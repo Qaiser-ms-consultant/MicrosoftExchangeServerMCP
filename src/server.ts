@@ -13,6 +13,8 @@ import { registerServerAdminTools } from "./tools/admin-servers.js";
 import { registerMonitoringTools } from "./tools/admin-monitoring.js";
 import { registerDiagnosticTools } from "./tools/admin-diagnostics.js";
 import { registerSearchTools } from "./tools/admin-search.js";
+import { registerComplianceTools } from "./tools/admin-compliance.js";
+import { registerMailboxFeatureTools } from "./tools/admin-mailbox-features.js";
 import { registerResources } from "./resources/folder-resource.js";
 import { registerPrompts } from "./prompts/index.js";
 
@@ -37,6 +39,8 @@ async function main() {
     registerServerAdminTools(server, client.ps);
     registerMonitoringTools(server, client.ps);
     registerSearchTools(server, client.ps);
+    registerComplianceTools(server, client.ps);
+    registerMailboxFeatureTools(server, client.ps);
   }
   // Always register diagnostics (helps when all other tools 404)
   registerDiagnosticTools(server, config, client.auth);

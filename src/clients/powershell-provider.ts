@@ -32,6 +32,11 @@ const ALLOWED_CMDLETS = new Set([
   "Search-Mailbox", "Get-MessageTrackingLog", "Get-MessageTrace",
   // Public folders / Mobile
   "Get-PublicFolder", "Get-PublicFolderMailbox", "Get-MobileDevice", "Get-MobileDeviceMailboxPolicy",
+  // Compliance / OOF / Features
+  "Get-MailboxAutoReplyConfiguration", "Set-MailboxAutoReplyConfiguration",
+  "Get-InboxRule", "Get-MailboxFolderPermission", "Get-MailboxPermission",
+  "Get-RetentionPolicy", "Get-RetentionPolicyTag", "Get-JournalRule",
+  "Get-MailboxJunkEmailConfiguration", "Get-MailboxSearch",
   // Legacy compat
   "Get-ADPermission",
 ]);
