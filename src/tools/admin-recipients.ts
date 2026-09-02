@@ -26,15 +26,40 @@ export function registerRecipientAdminTools(server: McpServer, ps: PowerShellPro
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
   });
 
-  server.tool("exchange_create_mailbox", "Create mailbox (New-Mailbox) — user/shared/room", {
-    name: z.string(), alias: z.string().optional(), userPrincipalName: z.string().optional(), shared: z.boolean().optional().describe("Create shared mailbox"), room: z.boolean().optional(),
+  server.tool("exchange_create_mailbox", "Create mailbox (New-Mailbox) — user/shared/room. For UserMailbox, password is required (SecureString).", {
+    name: z.string().describe("Display name"),
+    alias: z.string().optional(),
+    userPrincipalName: z.string().optional().describe("UPN, e.g. newuser@contoso.com — required for UserMailbox"),
+    password: z.string().optional().describe("Initial password for UserMailbox (required unless Shared/Room/Equipment). Will be converted to SecureString."),
+    organizationalUnit: z.string().optional().describe("OU DN, e.g. contoso.com/Users"),
+    shared: z.boolean().optional().describe("Create shared mailbox (no password needed)"),
+    room: z.boolean().optional().describe("Create room mailbox"),
+    equipment: z.boolean().optional().describe("Create equipment mailbox"),
     database: z.string().optional(),
-  }, async ({ name, alias, userPrincipalName, shared, room, database }) => {
-    let cmd = `New-Mailbox -Name "${name}"`;
+    firstName: z.string().optional(),
+    lastName: z.string().optional(),
+  }, async ({ name, alias, userPrincipalName, password, organizationalUnit, shared, room, equipment, database, firstName, lastName }) => {
+    const isSharedLike = !!(shared || room || equipment);
+    if (!isSharedLike && !password) {
+      throw new Error("Password is required for UserMailbox creation (New-Mailbox -Password). Provide 'password' param, or set shared/room/equipment:true for resource mailboxes.");
+    }
+    // Build PowerShell with SecureString handling for password
+    let prelude = "";
+    let pwVar = "";
+    if (password && !isSharedLike) {
+      const escPw = password.replace(/'/g, "''");
+      prelude = `$secPw = ConvertTo-SecureString -String '${escPw}' -AsPlainText -Force; `;
+      pwVar = " -Password $secPw";
+    }
+    let cmd = `${prelude}New-Mailbox -Name "${name.replace(/"/g, '""')}"${pwVar}`;
     if (alias) cmd += ` -Alias "${alias}"`;
     if (userPrincipalName) cmd += ` -UserPrincipalName "${userPrincipalName}"`;
+    if (organizationalUnit) cmd += ` -OrganizationalUnit "${organizationalUnit}"`;
+    if (firstName) cmd += ` -FirstName "${firstName}"`;
+    if (lastName) cmd += ` -LastName "${lastName}"`;
     if (shared) cmd += ` -Shared`;
     if (room) cmd += ` -Room`;
+    if (equipment) cmd += ` -Equipment`;
     if (database) cmd += ` -Database "${database}"`;
     const data = await ps.invokeJson(cmd);
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
