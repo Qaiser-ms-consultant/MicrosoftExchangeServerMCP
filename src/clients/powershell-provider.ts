@@ -174,13 +174,13 @@ try {
   }
 
   async getMailbox(identity: string): Promise<any> {
-    const arr = await this.invokeJson(`Get-Mailbox -Identity "${escapePs(identity)}"`);
+    const arr = await this.invokeJson(`Get-Mailbox -Identity '${escapePsSingle(identity)}' | Select-Object DisplayName,PrimarySmtpAddress,RecipientType,Name,Alias,Identity,OrganizationalUnit,Database,ServerName | Select-Object -First 1`);
     if (!arr.length) throw new ExchangeError({ message: `Mailbox ${identity} not found`, code: "NOT_FOUND", provider: "powershell" });
     return arr[0];
   }
 
   async getMailboxStatistics(identity: string): Promise<any> {
-    const arr = await this.invokeJson(`Get-MailboxStatistics -Identity "${escapePs(identity)}"`);
+    const arr = await this.invokeJson(`Get-MailboxStatistics -Identity '${escapePsSingle(identity)}' | Select-Object DisplayName,ItemCount,TotalItemSize,LastLogonTime,Database | Select-Object -First 1`);
     if (!arr.length) throw new ExchangeError({ message: `Statistics for ${identity} not found`, code: "NOT_FOUND", provider: "powershell" });
     return arr[0];
   }
@@ -201,6 +201,9 @@ try {
 
 function escapePs(s: string): string {
   return s.replace(/"/g, '`"').replace(/\$/g, '`$');
+}
+function escapePsSingle(s: string): string {
+  return s.replace(/'/g, "''");
 }
 
 function normalizePsJson(data: any): any[] {
