@@ -28,23 +28,19 @@ async function main() {
   // Log resolved Exchange targets for 404 diagnostics
   console.error(`Exchange targets — endpoint=${config.exchange.endpoint} | powershellUri=${config.exchange.powershellUri} | ews=${config.exchange.endpoint}${config.exchange.ewsPath} | rest=${config.exchange.endpoint}${config.exchange.restPath}`);
 
-  if (config.server.enableMailboxTools) {
-    registerMailTools(server, client);
-    registerCalendarTools(server, client);
-    registerContactTools(server, client);
-  }
-  if (config.server.enableAdminTools) {
-    registerAdminTools(server, client);
-    registerRecipientAdminTools(server, client.ps);
-    registerTransportAdminTools(server, client.ps);
-    registerServerAdminTools(server, client.ps);
-    registerMonitoringTools(server, client.ps);
-    registerSearchTools(server, client.ps);
-    registerComplianceTools(server, client.ps);
-    registerMailboxFeatureTools(server, client.ps);
-    registerSpecMissingTools(server, client.ps);
-  }
-  // Always register diagnostics (helps when all other tools 404)
+  // All tools open — no gating (legacy enableAdminTools/enableMailboxTools ignored for backward compat)
+  registerMailTools(server, client);
+  registerCalendarTools(server, client);
+  registerContactTools(server, client);
+  registerAdminTools(server, client);
+  registerRecipientAdminTools(server, client.ps);
+  registerTransportAdminTools(server, client.ps);
+  registerServerAdminTools(server, client.ps);
+  registerMonitoringTools(server, client.ps);
+  registerSearchTools(server, client.ps);
+  registerComplianceTools(server, client.ps);
+  registerMailboxFeatureTools(server, client.ps);
+  registerSpecMissingTools(server, client.ps);
   registerDiagnosticTools(server, config, client.auth);
   registerResources(server, client);
   registerPrompts(server);
@@ -56,7 +52,7 @@ async function main() {
     const stdio = new StdioServerTransport();
     await server.connect(stdio);
     const insecure = !!(config.exchange.insecure || config.exchange.tls?.rejectUnauthorized === false);
-    console.error(`Exchange MCP server running (stdio) — endpoint=${config.exchange.endpoint} provider=${config.exchange.provider} admin=${config.server.enableAdminTools} mailbox=${config.server.enableMailboxTools} insecure=${insecure}${insecure ? " [DEV: self-signed allowed]" : ""}`);
+    console.error(`Exchange MCP server running (stdio) — endpoint=${config.exchange.endpoint} provider=${config.exchange.provider} insecure=${insecure}${insecure ? " [DEV: self-signed allowed]" : ""} | tools=128 (all open)`);
   } else {
     // HTTP/SSE — use Express wrapper (lazy import to keep stdio light)
     const express = await import("express");

@@ -33,8 +33,9 @@ export interface AppConfig {
     transport: TransportType;
     port: number;
     host: string;
-    enableAdminTools: boolean;
-    enableMailboxTools: boolean;
+    // Deprecated: all 128 tools now always enabled; these flags are ignored but kept for backward compat
+    enableAdminTools?: boolean;
+    enableMailboxTools?: boolean;
   };
   logging: { level: string; file: string };
 }

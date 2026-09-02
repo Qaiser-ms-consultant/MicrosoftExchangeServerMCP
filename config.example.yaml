@@ -34,8 +34,7 @@ server:
   transport: stdio # stdio|http
   port: 3000
   host: 0.0.0.0
-  enableAdminTools: true
-  enableMailboxTools: false
+  # All 128 tools are now always enabled (no gating)
 
 logging:
   level: info # debug|info|warn|error
