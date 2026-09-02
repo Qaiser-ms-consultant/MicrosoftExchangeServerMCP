@@ -31,12 +31,18 @@ const ALLOWED_CMDLETS = new Set([
   // Message search (PowerShell alternative to EWS/Graph for on-prem)
   "Search-Mailbox", "Get-MessageTrackingLog", "Get-MessageTrace",
   // Public folders / Mobile
-  "Get-PublicFolder", "Get-PublicFolderMailbox", "Get-MobileDevice", "Get-MobileDeviceMailboxPolicy",
+  "Get-PublicFolder", "Get-PublicFolderMailbox", "Get-MobileDevice", "Get-MobileDeviceMailboxPolicy", "Get-PublicFolderStatistics",
   // Compliance / OOF / Features
   "Get-MailboxAutoReplyConfiguration", "Set-MailboxAutoReplyConfiguration",
   "Get-InboxRule", "Get-MailboxFolderPermission", "Get-MailboxPermission",
   "Get-RetentionPolicy", "Get-RetentionPolicyTag", "Get-JournalRule",
   "Get-MailboxJunkEmailConfiguration", "Get-MailboxSearch",
+  // Extended server/mailflow/database/dag/report/log
+  "Get-Service", "Restart-Service", "Get-WinEvent", "Get-EventLog", "Get-Counter", "Get-PSDrive", "Get-CimInstance", "Get-WmiObject", "Get-ChildItem", "Test-NetConnection", "Resolve-DnsName",
+  "Get-MailboxDatabase", "Mount-Database", "Dismount-Database", "Move-ActiveMailboxDatabase", "Suspend-MailboxDatabaseCopy", "Resume-MailboxDatabaseCopy", "Add-MailboxDatabaseCopy", "Remove-MailboxDatabaseCopy", "New-MailboxRepairRequest", "Get-MailboxRepairRequest",
+  "Get-DatabaseAvailabilityGroup", "Set-MailboxDatabaseCopy", "Test-ReplicationHealth",
+  "Get-MailboxFolderStatistics", "Get-MoveRequest", "New-MoveRequest", "Resume-MoveRequest", "Add-MailboxPermission", "Remove-MailboxPermission", "New-DistributionGroup", "Set-DistributionGroup", "Remove-DistributionGroup", "Add-DistributionGroupMember", "Remove-DistributionGroupMember", "New-MailContact", "Set-MailContact", "Remove-MailContact",
+  "Get-OwaVirtualDirectory", "Test-OwaConnectivity", "Enable-ExchangeCertificate", "Import-ExchangeCertificate", "New-ExchangeCertificate", "Search-MailboxAuditLog", "Get-DlpPolicy", "Test-MAPIConnectivity",
   // Legacy compat
   "Get-ADPermission",
 ]);
