@@ -1,9 +1,12 @@
 import axios from "axios";
+import { XMLParser } from "fast-xml-parser";
 import type { AppConfig } from "../config.js";
 import type { AuthManager } from "../auth/auth-manager.js";
 import { ExchangeError } from "../errors.js";
 import { getHttpsAgent } from "../utils/tls.js";
 import type { Message, SendMessageInput, CalendarEvent, Contact, TaskItem, PaginationOpts, SearchOpts } from "./types.js";
+
+const xmlParser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_", removeNSPrefix: true, textNodeName: "#text" });
 
 /**
  * EWS provider — uses raw SOAP via axios to avoid heavy native deps.
@@ -135,24 +138,113 @@ export class EWSProvider {
   }
 }
 
-// Minimal XML helpers — production should use a proper XML parser (fast-xml-parser)
 function escapeXml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 }
 
-function parseMessagesFromFindItem(_xml: string): Message[] {
-  // Placeholder: real impl would parse with fast-xml-parser
-  return [];
+function parseMessagesFromFindItem(xml: string): Message[] {
+  try {
+    const j = xmlParser.parse(xml);
+    const resp = j.Envelope?.Body?.FindItemResponse?.ResponseMessages?.FindItemResponseMessage;
+    const msg = Array.isArray(resp) ? resp[0] : resp;
+    if (msg?.["@_ResponseClass"] === "Error") throw new Error(msg.MessageText ?? "FindItem error");
+    const root = msg?.RootFolder;
+    if (!root || root.TotalItemsInView === "0" || root.TotalItemsInView === 0) return [];
+    const items = root.Items;
+    if (!items) return [];
+    const rawItems = items.Message ? (Array.isArray(items.Message) ? items.Message : [items.Message]) : [];
+    return rawItems.map((m: any) => ({
+      id: m.ItemId?.["@_Id"] ?? m.ItemId?.Id ?? "",
+      subject: m.Subject ?? "",
+      from: m.From?.Mailbox?.EmailAddress ?? m.Sender?.Mailbox?.EmailAddress ?? "",
+      to: (() => {
+        const to = m.ToRecipients?.Mailbox;
+        if (!to) return [];
+        const arr = Array.isArray(to) ? to : [to];
+        return arr.map((x: any) => x.EmailAddress).filter(Boolean);
+      })(),
+      body: m.Body?.["#text"] ?? m.Body ?? "",
+      bodyType: (m.Body?.["@_BodyType"] as any) ?? "HTML",
+      isRead: m.IsRead === "true" || m.IsRead === true,
+      hasAttachments: m.HasAttachments === "true",
+      importance: (m.Importance as any) ?? "Normal",
+      receivedDateTime: m.DateTimeReceived ?? m.DateTimeCreated ?? new Date().toISOString(),
+    }));
+  } catch {
+    return [];
+  }
 }
-function parseMessagesFromGetItem(_xml: string): Message[] {
-  return [];
+function parseMessagesFromGetItem(xml: string): Message[] {
+  try {
+    const j = xmlParser.parse(xml);
+    const resp = j.Envelope?.Body?.GetItemResponse?.ResponseMessages?.GetItemResponseMessage;
+    const msg = Array.isArray(resp) ? resp[0] : resp;
+    const items = msg?.Items;
+    if (!items) return [];
+    const raw = items.Message ? (Array.isArray(items.Message) ? items.Message : [items.Message]) : [];
+    return raw.map((m: any) => ({
+      id: m.ItemId?.["@_Id"] ?? "",
+      subject: m.Subject ?? "",
+      from: m.From?.Mailbox?.EmailAddress ?? "",
+      to: (() => {
+        const to = m.ToRecipients?.Mailbox;
+        if (!to) return [];
+        const arr = Array.isArray(to) ? to : [to];
+        return arr.map((x: any) => x.EmailAddress);
+      })(),
+      body: m.Body?.["#text"] ?? "",
+      bodyType: (m.Body?.["@_BodyType"] as any) ?? "HTML",
+      isRead: m.IsRead === "true",
+      hasAttachments: m.HasAttachments === "true",
+      importance: (m.Importance as any) ?? "Normal",
+      receivedDateTime: m.DateTimeReceived ?? new Date().toISOString(),
+    }));
+  } catch {
+    return [];
+  }
 }
-function parseCalendarEvents(_xml: string): CalendarEvent[] {
-  return [];
+function parseCalendarEvents(xml: string): CalendarEvent[] {
+  try {
+    const j = xmlParser.parse(xml);
+    const resp = j.Envelope?.Body?.FindItemResponse?.ResponseMessages?.FindItemResponseMessage;
+    const msg = Array.isArray(resp) ? resp[0] : resp;
+    const items = msg?.RootFolder?.Items;
+    if (!items) return [];
+    const raw = items.CalendarItem ? (Array.isArray(items.CalendarItem) ? items.CalendarItem : [items.CalendarItem]) : [];
+    return raw.map((c: any) => ({
+      id: c.ItemId?.["@_Id"] ?? "",
+      subject: c.Subject ?? "",
+      body: c.Body?.["#text"] ?? "",
+      start: c.Start ?? "",
+      end: c.End ?? "",
+      location: c.Location ?? "",
+      attendees: [],
+    }));
+  } catch {
+    return [];
+  }
 }
-function parseContacts(_xml: string): Contact[] {
-  return [];
+function parseContacts(xml: string): Contact[] {
+  try {
+    const j = xmlParser.parse(xml);
+    const resp = j.Envelope?.Body?.FindItemResponse?.ResponseMessages?.FindItemResponseMessage;
+    const items = (Array.isArray(resp) ? resp[0] : resp)?.RootFolder?.Items;
+    if (!items) return [];
+    const raw = items.Contact ? (Array.isArray(items.Contact) ? items.Contact : [items.Contact]) : [];
+    return raw.map((c: any) => ({ id: c.ItemId?.["@_Id"] ?? "", displayName: c.DisplayName ?? c.Subject ?? "", emailAddresses: [] }));
+  } catch {
+    return [];
+  }
 }
-function parseTasks(_xml: string): TaskItem[] {
-  return [];
+function parseTasks(xml: string): TaskItem[] {
+  try {
+    const j = xmlParser.parse(xml);
+    const resp = j.Envelope?.Body?.FindItemResponse?.ResponseMessages?.FindItemResponseMessage;
+    const items = (Array.isArray(resp) ? resp[0] : resp)?.RootFolder?.Items;
+    if (!items) return [];
+    const raw = items.Task ? (Array.isArray(items.Task) ? items.Task : [items.Task]) : [];
+    return raw.map((t: any) => ({ id: t.ItemId?.["@_Id"] ?? "", subject: t.Subject ?? "", status: (t.Status as any) ?? "NotStarted" }));
+  } catch {
+    return [];
+  }
 }
