@@ -1,0 +1,26 @@
+exchange:
+  endpoint: https://mail.contoso.com
+  version: auto
+  provider: auto
+  ewsPath: /EWS/Exchange.asmx
+  restPath: /api/v2.0
+  powershellUri: https://mail.contoso.com/PowerShell
+  # Production: valid cert — keep strict
+  insecure: false
+  tls:
+    rejectUnauthorized: true
+    allowSelfSigned: false
+
+auth:
+  method: basic
+  basic:
+    username: admin@contoso.com
+    password: "${EXCHANGE_PASSWORD}"
+    domain: CONTOSO
+
+server:
+  transport: stdio
+  port: 3000
+  host: 0.0.0.0
+  enableAdminTools: true
+  enableMailboxTools: false

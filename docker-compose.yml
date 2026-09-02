@@ -1,0 +1,14 @@
+services:
+  exchange-mcp:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - EXCHANGE_ENDPOINT=${EXCHANGE_ENDPOINT}
+      - AUTH_METHOD=${AUTH_METHOD:-basic}
+      - EXCHANGE_PASSWORD=${EXCHANGE_PASSWORD}
+      - OAUTH_CLIENT_ID=${OAUTH_CLIENT_ID}
+      - OAUTH_CLIENT_SECRET=${OAUTH_CLIENT_SECRET}
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    restart: unless-stopped

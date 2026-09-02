@@ -1,0 +1,32 @@
+{
+  "name": "exchange-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server for Microsoft Exchange Server On-Premise (EWS / REST / PowerShell)",
+  "type": "module",
+  "bin": {
+    "exchange-mcp": "./dist/server.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsx src/server.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src --ext .ts",
+    "inspector": "npx @modelcontextprotocol/inspector node dist/server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "axios": "^1.7.0",
+    "express": "^5.2.1",
+    "yaml": "^2.5.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^20.12.0",
+    "tsx": "^4.9.0",
+    "typescript": "^5.5.0",
+    "vitest": "^1.6.0"
+  }
+}

@@ -1,0 +1,51 @@
+exchange:
+  endpoint: https://mail.contoso.com
+  version: auto # 2013|2016|2019|auto
+  provider: auto # ews|rest|powershell|auto
+  ewsPath: /EWS/Exchange.asmx
+  restPath: /api/v2.0
+  # PowerShell remoting — CRITICAL: must be http(s)://<exchange-fqdn>/PowerShell (capital P/S)
+  # If 404, verify with: Get-PowerShellVirtualDirectory | fl InternalUrl,ExternalUrl,*Auth*
+  # Env override: EXCHANGE_POWERSHELL_URL or EXCHANGE_SERVER
+  powershellUri: https://mail.contoso.com/PowerShell
+  # For lab with self-signed cert: set insecure true (dev only). Production: false + valid cert
+  insecure: false
+  tls:
+    rejectUnauthorized: true # false = allow self-signed; true = strict (production)
+    allowSelfSigned: false
+
+auth:
+  method: basic # basic|oauth|certificate
+  basic:
+    username: admin@contoso.com
+    password: "${EXCHANGE_PASSWORD}" # or 'yourPassword' — use env var for secrets
+    domain: CONTOSO
+  oauth:
+    authority: https://adfs.contoso.com/adfs
+    clientId: "${OAUTH_CLIENT_ID}"
+    clientSecret: "${OAUTH_CLIENT_SECRET}"
+    tenantId: common
+    scope: https://mail.contoso.com/.default
+  certificate:
+    pfxPath: ./cert.pfx
+    passphrase: "${CERT_PASSPHRASE}"
+
+server:
+  transport: stdio # stdio|http
+  port: 3000
+  host: 0.0.0.0
+  enableAdminTools: true
+  enableMailboxTools: false
+
+logging:
+  level: info # debug|info|warn|error
+  file: ""
+
+# Lab example (self-signed, e.g. https://exchange.lab.local or https://10.0.0.10):
+# exchange:
+#   endpoint: https://exchange.lab.local
+#   powershellUri: https://exchange.lab.local/PowerShell
+#   insecure: true
+#   tls: { rejectUnauthorized: false, allowSelfSigned: true }
+# auth:
+#   basic: { username: admin@lab.local, password: 'labPassword', domain: LAB }
