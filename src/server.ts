@@ -12,6 +12,7 @@ import { registerTransportAdminTools } from "./tools/admin-transport.js";
 import { registerServerAdminTools } from "./tools/admin-servers.js";
 import { registerMonitoringTools } from "./tools/admin-monitoring.js";
 import { registerDiagnosticTools } from "./tools/admin-diagnostics.js";
+import { registerSearchTools } from "./tools/admin-search.js";
 import { registerResources } from "./resources/folder-resource.js";
 import { registerPrompts } from "./prompts/index.js";
 
@@ -35,6 +36,7 @@ async function main() {
     registerTransportAdminTools(server, client.ps);
     registerServerAdminTools(server, client.ps);
     registerMonitoringTools(server, client.ps);
+    registerSearchTools(server, client.ps);
   }
   // Always register diagnostics (helps when all other tools 404)
   registerDiagnosticTools(server, config, client.auth);
@@ -48,7 +50,7 @@ async function main() {
     const stdio = new StdioServerTransport();
     await server.connect(stdio);
     const insecure = !!(config.exchange.insecure || config.exchange.tls?.rejectUnauthorized === false);
-    console.error(`Exchange MCP server running (stdio) — endpoint=${config.exchange.endpoint} provider=${config.exchange.provider} admin=${config.server.enableAdminTools} insecure=${insecure}${insecure ? " [DEV: self-signed allowed]" : ""}`);
+    console.error(`Exchange MCP server running (stdio) — endpoint=${config.exchange.endpoint} provider=${config.exchange.provider} admin=${config.server.enableAdminTools} mailbox=${config.server.enableMailboxTools} insecure=${insecure}${insecure ? " [DEV: self-signed allowed]" : ""}`);
   } else {
     // HTTP/SSE — use Express wrapper (lazy import to keep stdio light)
     const express = await import("express");

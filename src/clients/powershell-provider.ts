@@ -28,6 +28,8 @@ const ALLOWED_CMDLETS = new Set([
   // Permissions / Compliance
   "Get-RoleGroup", "Get-ManagementRoleAssignment", "Get-RoleAssignmentPolicy", "Get-ManagementRole",
   "Search-AdminAuditLog", "Search-MailboxAuditLog", "Get-JournalRule",
+  // Message search (PowerShell alternative to EWS/Graph for on-prem)
+  "Search-Mailbox", "Get-MessageTrackingLog", "Get-MessageTrace",
   // Public folders / Mobile
   "Get-PublicFolder", "Get-PublicFolderMailbox", "Get-MobileDevice", "Get-MobileDeviceMailboxPolicy",
   // Legacy compat
