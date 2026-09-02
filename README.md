@@ -42,11 +42,11 @@
 
 ## Features
 
-- **40 admin tools** (active by default) mapped to **Exchange Management Shell** & **EAC** feature areas ([docs](https://learn.microsoft.com/en-us/exchange/exchange-server)): Recipients, Mail Flow, Servers/Databases/DAG, Monitoring/Troubleshooting. 13 mailbox tools optional.
-- **Multi-version:** 2013 / 2016 / 2019 / SE (auto-detect, REST preferred on 2016+, EWS fallback, PowerShell for admin via WinRM).
+- **128 tools — all open, no gating** — mapped to **Exchange Management Shell** & **EAC** ([docs](https://learn.microsoft.com/en-us/exchange/exchange-server)): Recipients, Mail Flow, Servers/DB/DAG, Monitoring, Compliance (LitigationHold/OOF/Retention), ClientAccess, Certificates, Security, Logs & Reports. See [Tools Reference](#tools-reference).
+- **Multi-version:** 2013 / 2016 / 2019 / SE (auto-detect, REST preferred on 2016+, EWS fallback, PowerShell via WinRM on Windows).
 - **Multi-auth:** Basic (lab), OAuth 2.0 via ADFS/Azure AD (`client_credentials`), Certificate mTLS (`pfx`/`pem`).
 - **Multi-transport:** `stdio` for local clients, `http`/`SSE` for remote/Docker/shared.
-- **Lab-friendly:** `insecure`/`rejectUnauthorized: false` for self-signed lab certs (e.g. `https://exchange.lab.local`) with production-strict default; WinRM `SkipCACheck` on Windows.
+- **Lab-friendly:** `insecure`/`rejectUnauthorized: false` for self-signed lab certs (e.g. `https://exchange.lab.local`) + WinRM `SkipCACheck`; production-strict by default.
 - **No secrets in repo:** `config.yaml` gitignored, env-var expansion (`${VAR}`) supported.
 
 ---
@@ -83,7 +83,7 @@ npm start                                    # stdio (default)
 # 3. Verify
 npm test                                     # 4/4
 npx @modelcontextprotocol/inspector node dist/server.js --config=./config.yaml
-# Open inspector URL, confirm 40+ tools list
+# Open inspector URL, confirm 128 tools
 
 # 4. Connect a client (see below), then ask:
 #   "list mailboxes with exchange_list_mailboxes"
@@ -102,7 +102,7 @@ Copy one of the examples and edit `config.yaml` (gitignored — never commit sec
 - `config.production.yaml.example` — production template; lab variant commented inside
 
 ```yaml
-# config.yaml
+# config.yaml — all 128 tools are always enabled (no enableAdminTools/enableMailboxTools gating)
 exchange:
   endpoint: https://mail.contoso.com       # or https://exchange.lab.local for lab
   version: auto                           # 2013|2016|2019|auto
@@ -133,8 +133,6 @@ server:
   transport: stdio                        # stdio|http
   port: 3000
   host: 0.0.0.0
-  enableAdminTools: true                  # admin-only by default
-  enableMailboxTools: false               # set true to enable mail/calendar/contacts tools
 ```
 
 ### Lab (Self-Signed Cert) vs Production
@@ -193,8 +191,6 @@ auth: { method: certificate, certificate: { pfxPath: ./cert.pfx, passphrase: '..
 | `auth.oauth.clientId` | `OAUTH_CLIENT_ID` | — | — |
 | `server.transport` | `MCP_TRANSPORT` | `stdio` | `stdio|http` |
 | `server.port` | `PORT` | `3000` | HTTP port |
-| `server.enableAdminTools` | `ENABLE_ADMIN_TOOLS` | `true` | — |
-| `server.enableMailboxTools` | `ENABLE_MAILBOX_TOOLS` | `false` | — |
 
 Load order: `defaults` < `config.yaml` (or `--config=path`, then `config.yml`/`config.json`/`config.example.yaml` fallback) < env vars. YAML values support `${ENV}` expansion (`src/config.ts:1`).
 
@@ -445,24 +441,20 @@ npx @modelcontextprotocol/inspector node dist/server.js --config=./config.yaml
 
 ---
 
-## Tools Reference
-
-**Admin — active by default** (`enableAdminTools: true`, 40 tools):
+## Tools Reference — 128 tools (all open, no gating)
 
 | Group | Cmdlet Base | Tools |
 |---|---|---|
-| **Recipients** (13) — EAC Recipients | `Get/Set/New-Mailbox`, `Get-MailboxStatistics/Permission`, `Get-DistributionGroup*`, `Get-MailContact/User`, `Get-CASMailbox` | `exchange_list_mailboxes`, `exchange_get_mailbox`, `exchange_get_mailbox_statistics`, `exchange_get_mailbox_permissions`, `exchange_create_mailbox`, `exchange_set_mailbox`, `exchange_remove_mailbox`, `exchange_list_distribution_groups`, `exchange_get_distribution_group_member`, `exchange_list_dynamic_distribution_groups`, `exchange_list_mail_contacts`, `exchange_list_mail_users`, `exchange_get_cas_mailbox` |
-| **Mail Flow / Transport** (10) — EAC Mail flow | `Get-TransportRule`, `Get-Send/ReceiveConnector`, `Get-Accepted/RemoteDomain`, `Get-Queue/Digest`, `Retry/Suspend-Queue`, `Get-MessageTrackingLog` | `exchange_get_transport_rules`, `exchange_list_send_connectors`, `exchange_list_receive_connectors`, `exchange_list_accepted_domains`, `exchange_list_remote_domains`, `exchange_get_queue`, `exchange_get_queue_digest`, `exchange_retry_queue`, `exchange_suspend_queue`, `exchange_get_message_tracking_log` |
-| **Servers / DB / DAG / Certs** (9) — EAC Servers + HA | `Get-ExchangeServer`, `Get-MailboxDatabase*`, `Get-DatabaseAvailabilityGroup`, `Get-ExchangeCertificate`, `Get-*VirtualDirectory`, `Get-TransportService` | `exchange_list_servers`, `exchange_get_server`, `exchange_list_mailbox_databases`, `exchange_get_mailbox_database`, `exchange_get_database_copy_status`, `exchange_get_dag`, `exchange_get_exchange_certificate`, `exchange_get_virtual_directory`, `exchange_get_transport_service` |
-| **Monitoring / Troubleshooting** (9) — Managed Availability + Diagnostics | `Get-ServerHealth`, `Get-HealthReport`, `Test-Service/Replication/MailflowHealth`, `Get-ServerComponentState`, `Get-MonitoringItemIdentity`, `Get-RoleGroup`, `Search-AdminAuditLog`, `Test-Connection` | `exchange_get_server_health`, `exchange_get_health_report`, `exchange_test_service_health`, `exchange_test_replication_health`, `exchange_get_server_component_state`, `exchange_get_monitoring_item`, `exchange_test_mailflow`, `exchange_get_role_groups`, `exchange_search_admin_audit_log`, `exchange_test_connection` |
+| **Recipients** (13) — EAC Recipients | `Get/Set/New-Mailbox`, `Get-MailboxStatistics/Permission`, `Get-DistributionGroup*`, `Get-MailContact/User`, `Get-CASMailbox` | `exchange_list_mailboxes`, `exchange_get_mailbox`, `exchange_get_mailbox_statistics`, `exchange_get_mailbox_permissions`, `exchange_create_mailbox` (now with `password` + `shared/room/equipment`), `exchange_set_mailbox`, `exchange_remove_mailbox`, `exchange_list_distribution_groups`, `exchange_get_distribution_group_member`, `exchange_list_dynamic_distribution_groups`, `exchange_list_mail_contacts`, `exchange_list_mail_users`, `exchange_get_cas_mailbox` |
+| **Mail Flow / Transport** (13) — EAC Mail flow | `Get-TransportRule`, `Get-Send/ReceiveConnector`, `Get-Accepted/RemoteDomain`, `Get-Queue/Digest`, `Retry/Suspend/Resume-Queue`, `Get-MessageTrackingLog/Trace` | `exchange_get_transport_rules`, `exchange_list_send_connectors`, `exchange_list_receive_connectors`, `exchange_list_accepted_domains`, `exchange_list_remote_domains`, `exchange_get_queue`, `exchange_get_queue_digest`, `exchange_retry_queue`, `exchange_suspend_queue`, `mailflow.resume_queue`, `exchange_get_message_tracking_log`, `mailflow.get_message_trace`, `mailflow.get_ndr_details`, `mailflow.test_smtp_connectivity` |
+| **Servers / DB / DAG / Certs** (18) — EAC Servers + HA | `Get-ExchangeServer`, `Get-MailboxDatabase*`, `Get-DatabaseAvailabilityGroup`, `Get-ExchangeCertificate`, `Get-*VirtualDirectory`, `Get-TransportService` | `exchange_list_servers`, `server.list`, `exchange_get_server`/`server.get_info`, `exchange_list_mailbox_databases`/`database.list`, `exchange_get_mailbox_database`, `exchange_get_database_copy_status`/`database.get_copy_status`, `database.mount`/`dismount`/`move_active`/`suspend/resume/add/remove_copy`/`new_repair_request`/`get_backup_status`/`get_whitespace_and_growth`, `exchange_get_dag`/`dag.list`/`get_info`/`get_witness_status`/`set_activation_policy`/`simulate_failover_check`, `exchange_get_exchange_certificate`, `certificate.get_expiring`/`enable_services`, `exchange_get_virtual_directory`/`clientaccess.get_virtual_directories`, `exchange_get_transport_service` |
+| **Monitoring / Health** (14) — Managed Availability + `server.*` | `Get-ServerHealth`, `Get-HealthReport`, `Test-Service/Replication/MailflowHealth`, `Get-ServerComponentState`, `Get-MonitoringItemIdentity`, `Get-Service`, `Get-WinEvent`, `Get-Counter`, `Get-WmiObject`, `HealthChecker.ps1` | `exchange_get_server_health`, `exchange_get_health_report`, `exchange_test_service_health`, `exchange_test_replication_health`, `exchange_get_server_component_state`, `exchange_get_monitoring_item`, `exchange_test_mailflow`, `exchange_get_role_groups`, `exchange_search_admin_audit_log`, `exchange_test_connection`, `server.get_services_status`, `server.restart_service`, `server.get_event_log_errors`, `server.get_performance_counters`, `server.get_disk_space`, `server.get_uptime`, `server.run_healthchecker` |
+| **Compliance / Hold / OOF** (17) — Holds & Mailbox Features | `Get/Set-Mailbox` LitigationHold, `Get-MailboxSearch`, `Get/Set-MailboxAutoReplyConfiguration`, `Get-InboxRule`, `Get-MailboxFolderPermission`, `Get-RetentionPolicy*` | `exchange_get_litigation_hold`, `exchange_set_litigation_hold`, `exchange_get_inplace_hold`, `exchange_get_retention_policy`/`_tag`, `exchange_get_journal_rule`, `exchange_get_mailbox_junk_config`, `exchange_get_oof`, `exchange_set_oof`, `exchange_get_inbox_rules`, `exchange_get_mailbox_folder_permission`, `exchange_get_archive_status`, `exchange_get_mailbox_quota`, `exchange_get_mobile_device`, `exchange_get_public_folder`, `exchange_get_transport_config` |
+| **Search / Mailbox / Groups** (8) | `Search-Mailbox`, `Get-MessageTrackingLog`, `New-MoveRequest`, `Get-MailboxFolderStatistics` | `exchange_search_mailbox`, `exchange_get_message_tracking_log`, `mailbox.get_folder_statistics`, `mailbox.set_quota`, `mailbox.new_move_request`/`get_move_request_status`, `mailbox.add/remove_permission`, `group.new`/`add_member`, `contact.list` |
+| **ClientAccess / Certs / Security / Logs / Reports** (15) | `Test-OwaConnectivity`, `Resolve-DnsName`, `Enable-ExchangeCertificate`, `Search-MailboxAuditLog`, `Get-PublicFolderStatistics`, `Get-ChildItem` logs | `clientaccess.get_virtual_directories`, `clientaccess.test_owa`, `clientaccess.get_autodiscover_info`, `certificate.get_expiring`, `certificate.enable_services`, `security.get_role_group_members`, `security.get_mailbox_audit_log`, `publicfolder.get_statistics`, `log.tail_transport_log`/`tail_iis_log`, `report.generate_health_summary`/`mailbox_size_report`/`certificate_expiry_report` |
+| **Mailbox (EWS/REST)** (13) — optional but now also open | `EWS`, `REST` | `exchange_list_messages`, `exchange_get_message`, `exchange_send_message`, `exchange_reply_message`, `exchange_forward_message`, `exchange_delete_message`, `exchange_move_message`, `exchange_search_messages`, `exchange_list_calendar_events`, `exchange_create_calendar_event`, `exchange_get_availability`, `exchange_list_contacts`, `exchange_list_tasks` (`src/tools/mail-tools.ts:1`, `calendar-tools.ts:1`, `contact-tools.ts:1`) |
 
-**Mailbox — disabled by default** (`enableMailboxTools: false`):
-
-`exchange_list_messages`, `exchange_get_message`, `exchange_send_message`, `exchange_reply_message`, `exchange_forward_message`, `exchange_delete_message`, `exchange_move_message`, `exchange_search_messages`, `exchange_list_calendar_events`, `exchange_create_calendar_event`, `exchange_get_availability`, `exchange_list_contacts`, `exchange_list_tasks` (`src/tools/mail-tools.ts:1`, `calendar-tools.ts:1`, `contact-tools.ts:1`)
-
-Enable: set `server.enableMailboxTools: true` or `ENABLE_MAILBOX_TOOLS=true`.
-
-Resources: `exchange://folders` (`src/resources/folder-resource.ts:1`). Prompts: `triage-inbox`, `schedule-meeting` (`src/prompts/index.ts:1`).
+All 128 tools always enabled. Resources: `exchange://folders` (`src/resources/folder-resource.ts:1`). Prompts: `triage-inbox`, `schedule-meeting` (`src/prompts/index.ts:1`). Previous gating via `enableAdminTools`/`enableMailboxTools` removed (still accepted in YAML for backward compat but ignored).
 
 ---
 
@@ -527,7 +519,7 @@ Design spec: `docs/superpowers/specs/2026-09-02-exchange-mcp-design.md`.
 ## Security Notes
 
 - Never commit `config.yaml` (gitignored) or `.env` containing passwords/certs. Use `config.example.yaml` as template.
-- Admin tools are **powerful** (create/remove mailboxes, transport rules). Gate with `enableAdminTools` and RBAC. Allowlist in `src/clients/powershell-provider.ts:7` prevents arbitrary cmdlet execution — add only needed cmdlets.
+- Admin tools are **powerful** (create/remove mailboxes, transport rules, `server.restart_service`, `database.mount` etc.). RBAC still enforced by Exchange; allowlist in `src/clients/powershell-provider.ts:7` prevents arbitrary cmdlet execution — add only needed cmdlets.
 - Prefer OAuth/Certificate over Basic in production. Use valid certs (`insecure: false`).
 - `src/auth/oauth-auth.ts:1` caches tokens in-memory; `src/auth/cert-auth.ts:1` uses `https.Agent` with `pfx`/`cert`.
 - WinRM on Windows uses `PSSessionOption -SkipCACheck` when `insecure: true` — only for lab.
