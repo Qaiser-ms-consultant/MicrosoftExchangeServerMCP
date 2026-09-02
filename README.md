@@ -7,7 +7,7 @@
 [![Exchange](https://img.shields.io/badge/Exchange-2013%20%7C%202016%20%7C%202019%20%7C%20SE-blue)](https://learn.microsoft.com/en-us/exchange/exchange-server)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-**For:** Exchange admins who want AI assistants (OpenCode, Claude Desktop, Cursor, etc.) to run **real Exchange Management Shell tasks** — recipient provisioning, transport troubleshooting, DAG/health monitoring — against **on-premise Exchange**, not Exchange Online.
+**For:** Exchange admins who want AI assistants (OpenCode, Claude Code/Desktop, Cursor, Codex, Windsurf, VS Code, etc.) to run **real Exchange Management Shell tasks** — recipient provisioning, transport troubleshooting, DAG/health monitoring — against **on-premise Exchange**, not Exchange Online.
 
 ---
 
@@ -16,15 +16,20 @@
 - [Features](#features)
 - [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
-- [Configuration](#configuration)
+- [Configuration (MCP Server)](#configuration-mcp-server)
+  - [Config File](#config-file)
   - [Lab (Self-Signed Cert) vs Production](#lab-self-signed-cert-vs-production)
   - [Auth](#auth)
-  - [All Options](#all-options)
-- [Connect to Clients](#connect-to-clients)
+  - [All Options & Env Vars](#all-options--env-vars)
+- [Connect to Clients (MCP Clients)](#connect-to-clients-mcp-clients)
   - [OpenCode](#opencode)
+  - [Claude Code (CLI)](#claude-code-cli)
   - [Claude Desktop](#claude-desktop)
-  - [Cursor / Any MCP Client](#cursor--any-mcp-client)
-  - [HTTP / Docker (Remote)](#http--docker-remote)
+  - [Cursor](#cursor)
+  - [Codex (OpenAI)](#codex-openai)
+  - [Windsurf](#windsurf)
+  - [VS Code (MCP Extension)](#vs-code-mcp-extension)
+  - [Generic / Any MCP Client (stdio vs HTTP)](#generic--any-mcp-client-stdio-vs-http)
 - [Tools Reference](#tools-reference)
 - [Examples](#examples)
 - [Troubleshooting](#troubleshooting)
@@ -38,10 +43,10 @@
 ## Features
 
 - **40 admin tools** (active by default) mapped to **Exchange Management Shell** & **EAC** feature areas ([docs](https://learn.microsoft.com/en-us/exchange/exchange-server)): Recipients, Mail Flow, Servers/Databases/DAG, Monitoring/Troubleshooting. 13 mailbox tools optional.
-- **Multi-version:** 2013 / 2016 / 2019 / SE (auto-detect, REST preferred on 2016+, EWS fallback, PowerShell for admin).
+- **Multi-version:** 2013 / 2016 / 2019 / SE (auto-detect, REST preferred on 2016+, EWS fallback, PowerShell for admin via WinRM).
 - **Multi-auth:** Basic (lab), OAuth 2.0 via ADFS/Azure AD (`client_credentials`), Certificate mTLS (`pfx`/`pem`).
-- **Multi-transport:** `stdio` for local clients, `http`/`SSE` for remote/Docker.
-- **Lab-friendly:** `insecure`/`rejectUnauthorized: false` for self-signed lab certs (e.g. `https://exchange.lab.local`) with production-strict default.
+- **Multi-transport:** `stdio` for local clients, `http`/`SSE` for remote/Docker/shared.
+- **Lab-friendly:** `insecure`/`rejectUnauthorized: false` for self-signed lab certs (e.g. `https://exchange.lab.local`) with production-strict default; WinRM `SkipCACheck` on Windows.
 - **No secrets in repo:** `config.yaml` gitignored, env-var expansion (`${VAR}`) supported.
 
 ---
@@ -52,8 +57,9 @@
 - **Exchange Server** 2013+ on-prem with network reachability:
   - EWS: `https://<host>/EWS/Exchange.asmx` (often `443`)
   - REST (2016+): `https://<host>/api/v2.0`
-  - PowerShell Remoting: `https://<host>/PowerShell` (WinRM `/PowerShell` virtual directory, 443/5986)
-- Credentials with **appropriate RBAC roles** (e.g. `Organization Management`, `Recipient Management`, `View-Only Configuration` + `Transport Queues` for `Get-Queue`). Minimal roles per cmdlet: `Get-ManagementRole -Cmdlet Get-Queue` etc.
+  - PowerShell Remoting: `https://<host>/PowerShell` (WinRM `/PowerShell` virtual directory, 443/5986) — must be `https://<fqdn>/PowerShell` (capital P/S). Verify: `Get-PowerShellVirtualDirectory | fl InternalUrl,ExternalUrl,*Auth*` and `Test-WSMan <host>`
+- **Windows host recommended** for PowerShell tools (uses `New-PSSession` WinRM with `Basic` + `SkipCACheck` for self-signed). On Linux/macOS, PowerShell tools fall back to HTTP POST (requires custom wrapper — 415 otherwise).
+- Credentials with **appropriate RBAC roles** (e.g. `Organization Management`, `Recipient Management`, `View-Only Configuration` + `Transport Queues` for `Get-Queue`). Check: `Get-ManagementRole -Cmdlet Get-Queue` etc.
 
 ---
 
@@ -77,7 +83,7 @@ npm start                                    # stdio (default)
 # 3. Verify
 npm test                                     # 4/4
 npx @modelcontextprotocol/inspector node dist/server.js --config=./config.yaml
-# Open inspector URL, confirm tools list
+# Open inspector URL, confirm 40+ tools list
 
 # 4. Connect a client (see below), then ask:
 #   "list mailboxes with exchange_list_mailboxes"
@@ -86,7 +92,9 @@ npx @modelcontextprotocol/inspector node dist/server.js --config=./config.yaml
 
 ---
 
-## Configuration
+## Configuration (MCP Server)
+
+### Config File
 
 Copy one of the examples and edit `config.yaml` (gitignored — never commit secrets):
 
@@ -101,7 +109,7 @@ exchange:
   provider: auto                          # ews|rest|powershell|auto
   ewsPath: /EWS/Exchange.asmx
   restPath: /api/v2.0
-  powershellUri: https://mail.contoso.com/PowerShell
+  powershellUri: https://mail.contoso.com/PowerShell  # CRITICAL: https://<fqdn>/PowerShell
   insecure: false                         # lab self-signed: true, prod: false
   tls:
     rejectUnauthorized: true              # lab: false, prod: true
@@ -133,22 +141,29 @@ server:
 
 | Environment | `exchange.insecure` | `tls.rejectUnauthorized` | How |
 |---|---|---|---|
-| **Lab** (self-signed, e.g. `exchange.lab.local`) | `true` | `false` | `src/utils/tls.ts:1` creates `https.Agent({ rejectUnauthorized: false })` for EWS/REST/PowerShell/OAuth |
+| **Lab** (self-signed, e.g. `exchange.lab.local`) | `true` | `false` | `src/utils/tls.ts:1` creates `https.Agent({ rejectUnauthorized: false })` for EWS/REST/PowerShell/OAuth + WinRM `SkipCACheck` |
 | **Production** (public cert, e.g. `mail.contoso.com`) | `false` | `true` | Strict verification (default) |
 
-Also via env: `EXCHANGE_INSECURE=true`. Server logs `insecure=true [DEV: self-signed allowed]` at startup (`src/server.ts:44`).
+Also via env: `EXCHANGE_INSECURE=true` or `EXCHANGE_POWERSHELL_URL=https://<fqdn>/PowerShell`. Server logs `insecure=true [DEV: self-signed allowed]` at startup (`src/server.ts:44`) and `Exchange targets — endpoint=... | powershellUri=...` for 404 diagnostics.
+
+Lab example:
+```yaml
+exchange:
+  endpoint: https://exchange.lab.local
+  powershellUri: https://exchange.lab.local/PowerShell
+  insecure: true
+  tls: { rejectUnauthorized: false, allowSelfSigned: true }
+```
 
 ### Auth
 
 **Basic (lab, simple):**
-
 ```yaml
 auth: { method: basic, basic: { username: admin@lab.local, password: '...', domain: LAB } }
 # or env: EXCHANGE_PASSWORD / AUTH_METHOD
 ```
 
 **OAuth 2.0 (ADFS/Azure AD, `client_credentials`):**
-
 ```yaml
 auth:
   method: oauth
@@ -160,26 +175,40 @@ auth:
 ```
 
 **Certificate (mTLS):**
-
 ```yaml
 auth: { method: certificate, certificate: { pfxPath: ./cert.pfx, passphrase: '...' } }
 # or certPath + keyPath for PEM
 ```
 
-### All Options
+### All Options & Env Vars
 
-Env overrides (highest priority): `EXCHANGE_ENDPOINT`, `EXCHANGE_VERSION`, `EXCHANGE_PROVIDER`, `AUTH_METHOD`, `EXCHANGE_PASSWORD`, `OAUTH_CLIENT_ID`, `OAUTH_CLIENT_SECRET`, `MCP_TRANSPORT`, `PORT`, `ENABLE_ADMIN_TOOLS`, `ENABLE_MAILBOX_TOOLS`, `EXCHANGE_INSECURE`.
+| Config Path | Env Override | Default | Desc |
+|---|---|---|---|
+| `exchange.endpoint` | `EXCHANGE_ENDPOINT` | `https://mail.contoso.local` | Base URL (scheme+host) |
+| `exchange.powershellUri` | `EXCHANGE_POWERSHELL_URL` / `EXCHANGE_SERVER` | `https://mail.contoso.local/PowerShell` | Full PowerShell URI — use `EXCHANGE_SERVER=<fqdn>` to auto-set both |
+| `exchange.insecure` | `EXCHANGE_INSECURE` | `false` | `true` = allow self-signed |
+| `exchange.tls.rejectUnauthorized` | — | `true` | `false` for lab |
+| `auth.method` | `AUTH_METHOD` | `basic` | `basic|oauth|certificate` |
+| `auth.basic.password` | `EXCHANGE_PASSWORD` | — | — |
+| `auth.oauth.clientId` | `OAUTH_CLIENT_ID` | — | — |
+| `server.transport` | `MCP_TRANSPORT` | `stdio` | `stdio|http` |
+| `server.port` | `PORT` | `3000` | HTTP port |
+| `server.enableAdminTools` | `ENABLE_ADMIN_TOOLS` | `true` | — |
+| `server.enableMailboxTools` | `ENABLE_MAILBOX_TOOLS` | `false` | — |
 
 Load order: `defaults` < `config.yaml` (or `--config=path`, then `config.yml`/`config.json`/`config.example.yaml` fallback) < env vars. YAML values support `${ENV}` expansion (`src/config.ts:1`).
 
 ---
 
-## Connect to Clients
+## Connect to Clients (MCP Clients)
+
+> All clients use **stdio** for local (one client per server process) or **HTTP** for shared/remote. Build first: `npm run build`. Config file path must be **absolute**.
 
 ### OpenCode
 
-`~/.config/opencode/opencode.jsonc` (`C:\Users\<you>\.config\opencode\opencode.jsonc` on Windows):
+**File:** `~/.config/opencode/opencode.jsonc` (`C:\Users\<you>\.config\opencode\opencode.jsonc` on Windows)
 
+**Stdio (recommended):**
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
@@ -193,8 +222,7 @@ Load order: `defaults` < `config.yaml` (or `--config=path`, then `config.yml`/`c
 }
 ```
 
-Or with env:
-
+**With env (no config file):**
 ```json
 {
   "mcp": {
@@ -204,6 +232,7 @@ Or with env:
       "enabled": true,
       "environment": {
         "EXCHANGE_ENDPOINT": "https://mail.contoso.com",
+        "EXCHANGE_POWERSHELL_URL": "https://mail.contoso.com/PowerShell",
         "AUTH_METHOD": "basic",
         "EXCHANGE_PASSWORD": "yourPassword",
         "EXCHANGE_INSECURE": "false"
@@ -213,40 +242,206 @@ Or with env:
 }
 ```
 
-Verify: `opencode mcp list` → `✓ exchange connected`. Restart OpenCode TUI.
+Verify: `opencode mcp list` → `✓ exchange connected`. Restart OpenCode TUI. Test: prompt `run exchange_test_connection`.
+
+### Claude Code (CLI)
+
+**CLI:** `claude` (Anthropic Claude Code)
+
+```bash
+# Add server (stdio):
+claude mcp add exchange -- node /absolute/path/to/dist/server.js --config=/absolute/path/to/config.yaml
+
+# Or with env:
+claude mcp add exchange --env EXCHANGE_ENDPOINT=https://mail.contoso.com --env EXCHANGE_PASSWORD=yourPassword -- node /absolute/path/to/dist/server.js
+
+# List / remove:
+claude mcp list
+claude mcp remove exchange
+
+# Config file: ~/.claude.json  (managed by CLI, or edit manually)
+# {
+#   "mcpServers": {
+#     "exchange": {
+#       "command": "node",
+#       "args": ["/absolute/path/to/dist/server.js", "--config=/absolute/path/to/config.yaml"]
+#     }
+#   }
+# }
+```
+
+Restart `claude` session. Run `/mcp` to see tools, or prompt `use exchange_list_mailboxes`.
 
 ### Claude Desktop
 
-`claude_desktop_config.json`:
+**File:** `claude_desktop_config.json`
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+- Linux: `~/.config/Claude/claude_desktop_config.json`
 
 ```json
 {
   "mcpServers": {
     "exchange": {
       "command": "node",
-      "args": ["D:/ProjMachsol/MCP/ExchangeServer/dist/server.js", "--config=D:/ProjMachsol/MCP/ExchangeServer/config.yaml"]
+      "args": ["/absolute/path/to/dist/server.js", "--config=/absolute/path/to/config.yaml"],
+      "env": {
+        "EXCHANGE_INSECURE": "false"
+      }
     }
   }
 }
 ```
 
-Restart Claude Desktop. Tools appear in `🔨` panel.
+Restart Claude Desktop. Tools appear in `🔨` panel. For self-signed lab, add `"EXCHANGE_INSECURE": "true"` to `env`.
 
-### Cursor / Any MCP Client
+### Cursor
 
-Stdio command: `node /absolute/path/to/dist/server.js --config=/absolute/path/to/config.yaml`
+**File:** `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project)
 
-### HTTP / Docker (Remote)
+```json
+{
+  "mcpServers": {
+    "exchange": {
+      "command": "node",
+      "args": ["/absolute/path/to/dist/server.js", "--config=/absolute/path/to/config.yaml"]
+    }
+  }
+}
+```
 
+Or via Cursor UI: `Cursor Settings → Features → MCP Servers → Add new global MCP server` → paste above.
+
+Restart Cursor. Check `View → Output → MCP` for logs.
+
+### Codex (OpenAI)
+
+**File:** `~/.codex/config.toml` (Codex CLI) or `~/.config/codex/config.json`
+
+**TOML:**
+```toml
+[mcp_servers.exchange]
+command = "node"
+args = ["/absolute/path/to/dist/server.js", "--config=/absolute/path/to/config.yaml"]
+# env = { EXCHANGE_INSECURE = "false" }  # if needed
+```
+
+**JSON alternative (`config.json`):**
+```json
+{
+  "mcpServers": {
+    "exchange": {
+      "command": "node",
+      "args": ["/absolute/path/to/dist/server.js", "--config=/absolute/path/to/config.yaml"]
+    }
+  }
+}
+```
+
+Run `codex --help` → MCP section, or `codex mcp list` if available.
+
+### Windsurf
+
+**File:** `~/.codeium/windsurf/mcp_config.json` (or `~/.windsurf/mcp.json` per version) — check Windsurf docs: `Windsurf → Settings → MCP`.
+
+```json
+{
+  "mcpServers": {
+    "exchange": {
+      "command": "node",
+      "args": ["/absolute/path/to/dist/server.js", "--config=/absolute/path/to/config.yaml"]
+    }
+  }
+}
+```
+
+Restart Windsurf. Verify in `MCP Servers` panel.
+
+### VS Code (MCP Extension)
+
+**Prerequisite:** Install MCP extension (e.g. `MCP` by Anthropic or `Claude Dev`).
+
+**File:** `.vscode/mcp.json` (project) or `~/.vscode/mcp.json` (user) or via `settings.json`:
+
+```json
+// .vscode/mcp.json
+{
+  "servers": {
+    "exchange": {
+      "command": "node",
+      "args": ["/absolute/path/to/dist/server.js", "--config=/absolute/path/to/config.yaml"],
+      "env": {
+        "EXCHANGE_INSECURE": "false"
+      }
+    }
+  }
+}
+```
+
+Or `settings.json`:
+```json
+{
+  "mcp.servers": {
+    "exchange": {
+      "command": "node",
+      "args": ["/absolute/path/to/dist/server.js", "--config=/absolute/path/to/config.yaml"]
+    }
+  }
+}
+```
+
+Reload VS Code (`Developer: Reload Window`). Check `MCP: Show Installed Servers` command.
+
+### Generic / Any MCP Client (stdio vs HTTP)
+
+**Stdio (local, one client at a time):**
 ```bash
+node /absolute/path/to/dist/server.js --config=/absolute/path/to/config.yaml
+# Client config: command = "node", args = ["/path/dist/server.js", "--config=/path/config.yaml"]
+```
+
+**HTTP / SSE (shared, remote, Docker):**
+```bash
+# Server: set transport http
 # config.yaml: server.transport: http, port: 3000
 node dist/server.js --transport=http --config=./config.yaml
 # or
 docker compose up --build
-curl http://localhost:3000/health  # {"status":"ok","endpoint":"..."}
+curl http://localhost:3000/health  # {"status":"ok","endpoint":"https://mail.contoso.com"}
 ```
 
-Remote MCP URL: `http://localhost:3000/sse` (type `remote` in client config).
+Client (remote type):
+```json
+{
+  "mcpServers": {
+    "exchange": {
+      "type": "http",
+      "url": "http://localhost:3000/sse"
+    }
+  }
+}
+```
+
+For OpenCode remote:
+```json
+{
+  "mcp": {
+    "exchange": {
+      "type": "remote",
+      "url": "http://localhost:3000/sse",
+      "enabled": true
+    }
+  }
+}
+```
+
+> Note: `stdio` servers are **per-client** — two clients cannot share the same `node` process. Use `http` mode for multi-client or Docker.
+
+**Inspector (test any server):**
+```bash
+npx @modelcontextprotocol/inspector node dist/server.js --config=./config.yaml
+# Open http://localhost:6274 → List Tools → Try exchange_test_connection
+```
 
 ---
 
@@ -259,7 +454,7 @@ Remote MCP URL: `http://localhost:3000/sse` (type `remote` in client config).
 | **Recipients** (13) — EAC Recipients | `Get/Set/New-Mailbox`, `Get-MailboxStatistics/Permission`, `Get-DistributionGroup*`, `Get-MailContact/User`, `Get-CASMailbox` | `exchange_list_mailboxes`, `exchange_get_mailbox`, `exchange_get_mailbox_statistics`, `exchange_get_mailbox_permissions`, `exchange_create_mailbox`, `exchange_set_mailbox`, `exchange_remove_mailbox`, `exchange_list_distribution_groups`, `exchange_get_distribution_group_member`, `exchange_list_dynamic_distribution_groups`, `exchange_list_mail_contacts`, `exchange_list_mail_users`, `exchange_get_cas_mailbox` |
 | **Mail Flow / Transport** (10) — EAC Mail flow | `Get-TransportRule`, `Get-Send/ReceiveConnector`, `Get-Accepted/RemoteDomain`, `Get-Queue/Digest`, `Retry/Suspend-Queue`, `Get-MessageTrackingLog` | `exchange_get_transport_rules`, `exchange_list_send_connectors`, `exchange_list_receive_connectors`, `exchange_list_accepted_domains`, `exchange_list_remote_domains`, `exchange_get_queue`, `exchange_get_queue_digest`, `exchange_retry_queue`, `exchange_suspend_queue`, `exchange_get_message_tracking_log` |
 | **Servers / DB / DAG / Certs** (9) — EAC Servers + HA | `Get-ExchangeServer`, `Get-MailboxDatabase*`, `Get-DatabaseAvailabilityGroup`, `Get-ExchangeCertificate`, `Get-*VirtualDirectory`, `Get-TransportService` | `exchange_list_servers`, `exchange_get_server`, `exchange_list_mailbox_databases`, `exchange_get_mailbox_database`, `exchange_get_database_copy_status`, `exchange_get_dag`, `exchange_get_exchange_certificate`, `exchange_get_virtual_directory`, `exchange_get_transport_service` |
-| **Monitoring / Troubleshooting** (8) — Managed Availability | `Get-ServerHealth`, `Get-HealthReport`, `Test-Service/Replication/MailflowHealth`, `Get-ServerComponentState`, `Get-MonitoringItemIdentity`, `Get-RoleGroup`, `Search-AdminAuditLog` | `exchange_get_server_health`, `exchange_get_health_report`, `exchange_test_service_health`, `exchange_test_replication_health`, `exchange_get_server_component_state`, `exchange_get_monitoring_item`, `exchange_test_mailflow`, `exchange_get_role_groups`, `exchange_search_admin_audit_log` |
+| **Monitoring / Troubleshooting** (9) — Managed Availability + Diagnostics | `Get-ServerHealth`, `Get-HealthReport`, `Test-Service/Replication/MailflowHealth`, `Get-ServerComponentState`, `Get-MonitoringItemIdentity`, `Get-RoleGroup`, `Search-AdminAuditLog`, `Test-Connection` | `exchange_get_server_health`, `exchange_get_health_report`, `exchange_test_service_health`, `exchange_test_replication_health`, `exchange_get_server_component_state`, `exchange_get_monitoring_item`, `exchange_test_mailflow`, `exchange_get_role_groups`, `exchange_search_admin_audit_log`, `exchange_test_connection` |
 
 **Mailbox — disabled by default** (`enableMailboxTools: false`):
 
@@ -281,6 +476,7 @@ Resources: `exchange://folders` (`src/resources/folder-resource.ts:1`). Prompts:
 "Track email from sender@contoso.com today"       → exchange_get_message_tracking_log { sender: "sender@contoso.com", start: "2026-09-02T00:00:00Z" }
 "Is DAG healthy?"                                → exchange_get_database_copy_status { identity: "*" } + exchange_get_server_health { server: "MAIL01" }
 "Check cert expiry"                              → exchange_get_exchange_certificate
+"Test connectivity (404 debug)"                  → exchange_test_connection { target: "powershell" }
 ```
 
 **Mailbox (if enabled):**
@@ -299,13 +495,16 @@ Resources: `exchange://folders` (`src/resources/folder-resource.ts:1`). Prompts:
 | `EISDIR: illegal operation on a directory` | `config.yaml` was a directory — delete it and `cp config.example.yaml config.yaml` |
 | `Basic auth requires username and password` | Add `auth.basic.username`/`password` in `config.yaml` or env `EXCHANGE_PASSWORD` |
 | `Tool ... is already registered` | Remove duplicate registration (fixed in `src/tools/admin-tools.ts:1` stub) |
-| `PowerShell auth failed` / `401` | Check user, domain, password; verify `powershellUri` and that account has RBAC role (`Get-ManagementRoleAssignment`) |
+| `PowerShell auth failed` / `401` | Check user, domain, password; verify `powershellUri` and that account has RBAC role (`Get-ManagementRoleAssignment`); for Basic, enable `Set-PowerShellVirtualDirectory -BasicAuthentication:$true` |
+| `PowerShell error 404` | Wrong `powershellUri` — must be `https://<fqdn>/PowerShell` (capital P/S). Set `EXCHANGE_POWERSHELL_URL` or `EXCHANGE_SERVER=<fqdn>`, verify `Get-PowerShellVirtualDirectory`, `Test-WSMan` |
+| `PowerShell error 415` | HTTP POST with wrong Content-Type — fixed via WinRM on Windows (`src/clients/powershell-provider.ts:56` uses `New-PSSession` with `SkipCACheck`). Run MCP on Windows for PowerShell tools. |
 | `Cmdlet not allowed: X` | Add cmdlet to `ALLOWED_CMDLETS` in `src/clients/powershell-provider.ts:7` |
 | `certificate has expired / self-signed` | Set `exchange.insecure: true` / `rejectUnauthorized: false` for lab (`src/utils/tls.ts:1`) or install valid cert for prod |
-| `opencode mcp list` shows `✗` | `npm run build`, check path in `opencode.jsonc`, restart OpenCode |
+| `opencode mcp list` shows `✗` / `claude mcp list` fails | `npm run build`, check absolute path in client config, restart client |
+| `exchange_test_connection` shows 404 | Copy suggested fix: `EXCHANGE_POWERSHELL_URL=https://<fqdn>/PowerShell` |
 | Queues always empty | Works only on-prem; `Get-Queue` requires Mailbox/Edge role + `Transport Queues` role |
 
-Debug: `npx @modelcontextprotocol/inspector node dist/server.js --config=./config.yaml` then `Get-ServerHealth` etc. Logs via `src/server.ts:44` + `LOG_LEVEL` (future).
+Debug: `npx @modelcontextprotocol/inspector node dist/server.js --config=./config.yaml` then `Get-ServerHealth` etc. Logs via `src/server.ts:44` (`Exchange targets — ...`).
 
 ---
 
@@ -319,7 +518,7 @@ npm run build        # tsc → dist/
 npx @modelcontextprotocol/inspector node dist/server.js --config=./config.yaml
 ```
 
-Structure: `src/server.ts:1` (MCP wiring) · `src/config.ts:1` · `src/auth/*` (basic/oauth/cert) · `src/clients/*` (ews/rest/powershell + `exchange-client.ts:1` auto-fallback) · `src/tools/admin-*` · `src/resources/*` · `src/utils/tls.ts:1`.
+Structure: `src/server.ts:1` (MCP wiring) · `src/config.ts:1` · `src/auth/*` (basic/oauth/cert) · `src/clients/*` (ews/rest/powershell + `exchange-client.ts:1` auto-fallback + `powershell-provider.ts:56` WinRM) · `src/tools/admin-*` · `src/resources/*` · `src/utils/tls.ts:1`.
 
 Design spec: `docs/superpowers/specs/2026-09-02-exchange-mcp-design.md`.
 
@@ -331,6 +530,7 @@ Design spec: `docs/superpowers/specs/2026-09-02-exchange-mcp-design.md`.
 - Admin tools are **powerful** (create/remove mailboxes, transport rules). Gate with `enableAdminTools` and RBAC. Allowlist in `src/clients/powershell-provider.ts:7` prevents arbitrary cmdlet execution — add only needed cmdlets.
 - Prefer OAuth/Certificate over Basic in production. Use valid certs (`insecure: false`).
 - `src/auth/oauth-auth.ts:1` caches tokens in-memory; `src/auth/cert-auth.ts:1` uses `https.Agent` with `pfx`/`cert`.
+- WinRM on Windows uses `PSSessionOption -SkipCACheck` when `insecure: true` — only for lab.
 
 ---
 
