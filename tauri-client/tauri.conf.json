@@ -1,0 +1,21 @@
+{
+  "package": {
+    "productName": "Tauri Client",
+    "version": "0.1.0"
+  },
+  "build": {
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "",
+    "devPath": "src",
+    "distDir": "../dist/tauri"
+  },
+  "tauri": {
+    "bundle": {
+      "active": false,
+      "targets": "all"
+    },
+    "allowlist": {
+      "all": true
+    }
+  }
+}
