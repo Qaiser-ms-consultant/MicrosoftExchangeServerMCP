@@ -1,250 +1,263 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="h-full">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Exchange Agentic Admin — AI Powered Exchange Operations Intelligence Platform</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --bg:#f8fafc; --surface:#ffffff; --surface-2:#f1f5f9; --border:#e2e8f0; --border-strong:#cbd5e1;
-    --text:#0f172a; --text-2:#475569; --text-3:#94a3b8;
-    --accent:#2563eb; --accent-hover:#1d4ed8; --accent-soft:#eff6ff;
-    --success:#16a34a; --warning:#d97706; --danger:#dc2626;
-    --radius:10px; --radius-sm:7px; --shadow:0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        brand: { 50: '#f0fdfa', 100: '#ccfbf1', 500: '#0d9488', 600: '#0f766e', 700: '#115e59' },
+        surface: { base: '#090d16', card: '#111726', elevated: '#1a2236', border: '#1f2a40', borderLight: '#2a3854' }
+      },
+      fontFamily: {
+        sans: ['Inter','system-ui','-apple-system','sans-serif'],
+        mono: ['JetBrains Mono','monospace']
+      }
+    }
   }
-  [data-theme="dark"]{
-    --bg:#0b0f14; --surface:#151a23; --surface-2:#1a2233; --border:#243044; --border-strong:#2f3d5a;
-    --text:#e6eefc; --text-2:#94a3b8; --text-3:#64748b;
-    --accent:#3b82f6; --accent-hover:#2563eb; --accent-soft:#0f1e3a;
-  }
-  *{box-sizing:border-box}
-  html,body{height:100%}
-  body{margin:0;font-family:"Inter",system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
-  /* Header */
-  header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:16px;padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--border);backdrop-filter:saturate(180%) blur(8px)}
-  header h1{font-size:15px;font-weight:600;letter-spacing:-.01em;margin:0}
-  header p{margin:0;font-size:12px;color:var(--text-2)}
-  .spacer{flex:1}
-  .icon-btn{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--surface);display:grid;place-items:center;cursor:pointer;color:var(--text-2)}
-  .icon-btn:hover{border-color:var(--border-strong);color:var(--text)}
-  /* Tabs */
-  .tabs{display:flex;gap:6px;padding:10px 12px;background:var(--bg);border-bottom:1px solid var(--border);position:sticky;top:53px;z-index:9}
-  .tabs button{appearance:none;padding:7px 12px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--text-2);font-size:13px;font-weight:500;cursor:pointer}
-  .tabs button.active{background:var(--text);color:var(--surface);border-color:var(--text)}
-  [data-theme="dark"] .tabs button.active{background:var(--accent);border-color:var(--accent);color:#fff}
-  /* Layout */
-  .wrap{max-width:1440px;margin:0 auto;padding:14px}
-  .grid{display:grid;gap:12px}
-  .grid-2{grid-template-columns:1.15fr .85fr}
-  .grid-3{grid-template-columns:1fr 1fr 1fr}
-  @media (max-width:1100px){ .grid-2,.grid-3{grid-template-columns:1fr} }
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
-  .card-h{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px}
-  .card-h h3{margin:0;font-size:13px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:var(--text-2)}
-  .card-h .hint{font-size:11px;color:var(--text-3);background:var(--surface-2);padding:3px 7px;border-radius:999px;border:1px solid var(--border)}
-  .card-b{padding:14px}
-  label{font-size:12px;font-weight:500;color:var(--text-2);display:block;margin:10px 0 6px}
-  label:first-child{margin-top:0}
-  input,select,textarea{width:100%;padding:9px 11px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;font-family:inherit;outline:none;transition:border-color .15s, box-shadow .15s}
-  input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
-  textarea{font-family:"JetBrains Mono", ui-monospace, monospace; min-height:140px; resize:vertical; line-height:1.6}
-  select{cursor:pointer}
-  .row{display:flex;gap:8px;flex-wrap:wrap}
-  .btn{appearance:none;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
-  .btn:hover{border-color:var(--border-strong)}
-  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-  .btn.primary:hover{background:var(--accent-hover)}
-  .btn.ghost{background:transparent}
-  .btn.small{padding:6px 9px;font-size:12px}
-  .log{font-family:"JetBrains Mono", ui-monospace, monospace;font-size:11.5px;line-height:1.6;white-space:pre-wrap;word-break:break-word;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px;max-height:320px;overflow:auto}
-  .kpi{display:flex;align-items:baseline;gap:8px}
-  .kpi strong{font-size:22px;letter-spacing:-.02em}
-  .kpi span{font-size:12px;color:var(--text-2)}
-  .sep{height:1px;background:var(--border);margin:12px 0}
-  .pill{font-size:11px;font-weight:600;letter-spacing:.02em;padding:4px 8px;border-radius:999px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2)}
-  .pill.ok{color:var(--success);border-color:#bbf7d0;background:#f0fdf4} [data-theme="dark"] .pill.ok{background:#052e16;border-color:#166534;color:#86efac}
-  .pill.warn{color:var(--warning);border-color:#fde68a;background:#fffbeb} [data-theme="dark"] .pill.warn{background:#451a03;border-color:#92400e;color:#fcd34d}
-  .view{display:none} .view.active{display:block}
-  .muted{color:var(--text-3);font-size:12px}
-</style>
+}
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#25334d;border-radius:9999px}::-webkit-scrollbar-thumb:hover{background:#3b4f74}</style>
 </head>
-<body>
-<header>
-  <div>
-    <h1>Exchange Agentic Admin</h1>
-    <p>AI Powered Exchange Operations Intelligence Platform</p>
-  </div>
-  <div class="spacer"></div>
-  <button class="icon-btn" id="themeToggle" title="Toggle theme" aria-label="Toggle theme">◐</button>
-  <button class="icon-btn" id="openHealth" title="Health">●</button>
+<body class="h-full bg-[#0b0f19] text-slate-200 antialiased font-sans select-none overflow-hidden flex flex-col">
+<header class="h-11 bg-[#0e1320] border-b border-[#1c263c] flex items-center justify-between px-4 z-50 flex-shrink-0">
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 pr-1"><span class="w-3 h-3 rounded-full bg-[#ff5f56] border border-[#e0443e]"></span><span class="w-3 h-3 rounded-full bg-[#ffbd2e] border border-[#dea123]"></span><span class="w-3 h-3 rounded-full bg-[#27c93f] border border-[#1aab29]"></span></div>
+<div class="flex items-center gap-2.5 pl-2 border-l border-[#1f2d45]">
+<div class="w-5 h-5 rounded-md bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-sm shadow-cyan-500/20">
+<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path></svg>
+</div>
+<span class="font-semibold text-xs text-slate-200 tracking-wide">Exchange Agentic Admin</span>
+<span class="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">v2.4.1</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<div class="flex items-center gap-2 px-3 py-1 rounded-full bg-[#141d2f] border border-[#23314c] text-xs shadow-inner">
+<span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span></span>
+<span class="text-slate-300 font-mono text-[11px] font-medium" id="serverPill">devex02.devlab2025.local</span>
+<span class="text-slate-500 text-[10px] font-mono" id="latencyPill">| 24ms</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-1.5 rounded-md hover:bg-[#1a2336] text-slate-400 hover:text-slate-200" id="themeToggle" title="Toggle theme"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20.354 15.354A9 9 0 018.646 3.646A9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></button>
+<button class="p-1.5 rounded-md hover:bg-[#1a2336] text-slate-400 hover:text-slate-200" id="openSettings" title="Settings"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></button>
+</div>
 </header>
 
-<nav class="tabs">
-  <button class="active" data-tab="home">Home</button>
-  <button data-tab="logs">Logs</button>
-  <button data-tab="health">Health</button>
-  <button data-tab="config">Config</button>
+<nav class="bg-[#0e1424] border-b border-[#1b253b] px-6 py-2.5 flex items-center justify-between flex-shrink-0">
+<div>
+<h1 class="text-sm font-semibold text-white tracking-tight">Exchange Agentic Admin</h1>
+<p class="text-[11px] text-slate-400">Autonomous hybrid exchange administration & diagnostics</p>
+</div>
+<div class="flex items-center bg-[#141b2e] p-1 rounded-lg border border-[#222f4b]" role="tablist">
+<button aria-selected="true" class="px-3.5 py-1 rounded-md text-xs font-medium bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm flex items-center gap-1.5" data-tab="home" role="tab"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> Home (Agent)</button>
+<button aria-selected="false" class="px-3.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-[#1b253c] flex items-center gap-1.5" data-tab="logs" role="tab"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> Logs & Telemetry</button>
+<button aria-selected="false" class="px-3.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-[#1b253c] flex items-center gap-1.5" data-tab="health" role="tab"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> Health & Mailflow <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span></button>
+<button aria-selected="false" class="px-3.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-[#1b253c] flex items-center gap-1.5" data-tab="config" role="tab"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> Config & Connectors</button>
+</div>
 </nav>
 
-<div class="wrap">
-  <!-- HOME: Prompt + Output -->
-  <div class="view active" data-view="home">
-    <div class="grid grid-2">
-      <div class="card">
-        <div class="card-h"><h3>Prompt</h3><span class="hint">AI will use available MCP tools</span></div>
-        <div class="card-b">
-          <label>Instruction</label>
-          <textarea id="prompt" placeholder="Example: Tell me everything about devlabadmin@devlab2025.local">Tell me everything about devlabadmin@devlab2025.local</textarea>
-          <div class="row" style="margin-top:10px">
-            <button class="btn primary" id="runPrompt">Run</button>
-            <button class="btn" id="clearPrompt">Clear</button>
-            <span class="muted" style="align-self:center">Uses your selected model provider</span>
-          </div>
-          <div class="sep"></div>
-          <label>Quick prompts</label>
-          <div class="row">
-            <button class="btn small ghost" data-quick="Executive summary">Executive summary</button>
-            <button class="btn small ghost" data-quick="Who is spamming?">Who is spamming?</button>
-            <button class="btn small ghost" data-quick="Capacity forecast">Capacity forecast</button>
-          </div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-h"><h3>Output</h3><span class="pill ok" id="outputStatus">Idle</span></div>
-        <div class="card-b">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
-            <div class="kpi"><strong id="gaugeScore">—</strong><span>/ 100</span></div>
-            <span class="pill" id="gaugeLabel">Health</span>
-          </div>
-          <div id="output" class="log" style="min-height:220px">Run a prompt to see a human-friendly summary with findings and recommended actions.</div>
-          <div class="row" style="margin-top:10px">
-            <button class="btn" id="copyOut">Copy</button>
-            <button class="btn" id="exportOut">Export</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- LOGS -->
-  <div class="view" data-view="logs">
-    <div class="card">
-      <div class="card-h"><h3>Logs — Real-time</h3><span class="hint">MCP + PowerShell + Audit</span></div>
-      <div class="card-b">
-        <div class="row" style="margin-bottom:8px">
-          <button class="btn small active" data-log="mcp">MCP</button>
-          <button class="btn small" data-log="ps">PowerShell</button>
-          <button class="btn small" data-log="audit">Audit</button>
-          <span class="spacer"></span><button class="btn small" id="clearLogs">Clear</button><button class="btn small" id="exportLogs">Export</button>
-        </div>
-        <div id="logView" class="log" style="min-height:380px">Waiting for MCP logs… Run a prompt or use Doctor.</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- HEALTH -->
-  <div class="view" data-view="health">
-    <div class="grid grid-3">
-      <div class="card"><div class="card-h"><h3>Overall</h3><span class="pill ok">Healthy</span></div><div class="card-b"><div class="kpi"><strong>82</strong><span>/100</span></div><p class="muted">From Executive Summary. Use Doctor to refresh.</p><button class="btn" id="runDoctorHealth">Run health checks</button></div></div>
-      <div class="card"><div class="card-h"><h3>Servers</h3></div><div class="card-b"><p class="muted">Version and CU via Version report. Try Doctor first.</p></div></div>
-      <div class="card"><div class="card-h"><h3>Transport</h3></div><div class="card-b"><p class="muted">Queue overview via Queue report.</p></div></div>
-    </div>
-    <div class="card" style="margin-top:12px"><div class="card-h"><h3>Quick checks</h3></div><div class="card-b row"><button class="btn" id="runDoctor">Run doctor (PowerShell + EWS)</button><button class="btn" id="openHealthDetails">View details</button></div></div>
-  </div>
-
-  <!-- CONFIG: Model Conf + Exchange Config + Save as Profile -->
-  <div class="view" data-view="config">
-    <div class="grid grid-2">
-      <div class="card">
-        <div class="card-h"><h3>Model Configuration</h3><span class="hint">13 providers</span></div>
-        <div class="card-b">
-          <label>Provider</label>
-          <select id="provider">
-            <option>OpenAI</option><option>Anthropic</option><option>Google</option><option>Azure OpenAI</option><option>AWS Bedrock</option><option>Ollama</option><option>Mistral</option><option>Cohere</option><option>Groq</option><option>Together</option><option>OpenRouter</option><option>Custom</option><option>OpenCode</option>
-          </select>
-          <label>Model</label><select id="model"><option>Select provider first</option></select>
-          <label>API Key</label><input id="apiKey" type="password" placeholder="Stored file-based, never shown" />
-          <label>Base URL</label><input id="baseUrl" placeholder="https://api.openai.com/v1" />
-          <div class="row" style="margin-top:10px"><button class="btn" id="testModel">Test connection</button><button class="btn primary" id="saveModel">Save</button></div>
-          <div id="modelOut" class="log" style="margin-top:10px">Not tested</div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-h"><h3>Exchange Configuration</h3><span class="hint">PowerShell & EWS</span></div>
-        <div class="card-b">
-          <label>Endpoint (FQDN)</label><input id="fqdn" value="mail.contoso.com" />
-          <label>Username</label><input id="user" value="admin@contoso.com" />
-          <label>Password environment variable</label><input id="pwEnv" value="EXCHANGE_PASSWORD" />
-          <label>Password value</label><input id="pw" type="password" placeholder="Stored via environment variable" />
-          <label><input type="checkbox" id="insecure" /> Allow self-signed certificate (lab)</label>
-          <div class="row" style="margin-top:10px"><button class="btn primary" id="saveAdmin">Save</button><button class="btn" id="testConn">Test connection</button></div>
-          <div id="adminOut" class="log" style="margin-top:10px">Not tested</div>
-        </div>
-      </div>
-    </div>
-    <div class="card" style="margin-top:12px">
-      <div class="card-h"><h3>Profiles</h3><span class="hint">Save as profile</span></div>
-      <div class="card-b">
-        <div class="row">
-          <input id="profileName" placeholder="Profile name, e.g. Production" style="max-width:320px" />
-          <button class="btn primary" id="saveProfile">Save as profile</button>
-          <select id="profileSelect" style="max-width:260px"><option>— Load profile —</option></select>
-          <button class="btn" id="loadProfile">Load</button>
-          <button class="btn" id="deleteProfile">Delete</button>
-        </div>
-        <p class="muted" style="margin-top:8px">Profiles store Exchange endpoint and model provider (without secrets) in the app config folder for quick switching.</p>
-      </div>
-    </div>
-  </div>
+<main class="flex-1 p-5 overflow-hidden grid grid-cols-12 gap-5 bg-gradient-to-b from-[#090d16] to-[#0d1322]" data-purpose="split-pane-workflow">
+<!-- LEFT: Prompt Console -->
+<section class="col-span-12 lg:col-span-5 flex flex-col gap-4 h-full overflow-hidden" data-view="home">
+<div class="flex-1 bg-[#121829]/95 backdrop-blur-md border border-[#1f2d48] rounded-xl flex flex-col shadow-xl shadow-black/40 overflow-hidden">
+<div class="px-4 py-3 bg-[#151c30]/70 border-b border-[#1f2d48] flex items-center justify-between">
+<div class="flex items-center gap-2"><span class="text-xs font-bold uppercase tracking-wider text-slate-400">Prompt Console</span><span class="text-[11px] font-mono text-cyan-400 bg-cyan-950/40 border border-cyan-800/50 px-2 py-0.5 rounded-full">MCP Agent v1.2</span></div>
+<div class="flex items-center gap-1.5"><span class="flex h-2 w-2 rounded-full bg-cyan-400"></span><span class="text-[11px] font-medium text-slate-300" id="activeToolsPill">200 Active Tools</span></div>
 </div>
+<div class="p-4 flex-1 flex flex-col gap-3">
+<div class="flex items-center justify-between"><label class="text-xs font-medium text-slate-300">Instruction / Task Request</label><span class="text-[10px] text-slate-500 font-mono" id="currentMailboxLabel">devlabadmin@devlab2025.local</span></div>
+<div class="relative flex-1 group">
+<textarea class="w-full h-full p-3.5 bg-[#0b0f19] text-slate-100 rounded-lg border border-[#22304d] text-sm font-mono focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition resize-none leading-relaxed placeholder-slate-600" id="prompt" placeholder="Give a command to your Exchange Agent..." rows="6">Tell me everything about devlabadmin@devlab2025.local</textarea>
+<div class="absolute bottom-2.5 right-3 text-[10px] font-mono text-slate-500 bg-[#0b0f19]/80 px-1.5 py-0.5 rounded border border-[#1b253b]" id="tokenCount">48 tokens</div>
+</div>
+<div class="grid grid-cols-2 gap-2 text-xs">
+<div class="bg-[#0b0f19] border border-[#1d2943] rounded-lg p-2.5 flex items-center justify-between">
+<span class="text-slate-400 text-[11px]">Model Target:</span>
+<select id="provider" class="bg-transparent border-0 text-slate-200 text-xs font-medium p-0 focus:ring-0 cursor-pointer text-right">
+<option>OpenAI</option><option>Anthropic</option><option>Google</option><option>Azure OpenAI</option><option>AWS Bedrock</option><option>Ollama</option><option>Mistral</option><option>Cohere</option><option>Groq</option><option>Together</option><option>OpenRouter</option><option>Custom</option><option>OpenCode</option>
+</select>
+</div>
+<div class="bg-[#0b0f19] border border-[#1d2943] rounded-lg p-2.5 flex items-center justify-between">
+<span class="text-slate-400 text-[11px]">Model:</span>
+<select id="model" class="bg-transparent border-0 text-slate-200 text-xs font-medium p-0 focus:ring-0 cursor-pointer text-right"><option>Select provider first</option></select>
+</div>
+</div>
+<div class="bg-[#0b0f19] border border-[#1d2943] rounded-lg p-2.5 flex flex-col gap-2">
+<div class="flex items-center justify-between"><span class="text-[11px] text-slate-400">API Key</span><span class="text-[10px] text-slate-500">file-based ${API_KEY}</span></div>
+<input id="apiKey" type="password" placeholder="Stored file-based, never shown" class="w-full p-2 bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200 placeholder-slate-600 focus:border-blue-500 outline-none" />
+<input id="baseUrl" placeholder="https://api.openai.com/v1 (custom/Ollama)" class="w-full p-2 bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200 placeholder-slate-600 focus:border-blue-500 outline-none" />
+<div class="flex gap-2"><button class="flex-1 px-3 py-1.5 rounded-md bg-[#1a2336] hover:bg-[#1e2d4a] border border-[#23314e] text-xs text-slate-300" id="testModel">Test connection</button><button class="flex-1 px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium" id="saveModel">Save</button></div>
+<div id="modelOut" class="text-[11px] font-mono text-slate-400 bg-[#0b0f19] border border-[#1d2943] rounded p-2 max-h-20 overflow-auto">Not tested</div>
+</div>
+<div class="pt-2 flex items-center justify-between border-t border-[#1b263e]">
+<div class="flex items-center gap-2">
+<button class="px-5 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-medium text-xs flex items-center gap-2 shadow-lg shadow-blue-500/20" id="runPrompt"><svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg> Run Agent <kbd class="text-[9px] bg-blue-800/60 border border-blue-400/30 px-1 rounded font-mono">⌘↵</kbd></button>
+<button class="px-3.5 py-2 rounded-lg bg-[#141c2e] hover:bg-[#1c273e] text-slate-300 border border-[#23314e] text-xs" id="clearPrompt">Clear</button>
+</div>
+<span class="text-[11px] text-slate-500">Uses your selected MCP host</span>
+</div>
+</div>
+<div class="p-4 bg-[#0e1423] border-t border-[#1a253c]">
+<div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2.5 flex items-center justify-between"><span>Quick Diagnostic Prompts</span><span class="text-[10px] text-slate-500 font-mono">Pre-built recipes</span></div>
+<div class="flex flex-wrap gap-2">
+<button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300 flex items-center gap-1.5" data-quick="Tell me everything about devlabadmin@devlab2025.local"><span class="text-blue-400">📊</span> Executive summary</button>
+<button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300 flex items-center gap-1.5" data-quick="Who is spamming?"><span class="text-amber-400">⚠️</span> Who is spamming?</button>
+<button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300 flex items-center gap-1.5" data-quick="Capacity forecast"><span class="text-cyan-400">📈</span> Capacity forecast</button>
+<button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300 flex items-center gap-1.5" data-quick="Check mailbox quarantine for devlabadmin@devlab2025.local"><span class="text-rose-400">🛡️</span> Mailbox quarantine</button>
+<button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300 flex items-center gap-1.5" data-quick="Test replication health"><span class="text-purple-400">🔄</span> Replication sync</button>
+</div>
+</div>
+</div>
+</section>
+
+<!-- RIGHT: Output & Analysis -->
+<section class="col-span-12 lg:col-span-7 flex flex-col h-full overflow-hidden" data-view="home">
+<div class="flex-1 bg-[#121829]/95 backdrop-blur-md border border-[#1f2d48] rounded-xl flex flex-col shadow-xl shadow-black/40 overflow-hidden">
+<div class="px-4 py-3 bg-[#151c30]/70 border-b border-[#1f2d48] flex items-center justify-between flex-shrink-0">
+<div class="flex items-center gap-3">
+<span class="text-xs font-bold uppercase tracking-wider text-slate-400">Output & Analysis</span>
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" id="execBadge"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> <span id="execText">Idle</span></span>
+</div>
+<div class="flex items-center gap-2">
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-950/40 text-emerald-300 border border-emerald-800/40 text-xs font-mono font-medium" id="healthPill"><svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg><span id="healthText">— / 100 Health</span></div>
+<div class="h-4 w-[1px] bg-[#1f2d48]"></div>
+<button class="p-1.5 rounded-md hover:bg-[#1a2338] text-slate-300 hover:text-white border border-transparent hover:border-[#2b3a58] text-xs flex items-center gap-1" id="copyOut"><svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> Copy</button>
+<button class="p-1.5 rounded-md hover:bg-[#1a2338] text-slate-300 hover:text-white border border-transparent hover:border-[#2b3a58] text-xs flex items-center gap-1" id="exportOut"><svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> Export</button>
+</div>
+</div>
+<div class="px-4 py-2 bg-[#0d121f] border-b border-[#1b253b] flex items-center justify-between text-xs flex-shrink-0">
+<div class="flex items-center gap-4">
+<button class="text-blue-400 font-medium border-b-2 border-blue-500 pb-1 -mb-2" data-output-tab="summary">Executive Summary</button>
+<button class="text-slate-400 hover:text-slate-200 pb-1" data-output-tab="json">Raw MCP JSON</button>
+<button class="text-slate-400 hover:text-slate-200 pb-1" data-output-tab="ps">PowerShell Trace (PS-Remoting)</button>
+</div>
+<span class="text-[11px] font-mono text-slate-500" id="hostPill">Host: devex02.devlab2025.local</span>
+</div>
+<div class="flex-1 p-5 overflow-y-auto space-y-4 bg-[#0a0e17]" id="outputScroll" data-purpose="output-scroll-container">
+<div class="p-4 rounded-lg bg-[#111726] border border-[#1d2a42] flex items-start justify-between" id="identityCard">
+<div class="flex items-center gap-3.5">
+<div class="w-11 h-11 rounded-full bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center font-bold text-white text-sm shadow-md shadow-blue-500/10 ring-2 ring-blue-500/20" id="avatarDA">DA</div>
+<div>
+<div class="flex items-center gap-2">
+<h2 class="text-sm font-semibold text-white" id="outName">DevLab Administrator</h2>
+<span class="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1.5 py-0.5 rounded font-mono" id="outType">UserMailbox</span>
+</div>
+<p class="text-xs text-slate-400 font-mono" id="outEmail">devlabadmin@devlab2025.local</p>
+<div class="flex items-center gap-3 mt-1.5 text-[11px] text-slate-400 font-mono">
+<span>Database: <strong class="text-slate-200 font-medium" id="outDB">DB01-EAST</strong></span><span>•</span><span>Server: <strong class="text-slate-200 font-medium" id="outServer">EX01-DEVLAB</strong></span>
+</div>
+</div>
+</div>
+<div class="text-right">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30" id="outStatus">Active / Healthy</span>
+<p class="text-[10px] text-slate-500 mt-1" id="outLastLogon">Last Logged In: Today 09:42 EST</p>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-3" id="metricsGrid">
+<div class="p-3 bg-[#111726] border border-[#1d2a42] rounded-lg"><div class="text-[11px] text-slate-400 mb-1 flex items-center justify-between"><span>Total Mailbox Size</span><span class="text-cyan-400 font-mono text-[10px]" id="quotaPct">14.2%</span></div><div class="text-lg font-bold text-white font-mono" id="outSize">7.12 <span class="text-xs font-normal text-slate-400">GB</span></div><div class="w-full bg-[#1b253b] h-1.5 rounded-full mt-2 overflow-hidden"><div class="bg-cyan-500 h-full rounded-full" id="quotaBar" style="width: 14.2%"></div></div><div class="text-[10px] text-slate-500 mt-1 font-mono" id="outQuota">Quota Cap: 50.00 GB</div></div>
+<div class="p-3 bg-[#111726] border border-[#1d2a42] rounded-lg"><div class="text-[11px] text-slate-400 mb-1 flex items-center justify-between"><span>Item Count</span><span class="text-indigo-400 font-mono text-[10px]">In sync</span></div><div class="text-lg font-bold text-white font-mono" id="outItems">34,189 <span class="text-xs font-normal text-slate-400">items</span></div><div class="text-[10px] text-slate-500 mt-3 font-mono" id="outDeleted">Deleted Items: 421 (112 MB)</div></div>
+<div class="p-3 bg-[#111726] border border-[#1d2a42] rounded-lg"><div class="text-[11px] text-slate-400 mb-1 flex items-center justify-between"><span>Send / Receive Limit</span><span class="text-emerald-400 font-mono text-[10px]">Normal</span></div><div class="text-lg font-bold text-white font-mono">35 <span class="text-xs font-normal text-slate-400">MB / msg</span></div><div class="text-[10px] text-slate-500 mt-3 font-mono">Max Recipients: 500</div></div>
+</div>
+<div class="p-4 rounded-lg bg-[#111726] border border-[#1d2a42] space-y-3" id="highlightsCard">
+<h3 class="text-xs font-semibold text-slate-200 uppercase tracking-wider flex items-center gap-2"><svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> Mailflow & Permission Highlights</h3>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+<div class="p-2.5 bg-[#0b0f19] rounded-md border border-[#1a253a]"><span class="text-slate-400 block text-[11px]">Active Transport Rules Applied:</span><span class="font-medium text-slate-200" id="outRules">Default-Internal-Disclaimer, DLP-PCI-High</span></div>
+<div class="p-2.5 bg-[#0b0f19] rounded-md border border-[#1a253a]"><span class="text-slate-400 block text-[11px]">Mailbox Forwarding / Redirection:</span><span class="font-medium text-emerald-400" id="outFwd">None (Secure configuration)</span></div>
+<div class="p-2.5 bg-[#0b0f19] rounded-md border border-[#1a253a]"><span class="text-slate-400 block text-[11px]">Litigation Hold Status:</span><span class="font-medium text-amber-400" id="outHold">Enabled (Indefinite Duration)</span></div>
+<div class="p-2.5 bg-[#0b0f19] rounded-md border border-[#1a253a]"><span class="text-slate-400 block text-[11px]">Primary SMTP Address:</span><span class="font-mono text-cyan-300" id="outPrimarySmtp">devlabadmin@devlab2025.local</span></div>
+</div>
+</div>
+<div class="p-4 rounded-lg bg-gradient-to-r from-[#111827] to-[#121c33] border border-blue-900/40" id="aiRecCard">
+<div class="flex items-center gap-2 text-xs font-semibold text-blue-400 mb-2"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg><span>AI Agent Recommendations</span></div>
+<ul class="text-xs text-slate-300 space-y-2 list-disc list-inside" id="aiRecList">
+<li>Mailbox database replica is currently 0 copy queue length; health is optimal.</li>
+<li>No anomalous login locations or password spray attempts detected in transport logs for the last 48h.</li>
+<li>Optional recommendation: Run <code class="bg-blue-950 text-blue-300 px-1 py-0.5 rounded font-mono text-[11px]">Start-ManagedFolderAssistant -Identity devlabadmin</code> to clean up 421 expired staging items.</li>
+</ul>
+</div>
+</div>
+<div class="px-4 py-2 bg-[#0c111e] border-t border-[#1b253b] flex items-center justify-between text-[11px] text-slate-500 font-mono flex-shrink-0">
+<div class="flex items-center gap-3"><span>PowerShell Module: Microsoft.Exchange.Management.v15</span><span>•</span><span>Protocol: Kerberos WinRM</span></div>
+<div class="text-slate-400" id="tokenCount">JSON Tokens: 1,842 in / 420 out</div>
+</div>
+</div>
+</section>
+
+<!-- LOGS/HEALTH/CONFIG (hidden by default, shown via tabs) -->
+<section class="col-span-12 lg:col-span-12 hidden" data-view="logs">
+<div class="bg-[#121829]/95 backdrop-blur-md border border-[#1f2d48] rounded-xl flex flex-col shadow-xl shadow-black/40 overflow-hidden">
+<div class="px-4 py-3 bg-[#151c30]/70 border-b border-[#1f2d48] flex items-center justify-between"><span class="text-xs font-bold uppercase tracking-wider text-slate-400">Logs & Telemetry</span><span class="text-[11px] font-mono text-slate-500" id="logMeta">Real-time • MCP + PowerShell + Audit</span></div>
+<div class="p-4"><div class="flex gap-2 mb-3"><button class="px-2.5 py-1 rounded-md text-xs bg-[#1a2336] text-slate-200 border border-[#23314e]" data-log="mcp">MCP</button><button class="px-2.5 py-1 rounded-md text-xs bg-[#141d30] text-slate-400 border border-[#22304d]" data-log="ps">PowerShell</button><button class="px-2.5 py-1 rounded-md text-xs bg-[#141d30] text-slate-400 border border-[#22304d]" data-log="audit">Audit</button><span class="flex-1"></span><button class="px-2.5 py-1 rounded-md text-xs bg-[#141d30] border border-[#22304d] text-slate-300" id="clearLogs">Clear</button><button class="px-2.5 py-1 rounded-md text-xs bg-[#141d30] border border-[#22304d] text-slate-300" id="exportLogs">Export</button></div><div id="logView" class="font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-words bg-[#0b0f19] border border-[#1d2943] rounded-lg p-3 max-h-[60vh] overflow-auto">Waiting for MCP logs…</div></div>
+</div>
+</section>
+<section class="col-span-12 lg:col-span-12 hidden" data-view="health">
+<div class="grid grid-cols-3 gap-4">
+<div class="bg-[#121829] border border-[#1f2d48] rounded-xl p-4"><div class="flex items-center justify-between"><span class="text-xs font-bold uppercase tracking-wider text-slate-400">Overall</span><span class="px-2 py-0.5 rounded-full text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Healthy</span></div><div class="text-2xl font-bold text-white mt-2">82<span class="text-sm font-normal text-slate-400">/100</span></div><button class="mt-3 px-3 py-1.5 rounded-md bg-[#1a2336] border border-[#23314e] text-xs text-slate-300" id="runDoctorHealth">Run health checks</button></div>
+<div class="bg-[#121829] border border-[#1f2d48] rounded-xl p-4"><h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Servers</h3><p class="text-xs text-slate-500 mt-2">Version and CU via report.exchange_version_and_cu</p></div>
+<div class="bg-[#121829] border border-[#1f2d48] rounded-xl p-4"><h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Transport</h3><p class="text-xs text-slate-500 mt-2">Queue: report.queue_report</p></div>
+</div>
+<div class="bg-[#121829] border border-[#1f2d48] rounded-xl p-4 mt-4 flex items-center justify-between"><span class="text-xs font-bold uppercase tracking-wider text-slate-400">Quick checks</span><div class="flex gap-2"><button class="px-3 py-1.5 rounded-md bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs" id="runDoctor">Run doctor (PowerShell + EWS)</button><button class="px-3 py-1.5 rounded-md bg-[#141d30] border border-[#22304d] text-xs text-slate-300" id="openHealthDetails">View details</button></div></div>
+</section>
+<section class="col-span-12 lg:col-span-12 hidden" data-view="config">
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+<div class="bg-[#121829] border border-[#1f2d48] rounded-xl p-4"><div class="flex items-center justify-between"><span class="text-xs font-bold uppercase tracking-wider text-slate-400">Model Configuration</span><span class="text-xs bg-[#1a2336] border border-[#23314e] px-2 py-0.5 rounded-full text-slate-300">13 providers</span></div>
+<label class="text-xs text-slate-400 mt-3">Provider</label><select id="provider" class="w-full p-2 bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200"><option>OpenAI</option><option>Anthropic</option><option>Google</option><option>Azure OpenAI</option><option>AWS Bedrock</option><option>Ollama</option><option>Mistral</option><option>Cohere</option><option>Groq</option><option>Together</option><option>OpenRouter</option><option>Custom</option><option>OpenCode</option></select>
+<label class="text-xs text-slate-400 mt-2">Model</label><select id="model" class="w-full p-2 bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200"><option>Select provider first</option></select>
+<label class="text-xs text-slate-400 mt-2">API Key</label><input id="apiKey" type="password" placeholder="Stored file-based" class="w-full p-2 bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200" />
+<label class="text-xs text-slate-400 mt-2">Base URL</label><input id="baseUrl" placeholder="https://api.openai.com/v1" class="w-full p-2 bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200" />
+<div class="flex gap-2 mt-3"><button class="flex-1 px-3 py-1.5 rounded-md bg-[#1a2336] border border-[#23314e] text-xs text-slate-300" id="testModel">Test connection</button><button class="flex-1 px-3 py-1.5 rounded-md bg-blue-600 text-white text-xs" id="saveModel">Save</button></div><div id="modelOut" class="mt-2 font-mono text-xs text-slate-400 bg-[#0b0f19] border border-[#1d2943] rounded p-2 max-h-20 overflow-auto">Not tested</div></div>
+<div class="bg-[#121829] border border-[#1f2d48] rounded-xl p-4"><div class="flex items-center justify-between"><span class="text-xs font-bold uppercase tracking-wider text-slate-400">Exchange Configuration</span><span class="text-xs bg-[#1a2336] border border-[#23314e] px-2 py-0.5 rounded-full text-slate-300">PowerShell & EWS</span></div>
+<label class="text-xs text-slate-400 mt-3">Endpoint (FQDN)</label><input id="fqdn" value="mail.contoso.com" class="w-full p-2 bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200" />
+<label class="text-xs text-slate-400 mt-2">Username</label><input id="user" value="admin@contoso.com" class="w-full p-2 bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200" />
+<label class="text-xs text-slate-400 mt-2">Password env var</label><input id="pwEnv" value="EXCHANGE_PASSWORD" class="w-full p-2 bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200" />
+<label class="text-xs text-slate-400 mt-2">Password value</label><input id="pw" type="password" placeholder="Stored via env" class="w-full p-2 bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200" />
+<label class="text-xs text-slate-400 mt-2"><input type="checkbox" id="insecure" /> Allow self-signed (lab)</label>
+<div class="flex gap-2 mt-3"><button class="flex-1 px-3 py-1.5 rounded-md bg-blue-600 text-white text-xs" id="saveAdmin">Save</button><button class="flex-1 px-3 py-1.5 rounded-md bg-[#1a2336] border border-[#23314e] text-xs text-slate-300" id="testConn">Test connection</button></div><div id="adminOut" class="mt-2 font-mono text-xs text-slate-400 bg-[#0b0f19] border border-[#1d2943] rounded p-2 max-h-20 overflow-auto">Not tested</div></div>
+</div>
+<div class="bg-[#121829] border border-[#1f2d48] rounded-xl p-4 mt-4">
+<div class="flex items-center justify-between"><span class="text-xs font-bold uppercase tracking-wider text-slate-400">Profiles</span><span class="text-xs bg-[#1a2336] border border-[#23314e] px-2 py-0.5 rounded-full text-slate-300">Save as profile</span></div>
+<div class="flex gap-2 mt-3"><input id="profileName" placeholder="Profile name, e.g. Production" class="flex-1 p-2 bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200" /><button class="px-3 py-1.5 rounded-md bg-blue-600 text-white text-xs" id="saveProfile">Save as profile</button><select id="profileSelect" class="p-2 bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200"><option>— Load profile —</option></select><button class="px-3 py-1.5 rounded-md bg-[#1a2336] border border-[#23314e] text-xs text-slate-300" id="loadProfile">Load</button><button class="px-3 py-1.5 rounded-md bg-[#1a2336] border border-[#23314e] text-xs text-slate-300" id="deleteProfile">Delete</button></div>
+</div>
+</section>
+</main>
 
 <script>
 const $ = (s)=>document.querySelector(s);
 const $$ = (s)=>[...document.querySelectorAll(s)];
-window.addEventListener('error', (e)=>{ console.error(e.error||e.message); const el=document.getElementById('output'); if(el) el.textContent='JS Error: '+(e.error?.message||e.message); });
+window.addEventListener('error', (e)=>{ console.error(e.error||e.message); const el=document.getElementById('modelOut'); if(el) el.textContent='JS Error: '+(e.error?.message||e.message); });
 const isDesktop = typeof window.exchangeDesktop !== 'undefined';
-console.log('Desktop bridge:', isDesktop ? 'available' : 'NOT available (fallback mode)', 'exchangeDesktop=', typeof (window as any).exchangeDesktop);
 if(!isDesktop){
   const warn=document.createElement('div');
   warn.style.cssText='background:#fffbeb;border:1px solid #fde68a;color:#92400e;padding:8px 12px;border-radius:8px;margin:8px 12px;font-size:12px';
-  warn.textContent='⚠️ Desktop bridge not detected — running in browser fallback mode. Some features (Test connection, Save to config.yaml) will use localStorage. Run via npm run desktop for full functionality.';
+  warn.textContent='⚠️ Not in Electron — fallback mode. Run via npm run desktop for full features.';
   document.body.prepend(warn);
 }
-
-// Theme
-(function(){
-  const savedTheme = localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-  document.documentElement.setAttribute("data-theme", savedTheme);
-  $("#themeToggle")?.addEventListener("click", ()=>{
-    const next = document.documentElement.getAttribute("data-theme")==="dark" ? "light" : "dark";
-    document.documentElement.setAttribute("data-theme", next);
-    localStorage.setItem("theme", next);
-  });
-  $("#openHealth")?.addEventListener("click", ()=>{
-    document.querySelector('[data-tab="health"]')?.click();
-  });
-})();
-
-// Tabs: Home, Logs, Health, Config - robust
+// Tabs — use data-tab / data-view
 $$('[data-tab]').forEach(b=>b.addEventListener('click',()=>{
-  $$('[data-tab]').forEach(x=>x.classList.remove('active')); b.classList.add('active');
+  $$('[data-tab]').forEach(x=>{ x.setAttribute('aria-selected','false'); x.classList.remove('bg-gradient-to-r','from-blue-600','to-indigo-600','text-white'); x.classList.add('text-slate-400'); });
+  b.setAttribute('aria-selected','true'); b.classList.add('bg-gradient-to-r','from-blue-600','to-indigo-600','text-white'); b.classList.remove('text-slate-400');
   const t=b.dataset.tab;
-  document.querySelectorAll('[data-view]').forEach(v=> {
-    const shouldShow = v.dataset.view===t;
-    v.classList.toggle('active', shouldShow);
-    (v as HTMLElement).style.display = shouldShow ? 'block' : 'none';
-  });
+  document.querySelectorAll('section[data-view]').forEach(v=>{ (v as HTMLElement).style.display = (v as HTMLElement).dataset.view===t ? 'flex' : 'none'; });
 }));
- // Ensure Home is visible on load
-document.querySelectorAll('[data-view]').forEach(v=>{
-  const isHome = (v as HTMLElement).dataset.view==="home";
-  v.classList.toggle('active', isHome);
-  (v as HTMLElement).style.display = isHome ? 'block' : 'none';
+ // Ensure Home visible on load
+document.querySelectorAll('section[data-view]').forEach(v=>{ const isHome=(v as HTMLElement).dataset.view==="home"; (v as HTMLElement).style.display=isHome?'flex':'none'; });
+
+// Theme toggle
+const savedTheme = localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+document.documentElement.classList.toggle("dark", savedTheme==="dark");
+document.getElementById("themeToggle")?.addEventListener("click", ()=>{
+  const isDark=document.documentElement.classList.toggle("dark");
+  localStorage.setItem("theme", isDark?"dark":"light");
 });
 
-// Provider models — extensive fallback for all 13 providers
+// Provider models — fallback for all 13
 const fallbackModels: Record<string, string[]> = {
   OpenAI: ["gpt-4o","gpt-4o-mini","o1","o1-mini","gpt-4-turbo","gpt-3.5-turbo"],
   Anthropic: ["claude-3-5-sonnet-20241022","claude-3-5-haiku-20241022","claude-3-opus-20240229","claude-3-haiku-20240307"],
@@ -261,7 +274,7 @@ const fallbackModels: Record<string, string[]> = {
   OpenCode: ["opencode/claude-3-5-sonnet","opencode/gpt-4o","opencode/gemini-1.5-pro","opencode/llama3.1"],
 };
 function populateModelsForProvider(provider: string, models?: any[]){
-  const sel=$("#model") as HTMLSelectElement | null;
+  const sel=document.getElementById("model") as HTMLSelectElement | null;
   if(!sel) return;
   sel.innerHTML="";
   const list = models && models.length ? models.map((m:any)=>m.id||m.name||String(m)) : (fallbackModels[provider]||["default"]);
@@ -271,39 +284,30 @@ function showStatus(elId: string, msg: string, isError=false){
   const el=document.getElementById(elId);
   if(!el) return;
   el.textContent=msg;
-  el.style.borderColor = isError ? "var(--danger)" : "";
+  el.style.borderColor = isError ? "#dc2626" : "";
 }
-
-// Init provider dropdown with fallback immediately
 (function initProviders(){
-  const sel=$("#provider") as HTMLSelectElement | null;
-  if(sel && sel.options.length===0){
-    // Static options already in HTML, but ensure at least fallback if JS cleared
-    Object.keys(fallbackModels).forEach(p=>{
-      if(!Array.from(sel.options).some(o=>o.value===p)){
-        const o=document.createElement('option'); o.value=p; o.textContent=p; sel.appendChild(o);
-      }
-    });
+  const sel=document.getElementById("provider") as HTMLSelectElement | null;
+  if(sel){
+    // Static options already in HTML, ensure fallback
+    if(sel.options.length===0){
+      Object.keys(fallbackModels).forEach(p=>{ const o=document.createElement('option'); o.value=p; o.textContent=p; sel.appendChild(o); });
+    }
+    populateModelsForProvider(sel.value || "OpenAI", null);
   }
-  // Populate models for initial provider
-  const initialProvider = (sel?.value || "OpenAI");
-  populateModelsForProvider(initialProvider, null);
 })();
-
-$("#provider")?.addEventListener('change', async()=>{
-  const provider=($("#provider") as HTMLSelectElement).value;
-  const apiKey=($("#apiKey") as HTMLInputElement)?.value?.trim();
+document.getElementById("provider")?.addEventListener('change', async()=>{
+  const provider=(document.getElementById("provider") as HTMLSelectElement).value;
+  const apiKey=(document.getElementById("apiKey") as HTMLInputElement)?.value?.trim();
   if(!apiKey){ populateModelsForProvider(provider, null); showStatus("modelOut", "Enter API key to fetch live models, showing fallback"); return; }
   try{
     if(!isDesktop) throw new Error("Not in desktop");
-    const res=await (window as any).exchangeDesktop.testProvider({provider, apiKey, baseUrl: ($("#baseUrl") as HTMLInputElement)?.value});
+    const res=await (window as any).exchangeDesktop.testProvider({provider, apiKey, baseUrl: (document.getElementById("baseUrl") as HTMLInputElement)?.value});
     if(res?.models?.length) populateModelsForProvider(provider, res.models);
     else populateModelsForProvider(provider, null);
     showStatus("modelOut", JSON.stringify(res,null,2).slice(0,1500), !res?.ok);
   }catch(e:any){ populateModelsForProvider(provider, null); showStatus("modelOut", "Failed to fetch models, showing fallback: "+(e?.message||String(e)), true); }
 });
-
-// Buttons — all with error handling and fallbacks
 function safeHandler(id: string, fn: () => Promise<void>){
   const el=document.getElementById(id);
   if(!el) return;
@@ -313,28 +317,26 @@ function safeHandler(id: string, fn: () => Promise<void>){
     btn.textContent="Working..."; (btn as HTMLButtonElement).disabled=true;
     try{ await fn(); }catch(e:any){
       const outId = id==="testModel" ? "modelOut" : id==="testConn" ? "adminOut" : id==="runDoctor"||id==="runDoctorHealth" ? "logView" : "output";
-      showStatus(outId, "Error: "+(e?.message||String(e)), true);
+      const target=document.getElementById(outId);
+      if(target) target.textContent="Error: "+(e?.message||String(e));
       console.error(e);
     }finally{ btn.textContent=origText||""; (btn as HTMLButtonElement).disabled=false; }
   });
 }
-
 safeHandler("testModel", async()=>{
   if(!isDesktop) throw new Error("Desktop bridge not available — run via npm run desktop");
-  const r=await (window as any).exchangeDesktop.testProvider({provider:($("#provider") as HTMLSelectElement).value, apiKey:($("#apiKey") as HTMLInputElement).value, baseUrl:($("#baseUrl") as HTMLInputElement).value});
+  const r=await (window as any).exchangeDesktop.testProvider({provider:(document.getElementById("provider") as HTMLSelectElement).value, apiKey:(document.getElementById("apiKey") as HTMLInputElement).value, baseUrl:(document.getElementById("baseUrl") as HTMLInputElement).value});
   showStatus("modelOut", JSON.stringify(r,null,2));
   const models=r?.models ?? [];
-  if(models.length) populateModelsForProvider(($("#provider") as HTMLSelectElement).value, models);
+  if(models.length) populateModelsForProvider((document.getElementById("provider") as HTMLSelectElement).value, models);
 });
-
 safeHandler("saveModel", async()=>{
-  const data={ provider:($("#provider") as HTMLSelectElement).value, model:($("#model") as HTMLSelectElement).value, apiKey:($("#apiKey") as HTMLInputElement).value, baseUrl:($("#baseUrl") as HTMLInputElement).value };
+  const data={ provider:(document.getElementById("provider") as HTMLSelectElement).value, model:(document.getElementById("model") as HTMLSelectElement).value, apiKey:(document.getElementById("apiKey") as HTMLInputElement).value, baseUrl:(document.getElementById("baseUrl") as HTMLInputElement).value };
   localStorage.setItem("exchange-desktop-model", JSON.stringify(data));
-  showStatus("modelOut", "Saved model config (file-based, API key not persisted in plain text — set env var)");
+  showStatus("modelOut", "Saved model config");
 });
-
 safeHandler("saveAdmin", async()=>{
-  const cfg=`exchange:\n  endpoint: https://${($("#fqdn") as HTMLInputElement).value}\n  powershellUri: https://${($("#fqdn") as HTMLInputElement).value}/PowerShell\n`;
+  const cfg=`exchange:\n  endpoint: https://${(document.getElementById("fqdn") as HTMLInputElement).value}\n  powershellUri: https://${(document.getElementById("fqdn") as HTMLInputElement).value}/PowerShell\n`;
   if(isDesktop){
     await (window as any).exchangeDesktop.saveConfig(cfg);
     showStatus("adminOut", "Saved to config.yaml: "+await (window as any).exchangeDesktop.configPath());
@@ -343,85 +345,99 @@ safeHandler("saveAdmin", async()=>{
     showStatus("adminOut", "Saved locally (no desktop bridge)");
   }
 });
-
 safeHandler("testConn", async()=>{
   if(!isDesktop) throw new Error("Desktop bridge not available");
-  const r=await (window as any).exchangeDesktop.runDoctor({endpoint:`https://${($("#fqdn") as HTMLInputElement).value}`, insecure:($("#insecure") as HTMLInputElement).checked});
+  const r=await (window as any).exchangeDesktop.runDoctor({endpoint:`https://${(document.getElementById("fqdn") as HTMLInputElement).value}`, insecure:(document.getElementById("insecure") as HTMLInputElement).checked});
   showStatus("adminOut", JSON.stringify(r,null,2));
 });
-
 safeHandler("runDoctor", async()=>{
   if(!isDesktop) throw new Error("Desktop bridge not available");
-  const r=await (window as any).exchangeDesktop.runDoctor({endpoint:`https://${($("#fqdn") as HTMLInputElement).value}`, insecure:($("#insecure") as HTMLInputElement).checked});
-  showStatus("logView", JSON.stringify(r,null,2));
+  const r=await (window as any).exchangeDesktop.runDoctor({endpoint:`https://${(document.getElementById("fqdn") as HTMLInputElement).value}`, insecure:(document.getElementById("insecure") as HTMLInputElement).checked});
+  const el=document.getElementById("logView"); if(el) el.textContent=JSON.stringify(r,null,2);
+  document.querySelector('[data-tab="logs"]')?.dispatchEvent(new Event('click'));
 });
 safeHandler("runDoctorHealth", async()=>{
-  const btn=document.getElementById("runDoctorHealth");
   if(isDesktop){
-    const r=await (window as any).exchangeDesktop.runDoctor({endpoint:`https://${($("#fqdn") as HTMLInputElement).value}`, insecure:($("#insecure") as HTMLInputElement).checked});
-    showStatus("logView", JSON.stringify(r,null,2));
+    const r=await (window as any).exchangeDesktop.runDoctor({endpoint:`https://${(document.getElementById("fqdn") as HTMLInputElement).value}`, insecure:(document.getElementById("insecure") as HTMLInputElement).checked});
+    const el=document.getElementById("logView"); if(el) el.textContent=JSON.stringify(r,null,2);
     document.querySelector('[data-tab="logs"]')?.dispatchEvent(new Event('click'));
-  } else showStatus("logView", "Doctor requires desktop");
+  } else {
+    const el=document.getElementById("logView"); if(el) el.textContent="Doctor requires desktop";
+  }
 });
-$("#openHealthDetails")?.addEventListener('click', ()=> document.querySelector('[data-tab="health"]')?.dispatchEvent(new Event('click')));
-
-// Logs
+document.getElementById("openHealthDetails")?.addEventListener('click', ()=> document.querySelector('[data-tab="health"]')?.dispatchEvent(new Event('click')));
+// Logs streaming
 if(isDesktop && (window as any).exchangeDesktop.onLog){
-  (window as any).exchangeDesktop.onLog((d:string)=>{ const el=$("#logView"); if(!el) return; el.textContent+=d; el.scrollTop=el.scrollHeight; });
+  (window as any).exchangeDesktop.onLog((d:string)=>{ const el=document.getElementById("logView"); if(!el) return; el.textContent+=d; el.scrollTop=el.scrollHeight; });
 }
-$("#clearLogs")?.addEventListener('click', ()=>{ const el=$("#logView"); if(el) el.textContent=""; });
-$("#exportLogs")?.addEventListener('click', ()=>{ const el=$("#logView"); if(el) navigator.clipboard.writeText(el.textContent||""); showStatus("logView", "Copied logs"); });
-$("#clearPrompt")?.addEventListener('click', ()=>{ const el=$("#prompt") as HTMLTextAreaElement | null; if(el) el.value=""; });
-document.querySelectorAll("[data-quick]").forEach(b=> b.addEventListener('click', ()=>{ const p=$("#prompt") as HTMLTextAreaElement | null; if(p) p.value=(b as HTMLElement).getAttribute("data-quick")||""; }));
-$("#copyOut")?.addEventListener('click', ()=> navigator.clipboard.writeText($("#output")?.textContent||""));
-$("#exportOut")?.addEventListener('click', ()=>{ const blob=new Blob([$("#output")?.textContent||""],{type:"text/markdown"}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download="output.md"; a.click(); });
-
+document.getElementById("clearLogs")?.addEventListener('click', ()=>{ const el=document.getElementById("logView"); if(el) el.textContent=""; });
+document.getElementById("exportLogs")?.addEventListener('click', ()=>{ const el=document.getElementById("logView"); if(el) navigator.clipboard.writeText(el.textContent||""); });
+document.getElementById("clearPrompt")?.addEventListener('click', ()=>{ const el=document.getElementById("prompt") as HTMLTextAreaElement | null; if(el) el.value=""; });
+document.querySelectorAll("[data-quick]").forEach(b=> b.addEventListener('click', ()=>{ const p=document.getElementById("prompt") as HTMLTextAreaElement | null; if(p) p.value=(b as HTMLElement).getAttribute("data-quick")||""; }));
+document.getElementById("copyOut")?.addEventListener('click', ()=> navigator.clipboard.writeText(document.getElementById("output")?.textContent||""));
+document.getElementById("exportOut")?.addEventListener('click', ()=>{ const blob=new Blob([document.getElementById("output")?.textContent||""],{type:"text/markdown"}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download="output.md"; a.click(); });
 // Profiles
 const profileKey="exchange-desktop-profiles";
 function loadProfiles(): Record<string, any>{ try{ return JSON.parse(localStorage.getItem(profileKey)||"{}"); }catch{ return {}; } }
 function saveProfiles(obj: Record<string, any>){ localStorage.setItem(profileKey, JSON.stringify(obj)); refreshProfileSelect(); }
 function refreshProfileSelect(){
-  const sel=$("#profileSelect") as HTMLSelectElement | null; if(!sel) return;
+  const sel=document.getElementById("profileSelect") as HTMLSelectElement | null; if(!sel) return;
   const profiles=loadProfiles();
   sel.innerHTML='<option>— Load profile —</option>';
   Object.keys(profiles).forEach(k=>{ const o=document.createElement('option'); o.value=k; o.textContent=k; sel.appendChild(o); });
 }
 safeHandler("saveProfile", async()=>{
-  const name=($("#profileName") as HTMLInputElement).value.trim(); if(!name) { alert("Enter profile name"); return; }
+  const name=(document.getElementById("profileName") as HTMLInputElement).value.trim(); if(!name) { alert("Enter profile name"); return; }
   const profiles=loadProfiles();
   profiles[name]={
-    fqdn:($("#fqdn") as HTMLInputElement).value, user:($("#user") as HTMLInputElement).value, pwEnv:($("#pwEnv") as HTMLInputElement).value, insecure:($("#insecure") as HTMLInputElement).checked,
-    provider:($("#provider") as HTMLSelectElement).value, model:($("#model") as HTMLSelectElement).value, baseUrl:($("#baseUrl") as HTMLInputElement).value
+    fqdn:(document.getElementById("fqdn") as HTMLInputElement).value, user:(document.getElementById("user") as HTMLInputElement).value, pwEnv:(document.getElementById("pwEnv") as HTMLInputElement).value, insecure:(document.getElementById("insecure") as HTMLInputElement).checked,
+    provider:(document.getElementById("provider") as HTMLSelectElement).value, model:(document.getElementById("model") as HTMLSelectElement).value, baseUrl:(document.getElementById("baseUrl") as HTMLInputElement).value
   };
   saveProfiles(profiles);
   showStatus("modelOut", `Saved profile "${name}"`);
 });
-$("#loadProfile")?.addEventListener('click', ()=>{
-  const name=($("#profileSelect") as HTMLSelectElement).value; const p=loadProfiles()[name]; if(!p) return;
-  ( $("#fqdn") as HTMLInputElement).value=p.fqdn||""; ( $("#user") as HTMLInputElement).value=p.user||""; ( $("#pwEnv") as HTMLInputElement).value=p.pwEnv||""; ( $("#insecure") as HTMLInputElement).checked=!!p.insecure;
-  if(p.provider) ($("#provider") as HTMLSelectElement).value=p.provider;
-  if(p.model){ const sel=$("#model") as HTMLSelectElement; const exists = Array.from(sel.options).some(o=>o.value===p.model); if(!exists){ const o=document.createElement('option'); o.value=p.model; o.textContent=p.model; sel.appendChild(o); } sel.value=p.model; }
-  if(p.baseUrl) ($("#baseUrl") as HTMLInputElement).value=p.baseUrl;
+document.getElementById("loadProfile")?.addEventListener('click', ()=>{
+  const name=(document.getElementById("profileSelect") as HTMLSelectElement).value; const p=loadProfiles()[name]; if(!p) return;
+  (document.getElementById("fqdn") as HTMLInputElement).value=p.fqdn||""; (document.getElementById("user") as HTMLInputElement).value=p.user||""; (document.getElementById("pwEnv") as HTMLInputElement).value=p.pwEnv||""; (document.getElementById("insecure") as HTMLInputElement).checked=!!p.insecure;
+  if(p.provider) (document.getElementById("provider") as HTMLSelectElement).value=p.provider;
+  if(p.model){ const sel=document.getElementById("model") as HTMLSelectElement; const exists = Array.from(sel.options).some(o=>o.value===p.model); if(!exists){ const o=document.createElement('option'); o.value=p.model; o.textContent=p.model; sel.appendChild(o); } sel.value=p.model; }
+  if(p.baseUrl) (document.getElementById("baseUrl") as HTMLInputElement).value=p.baseUrl;
 });
-$("#deleteProfile")?.addEventListener('click', ()=>{
-  const name=($("#profileSelect") as HTMLSelectElement).value; const profiles=loadProfiles(); delete profiles[name]; saveProfiles(profiles);
+document.getElementById("deleteProfile")?.addEventListener('click', ()=>{
+  const name=(document.getElementById("profileSelect") as HTMLSelectElement).value; const profiles=loadProfiles(); delete profiles[name]; saveProfiles(profiles);
 });
 refreshProfileSelect();
-
-// Prompt run
+// Prompt run (mock human-friendly, real would call model + MCP)
 safeHandler("runPrompt", async()=>{
-  const promptEl=$("#prompt") as HTMLTextAreaElement | null;
-  const outEl=$("#output");
-  const statusEl=document.getElementById("outputStatus");
-  const gaugeEl=document.getElementById("gaugeScore");
-  if(!promptEl || !outEl || !statusEl || !gaugeEl) return;
+  const promptEl=document.getElementById("prompt") as HTMLTextAreaElement | null;
+  const outEl=document.getElementById("output");
+  const statusEl=document.getElementById("execText");
+  const healthEl=document.getElementById("healthPill");
+  if(!promptEl || !outEl || !statusEl) return;
   outEl.textContent='Running…';
-  statusEl.textContent="Running";
-  // In real desktop, call model + MCP; here mock human-friendly
+  statusEl.textContent="Running…";
+  if(healthEl) healthEl.textContent="Running…";
   await new Promise(r=>setTimeout(r,600));
-  gaugeEl.textContent="74";
+  // Mock executive summary for demo — real would call ai.tell_me_everything via MCP
+  const mock={
+    name: "DevLab Administrator",
+    email: "devlabadmin@devlab2025.local",
+    db: "DB01-EAST",
+    server: "EX01-DEVLAB",
+    size: "7.12 GB",
+    items: "34,189",
+    health: "100 / 100 Health",
+  };
+  // Update output cards
+  const nameEl=document.getElementById("outName"); if(nameEl) nameEl.textContent=mock.name;
+  const emailEl=document.getElementById("outEmail"); if(emailEl) emailEl.textContent=mock.email;
+  const dbEl=document.getElementById("outDB"); if(dbEl) dbEl.textContent=mock.db;
+  const serverEl=document.getElementById("outServer"); if(serverEl) serverEl.textContent=mock.server;
+  const sizeEl=document.getElementById("outSize"); if(sizeEl) sizeEl.innerHTML=`${mock.size.split(" ")[0]} <span class="text-xs font-normal text-slate-400">GB</span>`;
+  const itemsEl=document.getElementById("outItems"); if(itemsEl) itemsEl.innerHTML=`${mock.items} <span class="text-xs font-normal text-slate-400">items</span>`;
   outEl.textContent=`Executive Summary\nMailbox Health: 74/100 — The mailbox is operational but requires attention because it is at 95.6% of quota and has grown 3.8 GB in the last 30 days.\n\nFindings\nQuota Risk — Projected to reach quota in ~20 days.\nSecurity — External forwarding is enabled.\nCleanup — 3.8 GB exists in recoverable/deleted content.\nConnectivity — No significant problems.\nMigration — Successfully migrated to Exchange 2019.\n\nRecommended Actions\n• Review mailbox quota.\n• Review external forwarding.\n• Review Recoverable Items.`;
-  statusEl.textContent="Done";
+  statusEl.textContent="Execution Completed in 1.18s";
+  if(healthEl) healthEl.textContent="100 / 100 Health";
 });
 </script>
 </body>
