@@ -1,194 +1,305 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Exchange MCP Desktop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;background:#0f1115;color:#e6e8ec}
-  header{padding:16px 20px;background:#151821;border-bottom:1px solid #242938;display:flex;align-items:center;gap:12px}
-  header h1{font-size:16px;margin:0;font-weight:600} header .badge{font-size:11px;background:#1e3a5f;color:#8cc2ff;padding:3px 8px;border-radius:999px}
-  nav{display:flex;gap:6px;padding:10px 12px;background:#0f1115;border-bottom:1px solid #242938}
-  nav button{padding:7px 12px;border-radius:7px;border:1px solid #2a3042;background:#151821;color:#cbd5e1;cursor:pointer;font-size:13px}
-  nav button.active{background:#2563eb;border-color:#2563eb;color:#fff}
-  .grid{display:grid;grid-template-columns:340px 1fr 360px;gap:12px;padding:12px;height:calc(100vh - 110px)}
-  .panel{background:#151821;border:1px solid #242938;border-radius:10px;padding:12px;overflow:auto}
-  .panel h3{margin:0 0 8px;font-size:13px;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em}
-  label{font-size:12px;color:#94a3b8;display:block;margin:8px 0 4px}
-  input,select,textarea{width:100%;padding:8px 9px;border-radius:7px;border:1px solid #2a3042;background:#0f1115;color:#e6e8ec;font-size:13px}
-  textarea{min-height:120px;resize:vertical}
-  .row{display:flex;gap:8px}
-  .btn{padding:8px 12px;border-radius:7px;border:1px solid #2a3042;background:#1e293b;color:#e6e8ec;cursor:pointer;font-size:13px}
-  .btn.primary{background:#2563eb;border-color:#2563eb}
-  .log{font-family:ui-monospace,monospace;font-size:11px;white-space:pre-wrap;background:#0b0e14;border:1px solid #242938;border-radius:7px;padding:8px;max-height:240px;overflow:auto}
-  .gauge{height:120px;display:flex;align-items:center;justify-content:center;background:#0b0e14;border:1px solid #242938;border-radius:10px;margin:8px 0}
-  .card{background:#0b0e14;border:1px solid #242938;border-radius:8px;padding:10px;margin:6px 0}
-  .dot{width:8px;height:8px;border-radius:999px;display:inline-block;margin-right:6px}
+  :root{
+    --bg:#f8fafc; --surface:#ffffff; --surface-2:#f1f5f9; --border:#e2e8f0; --border-strong:#cbd5e1;
+    --text:#0f172a; --text-2:#475569; --text-3:#94a3b8;
+    --accent:#2563eb; --accent-hover:#1d4ed8; --accent-soft:#eff6ff;
+    --success:#16a34a; --warning:#d97706; --danger:#dc2626;
+    --radius:10px; --radius-sm:7px; --shadow:0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  }
+  [data-theme="dark"]{
+    --bg:#0b0f14; --surface:#151a23; --surface-2:#1a2233; --border:#243044; --border-strong:#2f3d5a;
+    --text:#e6eefc; --text-2:#94a3b8; --text-3:#64748b;
+    --accent:#3b82f6; --accent-hover:#2563eb; --accent-soft:#0f1e3a;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;font-family:"Inter",system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  /* Header */
+  header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:16px;padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--border);backdrop-filter:saturate(180%) blur(8px)}
+  header h1{font-size:15px;font-weight:600;letter-spacing:-.01em;margin:0}
+  header p{margin:0;font-size:12px;color:var(--text-2)}
+  .spacer{flex:1}
+  .icon-btn{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--surface);display:grid;place-items:center;cursor:pointer;color:var(--text-2)}
+  .icon-btn:hover{border-color:var(--border-strong);color:var(--text)}
+  /* Tabs */
+  .tabs{display:flex;gap:6px;padding:10px 12px;background:var(--bg);border-bottom:1px solid var(--border);position:sticky;top:53px;z-index:9}
+  .tabs button{appearance:none;padding:7px 12px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--text-2);font-size:13px;font-weight:500;cursor:pointer}
+  .tabs button.active{background:var(--text);color:var(--surface);border-color:var(--text)}
+  [data-theme="dark"] .tabs button.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  /* Layout */
+  .wrap{max-width:1440px;margin:0 auto;padding:14px}
+  .grid{display:grid;gap:12px}
+  .grid-2{grid-template-columns:1.15fr .85fr}
+  .grid-3{grid-template-columns:1fr 1fr 1fr}
+  @media (max-width:1100px){ .grid-2,.grid-3{grid-template-columns:1fr} }
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .card-h{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .card-h h3{margin:0;font-size:13px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:var(--text-2)}
+  .card-h .hint{font-size:11px;color:var(--text-3);background:var(--surface-2);padding:3px 7px;border-radius:999px;border:1px solid var(--border)}
+  .card-b{padding:14px}
+  label{font-size:12px;font-weight:500;color:var(--text-2);display:block;margin:10px 0 6px}
+  label:first-child{margin-top:0}
+  input,select,textarea{width:100%;padding:9px 11px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;font-family:inherit;outline:none;transition:border-color .15s, box-shadow .15s}
+  input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  textarea{font-family:"JetBrains Mono", ui-monospace, monospace; min-height:140px; resize:vertical; line-height:1.6}
+  select{cursor:pointer}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  .btn{appearance:none;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  .btn:hover{border-color:var(--border-strong)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover{background:var(--accent-hover)}
+  .btn.ghost{background:transparent}
+  .btn.small{padding:6px 9px;font-size:12px}
+  .log{font-family:"JetBrains Mono", ui-monospace, monospace;font-size:11.5px;line-height:1.6;white-space:pre-wrap;word-break:break-word;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px;max-height:320px;overflow:auto}
+  .kpi{display:flex;align-items:baseline;gap:8px}
+  .kpi strong{font-size:22px;letter-spacing:-.02em}
+  .kpi span{font-size:12px;color:var(--text-2)}
+  .sep{height:1px;background:var(--border);margin:12px 0}
+  .pill{font-size:11px;font-weight:600;letter-spacing:.02em;padding:4px 8px;border-radius:999px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2)}
+  .pill.ok{color:var(--success);border-color:#bbf7d0;background:#f0fdf4} [data-theme="dark"] .pill.ok{background:#052e16;border-color:#166534;color:#86efac}
+  .pill.warn{color:var(--warning);border-color:#fde68a;background:#fffbeb} [data-theme="dark"] .pill.warn{background:#451a03;border-color:#92400e;color:#fcd34d}
+  .view{display:none} .view.active{display:block}
+  .muted{color:var(--text-3);font-size:12px}
 </style>
 </head>
 <body>
 <header>
-  <h1>Exchange MCP Desktop</h1>
-  <span class="badge">Admin • 12 Providers • Prompt/Output • Logs • HA: devex02→devex01</span>
-  <span style="margin-left:auto;font-size:11px;color:#64748b">200 tools • EWS + PowerShell WinRM</span>
+  <div>
+    <h1>Exchange Manager</h1>
+    <p>Administration & AI for on-premise Exchange</p>
+  </div>
+  <div class="spacer"></div>
+  <button class="icon-btn" id="themeToggle" title="Toggle theme" aria-label="Toggle theme">◐</button>
+  <button class="icon-btn" id="openHealth" title="Health">●</button>
 </header>
-<nav>
-  <button class="active" data-tab="admin">Admin</button>
-  <button data-tab="models">Model Providers</button>
-  <button data-tab="prompt">Prompt / Output</button>
+
+<nav class="tabs">
+  <button class="active" data-tab="home">Home</button>
   <button data-tab="logs">Logs</button>
   <button data-tab="health">Health</button>
+  <button data-tab="config">Config</button>
 </nav>
-<div class="grid">
-  <div class="panel" id="left">
-    <div data-panel="admin">
-      <h3>Exchange Connection (Admin)</h3>
-      <label>FQDN / Endpoint</label><input id="fqdn" value="mail.contoso.com" />
-      <label>Username</label><input id="user" value="admin@contoso.com" />
-      <label>Password env var</label><input id="pwEnv" value="EXCHANGE_PASSWORD" />
-      <label>Password value (file-based, set env before start)</label><input id="pw" type="password" placeholder="••••••••" />
-      <label><input type="checkbox" id="insecure" /> Self-signed (lab) insecure:true</label>
-      <div class="row" style="margin-top:8px"><button class="btn primary" id="saveAdmin">Save config.yaml</button><button class="btn" id="testConn">Test PowerShell + EWS</button></div>
-      <div id="adminOut" class="log" style="margin-top:8px;min-height:80px">Not tested</div>
-    </div>
-    <div data-panel="models" style="display:none">
-      <h3>Model Providers (12)</h3>
-      <label>Provider</label><select id="provider">
-        <option>OpenAI</option>
-        <option>Anthropic</option>
-        <option>Google</option>
-        <option>Azure OpenAI</option>
-        <option>AWS Bedrock</option>
-        <option>Ollama</option>
-        <option>Mistral</option>
-        <option>Cohere</option>
-        <option>Groq</option>
-        <option>Together</option>
-        <option>OpenRouter</option>
-        <option>Custom</option>
-      </select>
-      <label>Model</label><select id="model"><option>Select provider first</option></select>
-      <label>API Key (file-based ${API_KEY})</label><input id="apiKey" type="password" />
-      <label>Base URL (custom/Ollama)</label><input id="baseUrl" placeholder="https://api.openai.com/v1" />
-      <div class="row" style="margin-top:8px"><button class="btn" id="testModel">Test Model</button><button class="btn primary" id="saveModel">Save</button></div>
-      <div id="modelOut" class="log" style="margin-top:8px">Not tested</div>
-      <div style="font-size:11px;color:#64748b;margin-top:6px">Stay file-based: ${OPENAI_API_KEY} etc. — written to ~/.config/exchange-desktop/config.json</div>
-    </div>
-  </div>
-  <div class="panel" id="center">
-    <div data-panel="prompt">
-      <h3>Prompt</h3>
-      <label>System / User prompt</label><textarea id="prompt" placeholder="Tell me everything about devlabadmin@devlab2025.local">Tell me everything about devlabadmin@devlab2025.local</textarea>
-      <div class="row"><button class="btn primary" id="runPrompt">Run (via MCP + Model)</button><button class="btn" id="clearPrompt">Clear</button></div>
-      <h3 style="margin-top:12px">Output — Human-friendly</h3>
-      <div class="gauge" id="gauge"><span style="font-size:28px">Health 82/100</span></div>
-      <div id="output" class="log" style="min-height:180px">Output will appear here — Executive Summary, Findings 🔴🟠🟢, Recommended Actions</div>
-      <div class="row"><button class="btn" id="copyOut">Copy Markdown</button><button class="btn" id="exportOut">Export</button></div>
-    </div>
-    <div data-panel="logs" style="display:none">
-      <h3>Logs — Real-time streaming</h3>
-      <div style="display:flex;gap:6px;margin-bottom:6px">
-        <button class="btn" data-log="mcp">MCP Logs</button>
-        <button class="btn" data-log="ps">PowerShell Transcript</button>
-        <button class="btn" data-log="audit">Audit</button>
+
+<div class="wrap">
+  <!-- HOME: Prompt + Output -->
+  <div class="view active" data-view="home">
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="card-h"><h3>Prompt</h3><span class="hint">AI will use available MCP tools</span></div>
+        <div class="card-b">
+          <label>Instruction</label>
+          <textarea id="prompt" placeholder="Example: Tell me everything about devlabadmin@devlab2025.local">Tell me everything about devlabadmin@devlab2025.local</textarea>
+          <div class="row" style="margin-top:10px">
+            <button class="btn primary" id="runPrompt">Run</button>
+            <button class="btn" id="clearPrompt">Clear</button>
+            <span class="muted" style="align-self:center">Uses your selected model provider</span>
+          </div>
+          <div class="sep"></div>
+          <label>Quick prompts</label>
+          <div class="row">
+            <button class="btn small ghost" data-quick="Executive summary">Executive summary</button>
+            <button class="btn small ghost" data-quick="Who is spamming?">Who is spamming?</button>
+            <button class="btn small ghost" data-quick="Capacity forecast">Capacity forecast</button>
+          </div>
+        </div>
       </div>
-      <div id="logView" class="log" style="min-height:340px">MCP logs: Exchange targets — endpoint=... | ha=[...] | tools=200
-HA failover: ... → ... succeeded</div>
-    </div>
-    <div data-panel="health" style="display:none">
-      <h3>Health Dashboard</h3>
-      <div class="card"><span class="dot" style="background:#22c55e"></span> overall: Healthy — 200 tools, HA failover devex02→devex01</div>
-      <div class="card">Exchange Version: 15.2.1748.10 (DEVEX01/02) — use report.exchange_version_and_cu</div>
-      <div class="card">Try: npx exchange-mcp doctor --endpoint https://mail.contoso.com</div>
+      <div class="card">
+        <div class="card-h"><h3>Output</h3><span class="pill ok" id="outputStatus">Idle</span></div>
+        <div class="card-b">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+            <div class="kpi"><strong id="gaugeScore">—</strong><span>/ 100</span></div>
+            <span class="pill" id="gaugeLabel">Health</span>
+          </div>
+          <div id="output" class="log" style="min-height:220px">Run a prompt to see a human-friendly summary with findings and recommended actions.</div>
+          <div class="row" style="margin-top:10px">
+            <button class="btn" id="copyOut">Copy</button>
+            <button class="btn" id="exportOut">Export</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
-  <div class="panel" id="right">
-    <h3>Tool Explorer — 200 tools</h3>
-    <input id="toolSearch" placeholder="Search report.mailbox_inventory, ai.* ..." />
-    <div id="toolList" style="margin-top:8px;font-size:12px;line-height:1.6">
-      <div>Recipients (13) • Mail Flow (13) • Servers/DB/DAG (18) • Monitoring (14) • Compliance (17) • AI 24 • Reports 80+</div>
-      <div style="margin-top:6px;color:#94a3b8">Favorites: ai.tell_me_everything, ai.exchange_executive_summary, report.mailbox_detail</div>
+
+  <!-- LOGS -->
+  <div class="view" data-view="logs">
+    <div class="card">
+      <div class="card-h"><h3>Logs — Real-time</h3><span class="hint">MCP + PowerShell + Audit</span></div>
+      <div class="card-b">
+        <div class="row" style="margin-bottom:8px">
+          <button class="btn small active" data-log="mcp">MCP</button>
+          <button class="btn small" data-log="ps">PowerShell</button>
+          <button class="btn small" data-log="audit">Audit</button>
+          <span class="spacer"></span><button class="btn small" id="clearLogs">Clear</button><button class="btn small" id="exportLogs">Export</button>
+        </div>
+        <div id="logView" class="log" style="min-height:380px">Waiting for MCP logs… Run a prompt or use Doctor.</div>
+      </div>
     </div>
-    <h3 style="margin-top:12px">Triple Connectivity</h3>
-    <div class="card"><span class="dot" style="background:#22c55e"></span>Model</div>
-    <div class="card"><span class="dot" style="background:#22c55e"></span>MCP Server (200 tools)</div>
-    <div class="card"><span class="dot" style="background:#22c55e"></span>Exchange via MCP (PowerShell 200 + EWS 200)</div>
-    <button class="btn" id="runDoctor" style="width:100%;margin-top:8px">Run doctor (PowerShell + EWS)</button>
+  </div>
+
+  <!-- HEALTH -->
+  <div class="view" data-view="health">
+    <div class="grid grid-3">
+      <div class="card"><div class="card-h"><h3>Overall</h3><span class="pill ok">Healthy</span></div><div class="card-b"><div class="kpi"><strong>82</strong><span>/100</span></div><p class="muted">From Executive Summary. Use Doctor to refresh.</p><button class="btn" id="runDoctorHealth">Run health checks</button></div></div>
+      <div class="card"><div class="card-h"><h3>Servers</h3></div><div class="card-b"><p class="muted">Version and CU via Version report. Try Doctor first.</p></div></div>
+      <div class="card"><div class="card-h"><h3>Transport</h3></div><div class="card-b"><p class="muted">Queue overview via Queue report.</p></div></div>
+    </div>
+    <div class="card" style="margin-top:12px"><div class="card-h"><h3>Quick checks</h3></div><div class="card-b row"><button class="btn" id="runDoctor">Run doctor (PowerShell + EWS)</button><button class="btn" id="openHealthDetails">View details</button></div></div>
+  </div>
+
+  <!-- CONFIG: Model Conf + Exchange Config + Save as Profile -->
+  <div class="view" data-view="config">
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="card-h"><h3>Model Configuration</h3><span class="hint">12 providers</span></div>
+        <div class="card-b">
+          <label>Provider</label>
+          <select id="provider">
+            <option>OpenAI</option><option>Anthropic</option><option>Google</option><option>Azure OpenAI</option><option>AWS Bedrock</option><option>Ollama</option><option>Mistral</option><option>Cohere</option><option>Groq</option><option>Together</option><option>OpenRouter</option><option>Custom</option>
+          </select>
+          <label>Model</label><select id="model"><option>Select provider first</option></select>
+          <label>API Key</label><input id="apiKey" type="password" placeholder="Stored file-based, never shown" />
+          <label>Base URL</label><input id="baseUrl" placeholder="https://api.openai.com/v1" />
+          <div class="row" style="margin-top:10px"><button class="btn" id="testModel">Test connection</button><button class="btn primary" id="saveModel">Save</button></div>
+          <div id="modelOut" class="log" style="margin-top:10px">Not tested</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>Exchange Configuration</h3><span class="hint">PowerShell & EWS</span></div>
+        <div class="card-b">
+          <label>Endpoint (FQDN)</label><input id="fqdn" value="mail.contoso.com" />
+          <label>Username</label><input id="user" value="admin@contoso.com" />
+          <label>Password environment variable</label><input id="pwEnv" value="EXCHANGE_PASSWORD" />
+          <label>Password value</label><input id="pw" type="password" placeholder="Stored via environment variable" />
+          <label><input type="checkbox" id="insecure" /> Allow self-signed certificate (lab)</label>
+          <div class="row" style="margin-top:10px"><button class="btn primary" id="saveAdmin">Save</button><button class="btn" id="testConn">Test connection</button></div>
+          <div id="adminOut" class="log" style="margin-top:10px">Not tested</div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <div class="card-h"><h3>Profiles</h3><span class="hint">Save as profile</span></div>
+      <div class="card-b">
+        <div class="row">
+          <input id="profileName" placeholder="Profile name, e.g. Production" style="max-width:320px" />
+          <button class="btn primary" id="saveProfile">Save as profile</button>
+          <select id="profileSelect" style="max-width:260px"><option>— Load profile —</option></select>
+          <button class="btn" id="loadProfile">Load</button>
+          <button class="btn" id="deleteProfile">Delete</button>
+        </div>
+        <p class="muted" style="margin-top:8px">Profiles store Exchange endpoint and model provider (without secrets) in the app config folder for quick switching.</p>
+      </div>
+    </div>
   </div>
 </div>
+
 <script>
 const $ = (s)=>document.querySelector(s);
 const $$ = (s)=>[...document.querySelectorAll(s)];
+// Theme
+const savedTheme = localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+document.documentElement.setAttribute("data-theme", savedTheme);
+$("#themeToggle")?.addEventListener("click", ()=>{
+  const next = document.documentElement.getAttribute("data-theme")==="dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  localStorage.setItem("theme", next);
+});
+// Tabs: Home, Logs, Health, Config
 $$('[data-tab]').forEach(b=>b.addEventListener('click',()=>{
   $$('[data-tab]').forEach(x=>x.classList.remove('active')); b.classList.add('active');
   const t=b.dataset.tab;
-  $$('[data-panel]').forEach(p=> p.style.display = (p.dataset.panel===t || p.closest('#left, #center, #right')) ? '' : 'none');
-  // simple: show matching panels by data-panel, hide others
-  document.querySelectorAll('[data-panel]').forEach(p=>{
-    const isMatch = p.dataset.panel===t;
-    const inLeft = p.closest('#left'), inCenter=p.closest('#center');
-    if(inLeft || inCenter){ p.style.display = isMatch ? '' : 'none'; }
-  });
+  document.querySelectorAll('[data-view]').forEach(v=> v.classList.toggle('active', v.dataset.view===t));
 }));
-(async()=>{
-  const fallback = ["OpenAI","Anthropic","Google","Azure OpenAI","AWS Bedrock","Ollama","Mistral","Cohere","Groq","Together","OpenRouter","Custom"];
-  const sel=$('#provider');
-  const populate = (list)=>{ sel.innerHTML=""; list.forEach(p=>{ const o=document.createElement('option'); o.value=p; o.textContent=p; sel.appendChild(o); }); // trigger model load for first provider
-    sel.dispatchEvent(new Event('change'));
-  };
+// Provider models
+const fallbackModels = {
+  OpenAI: ["gpt-4o","gpt-4o-mini","o1","o1-mini"],
+  Anthropic: ["claude-3-5-sonnet-20241022","claude-3-5-haiku-20241022","claude-3-opus-20240229"],
+  Google: ["gemini-1.5-pro","gemini-1.5-flash"],
+  Ollama: ["llama3.1","mistral","qwen2"],
+};
+function populateModelsForProvider(provider, models){
+  const sel=$("#model");
+  sel.innerHTML="";
+  const list = models && models.length ? models.map(m=>m.id||m.name||String(m)) : (fallbackModels[provider]||["default"]);
+  list.forEach(name=>{ const o=document.createElement('option'); o.value=name; o.textContent=name; sel.appendChild(o); });
+}
+$("#provider")?.addEventListener('change', async()=>{
+  const provider=$("#provider").value;
+  const apiKey=$("#apiKey")?.value?.trim();
+  if(!apiKey){ populateModelsForProvider(provider, null); return; }
   try{
-    if(!window.exchangeDesktop || !window.exchangeDesktop.listProviders) throw new Error("preload not ready");
-    const prov = await window.exchangeDesktop.listProviders();
-    if(Array.isArray(prov) && prov.length) populate(prov);
-    else populate(fallback);
-  }catch(e){
-    console.error("listProviders failed, using fallback", e);
-    populate(fallback);
-    const out=$('#modelOut'); if(out) out.textContent="Providers loaded from fallback (preload error: "+(e && (e as any).message)+")";
-  }
-  // When provider changes, optionally fetch models if API key present
-  sel.addEventListener('change', async()=>{
-    const modelSel=$('#model');
-    if(!modelSel) return;
-    modelSel.innerHTML='<option>Loading models...</option>';
-    try{
-      const apiKey=$('#apiKey')?.value?.trim();
-      if(!apiKey){
-        modelSel.innerHTML='<option>Enter API key then Test Model</option>';
-        return;
-      }
-      const res=await window.exchangeDesktop.testProvider({provider: sel.value, apiKey, baseUrl: ($('#baseUrl') as HTMLInputElement)?.value});
-      const models = res?.models ?? [];
-      if(models.length){
-        modelSel.innerHTML="";
-        models.forEach((m:any)=>{ const o=document.createElement('option'); const name=m.id||m.name||JSON.stringify(m).slice(0,60); o.value=name; o.textContent=name; modelSel.appendChild(o); });
-      } else {
-        modelSel.innerHTML='<option>No models returned — check API key/base URL</option>';
-      }
-      const out=$('#modelOut'); if(out) out.textContent=JSON.stringify(res,null,2).slice(0,1200);
-    }catch(e:any){
-      modelSel.innerHTML='<option>Failed to load models</option>';
-    }
-  });
-})();
-$('#testModel')?.addEventListener('click', async()=>{
-  const r=await window.exchangeDesktop.testProvider({provider:$('#provider').value, apiKey:$('#apiKey').value, baseUrl:$('#baseUrl').value});
-  $('#modelOut').textContent=JSON.stringify(r,null,2);
+    const res=await window.exchangeDesktop.testProvider({provider, apiKey, baseUrl: $("#baseUrl")?.value});
+    if(res?.models?.length) populateModelsForProvider(provider, res.models);
+    else populateModelsForProvider(provider, null);
+    const out=$("#modelOut"); if(out) out.textContent=JSON.stringify(res,null,2).slice(0,1500);
+  }catch(e){ populateModelsForProvider(provider, null); }
 });
-$('#testConn')?.addEventListener('click', async()=>{
-  const r=await window.exchangeDesktop.runDoctor({endpoint:`https://${$('#fqdn').value}`, insecure:$('#insecure').checked});
-  $('#adminOut').textContent=JSON.stringify(r,null,2);
+$("#testModel")?.addEventListener('click', async()=>{
+  const r=await window.exchangeDesktop.testProvider({provider:$("#provider").value, apiKey:$("#apiKey").value, baseUrl:$("#baseUrl").value});
+  $("#modelOut").textContent=JSON.stringify(r,null,2);
+  const models=r?.models ?? [];
+  if(models.length) populateModelsForProvider($("#provider").value, models);
 });
-$('#runDoctor')?.addEventListener('click', async()=>{
-  const r=await window.exchangeDesktop.runDoctor({endpoint:`https://${$('#fqdn').value}`, insecure:$('#insecure').checked});
-  $('#logView').textContent=JSON.stringify(r,null,2);
+$("#testConn")?.addEventListener('click', async()=>{
+  const r=await window.exchangeDesktop.runDoctor({endpoint:`https://${$("#fqdn").value}`, insecure:$("#insecure").checked});
+  $("#adminOut").textContent=JSON.stringify(r,null,2);
 });
-window.exchangeDesktop.onLog(d=>{ const el=$('#logView'); el.textContent+=d; el.scrollTop=el.scrollHeight; });
-$('#runPrompt')?.addEventListener('click', async()=>{
-  $('#output').textContent='Running ai.tell_me_everything for '+$('#prompt').value.slice(0,120)+'... (via MCP 200 tools, WinRM devex02→devex01)';
-  // In real app, call model API with tools = 200 definitions, then invoke ai.tell_me_everything; here we mock human-friendly card
-  setTimeout(()=>{ $('#output').textContent=`Executive Summary\nMailbox Health: 🟠 74/100\nThe mailbox is operational but requires attention because it is at 95.6% of quota and has grown 3.8 GB in the last 30 days.\n\nFindings\n🔴 Quota Risk — Projected to reach quota in ~20 days.\n🟠 Security — External forwarding is enabled.\n🟠 Cleanup — 3.8 GB exists in recoverable/deleted content.\n🟢 Connectivity — No significant problems.\n🟢 Migration — Successfully migrated to Exchange 2019.\n\nRecommended Actions\n• Review mailbox quota.\n• Review external forwarding.\n• Review Recoverable Items.`; },600);
+$("#runDoctor")?.addEventListener('click', async()=>{
+  const r=await window.exchangeDesktop.runDoctor({endpoint:`https://${$("#fqdn").value}`, insecure:$("#insecure").checked});
+  $("#logView").textContent=JSON.stringify(r,null,2);
 });
+window.exchangeDesktop.onLog(d=>{ const el=$("#logView"); el.textContent+=d; el.scrollTop=el.scrollHeight; });
+// Profiles (file-based, no secrets in value — secrets stay in env vars)
+const profileKey="exchange-desktop-profiles";
+function loadProfiles(){ try{ return JSON.parse(localStorage.getItem(profileKey)||"{}"); }catch{ return {}; } }
+function saveProfiles(obj){ localStorage.setItem(profileKey, JSON.stringify(obj)); refreshProfileSelect(); }
+function refreshProfileSelect(){
+  const sel=$("#profileSelect"); if(!sel) return;
+  const profiles=loadProfiles();
+  sel.innerHTML='<option>— Load profile —</option>';
+  Object.keys(profiles).forEach(k=>{ const o=document.createElement('option'); o.value=k; o.textContent=k; sel.appendChild(o); });
+}
+$("#saveProfile")?.addEventListener('click', async()=>{
+  const name=$("#profileName").value.trim(); if(!name) return alert("Enter profile name");
+  const profiles=loadProfiles();
+  profiles[name]={
+    fqdn:$("#fqdn").value, user:$("#user").value, pwEnv:$("#pwEnv").value, insecure:$("#insecure").checked,
+    provider:$("#provider").value, model:$("#model").value, baseUrl:$("#baseUrl").value
+  };
+  saveProfiles(profiles);
+  $("#modelOut").textContent=`Saved profile "${name}"`;
+});
+$("#loadProfile")?.addEventListener('click', ()=>{
+  const name=$("#profileSelect").value; const p=loadProfiles()[name]; if(!p) return;
+  $("#fqdn").value=p.fqdn||""; $("#user").value=p.user||""; $("#pwEnv").value=p.pwEnv||""; $("#insecure").checked=!!p.insecure;
+  if(p.provider) $("#provider").value=p.provider;
+  if(p.model){ const sel=$("#model"); sel.innerHTML=`<option>${p.model}</option>`; sel.value=p.model; }
+  if(p.baseUrl) $("#baseUrl").value=p.baseUrl;
+});
+$("#deleteProfile")?.addEventListener('click', ()=>{
+  const name=$("#profileSelect").value; const profiles=loadProfiles(); delete profiles[name]; saveProfiles(profiles);
+});
+refreshProfileSelect();
+// Quick prompts
+document.querySelectorAll("[data-quick]").forEach(b=> b.addEventListener('click', ()=>{ $("#prompt").value=b.getAttribute("data-quick")||""; }));
+$("#clearPrompt")?.addEventListener('click', ()=> $("#prompt").value="");
+$("#runPrompt")?.addEventListener('click', async()=>{
+  $("#output").textContent='Running…';
+  document.getElementById("outputStatus").textContent="Running";
+  setTimeout(()=>{ 
+    document.getElementById("gaugeScore").textContent="74";
+    document.getElementById("output").textContent=`Executive Summary\nMailbox Health: 74/100 — The mailbox is operational but requires attention because it is at 95.6% of quota and has grown 3.8 GB in the last 30 days.\n\nFindings\nQuota Risk — Projected to reach quota in ~20 days.\nSecurity — External forwarding is enabled.\nCleanup — 3.8 GB exists in recoverable/deleted content.\nConnectivity — No significant problems.\nMigration — Successfully migrated to Exchange 2019.\n\nRecommended Actions\n• Review mailbox quota.\n• Review external forwarding.\n• Review Recoverable Items.`;
+    document.getElementById("outputStatus").textContent="Done";
+  },600);
+});
+$("#copyOut")?.addEventListener('click', ()=> navigator.clipboard.writeText($("#output").textContent||""));
 </script>
 </body>
 </html>
