@@ -16,6 +16,7 @@ Exchange administrators can use AI assistants such as OpenCode, Claude Code, Cur
 - [Features](#features)
 - [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
+- [Desktop App](#desktop-app)
 - [Configuration](#configuration)
 - [Connect to Clients](#connect-to-clients)
 - [Tools Reference](#tools-reference)
@@ -96,6 +97,36 @@ npx exchange-mcp doctor  # Tests both PowerShell and EWS endpoints
 opencode mcp list        # Should show connected
 claude mcp list          # Should show connected
 ```
+
+## Desktop App
+
+A standalone Electron desktop app is included for administrators who prefer a graphical interface.
+
+**Run in development:**
+
+```bash
+npm install
+npm run build              # compile MCP + desktop
+npm run desktop            # start Electron (loads src/desktop/renderer/index.html)
+# Alternative with tsx: npx electron src/desktop/main.ts
+```
+
+**Build installer:**
+
+```bash
+npm run desktop:build      # uses electron-builder, outputs dist/installer
+# Artifacts: dist/Exchange MCP Desktop Setup.exe (Windows) and .dmg (macOS)
+# No publish by default (--publish=never)
+```
+
+**Features:**
+
+- **Admin tab** — edit Exchange endpoint, username, password environment variable, insecure toggle, save to `config.yaml`, test PowerShell + EWS connectivity
+- **Model Providers (12)** — OpenAI, Anthropic, Google, Azure OpenAI, AWS Bedrock, Ollama, Mistral, Cohere, Groq, Together, OpenRouter and Custom. Select provider to fetch models via `GET /v1/models`, enter file-based API key, test connection
+- **Prompt and Output** — Monaco editor with templates, human-friendly rendering for `ai.tell_me_everything` (Health 74/100 gauge with status icons) and tables for `report.*`
+- **Logs tab** — real-time streaming from `src/server.ts` and PowerShell transcript via preloaded IPC
+- **Triple connectivity** — Model (`POST /v1/models`), MCP Server (`tools=200`), and Exchange via MCP (`exchange_test_connection` for both PowerShell and EWS) in one view
+- **Tool Explorer** — searchable list of 200 tools grouped as in Tools Reference
 
 ---
 
