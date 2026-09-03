@@ -1,11 +1,71 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" class="h-full">
 <head>
-  <meta charset="UTF-8" />
-  <title>Tauri Client</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Exchange Agentic Admin — AI Powered Exchange Operations Intelligence Platform</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script type="module">import YAML from 'https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js'; window.YAML = YAML;</script>
+<script>
+ tailwind.config = {
+   darkMode: 'class',
+   theme: {
+     extend: {
+       colors: {
+         brand: { 50: '#f0fdfa', 100: '#ccfbf1', 500: '#0d9488', 600: '#0f766e', 700: '#115e59' },
+         surface: { base: '#090d16', card: '#111726', elevated: '#1a2236', border: '#1f2a40', borderLight: '#2a3854' }
+       },
+       fontFamily: {
+         sans: ['Inter','system-ui','-apple-system','sans-serif'],
+         mono: ['JetBrains Mono','monospace']
+       }
+     }
+   }
+ }
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#25334d;border-radius:9999px}::-webkit-scrollbar-thumb:hover{background:#3b4f74}</style>
 </head>
-<body>
-  <h1>Tauri Client Placeholder</h1>
-  <p>This is the initial Tauri client UI.</p>
-</body>
-</html>
+<body class="h-full bg-[#0b0f19] text-slate-200 antialiased font-sans select-none overflow-hidden flex flex-col">
+<header class="h-11 bg-[#0e1320] border-b border-[#1c263c] flex items-center justify-between px-4 z-50 flex-shrink-0">
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 pr-1"><span class="w-3 h-3 rounded-full bg-[#ff5f56] border border-[#e0443e]"></span><span class="w-3 h-3 rounded-full bg-[#ffbd2e] border border-[#dea123]"></span><span class="w-3 h-3 rounded-full bg-[#27c93f] border border-[#1aab29]"></span></div>
+<div class="flex items-center gap-2.5 pl-2 border-l border-[#1f2d45]">
+<div class="w-5 h-5 rounded-md bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-sm shadow-cyan-500/20">
+<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path></svg>
+</div>
+<span class="font-semibold text-xs text-slate-200 tracking-wide">Exchange Agentic Admin</span>
+<span class="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">v2.4.1</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<div class="flex items-center gap-2 px-3 py-1 rounded-full bg-[#141d2f] border border-[#23314c] text-xs shadow-inner">
+<span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span></span>
+<span class="text-slate-300 font-mono text-[11px] font-medium" id="serverPill">devex02.devlab2025.local</span>
+<span class="text-slate-500 text-[10px] font-mono" id="latencyPill">| 24ms</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-1.5 rounded-md hover:bg-[#1a2336] text-slate-400 hover:text-slate-200" id="themeToggle" title="Toggle theme"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20.354 15.354A9 9 0 018.646 3.646A9 9 0 0012 21a9 9 0 008.354-5.646z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></button>
+<button class="p-1.5 rounded-md hover:bg-[#1a2336] text-slate-400 hover:text-slate-200" id="startMcp" title="Start MCP"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg></button>
+</div>
+</header>
+
+<nav class="bg-[#0e1424] border-b border-[#1b253b] px-6 py-2.5 flex items-center justify-between flex-shrink-0">
+<div>
+<h1 class="text-sm font-semibold text-white tracking-tight">Exchange Agentic Admin</h1>
+<p class="text-[11px] text-slate-400">AI Powered Exchange Operations Intelligence Platform</p>
+</div>
+<div class="flex items-center bg-[#141b2e] p-1 rounded-lg border border-[#222f4b]" role="tablist">
+<button aria-selected="true" class="px-3.5 py-1 rounded-md text-xs font-medium bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm flex items-center gap-1.5" data-tab="home" role="tab"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> Home (Agent)</button>
+<button aria-selected="false" class="px-3.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-[#1b253c] flex items-center gap-1.5" data-tab="logs" role="tab"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> Logs & Telemetry</button>
+<button aria-selected="false" class="px-3.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-[#1b253c] flex items-center gap-1.5" data-tab="health" role="tab"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> Health & Mailflow <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span></button>
+</div>
+</nav>
+
+<main class="flex-1 p-5 overflow-hidden grid grid-cols-12 gap-5 bg-gradient-to-b from-[#090d16] to-[#0d1322]" data-purpose="split-pane-workflow">
+<!-- LEFT: Prompt Console -->
+<section class="col-span-12 lg:col-span-5 flex flex-col gap-4 h-full overflow-hidden" data-view="home">
+<div class="flex-1 bg-[#121829]/95 backdrop-blur-md border border-[#1f2d48] rounded-xl flex flex-col shadow-xl shadow-black/40 overflow-hidden">
+<div class="px-4 py-3 bg-[#151c30]/70 border-b border-[#1f2d48] flex items-center justify-between">
+<div class="flex items-center gap-2"><span class="text-xs font-bold uppercase tracking-wider text-slate-400">Prompt Console</span><span class="text-[11px] font-mono font-... (truncated)"
