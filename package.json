@@ -16,9 +16,9 @@
     "inspector": "npx @modelcontextprotocol/inspector node dist/server.js",
     "init": "tsx src/cli/init.ts",
     "doctor": "tsx src/cli/doctor.ts",
-    "desktop": "electron src/desktop/main.ts",
-    "desktop:build": "tsc && electron-builder --publish=never",
-    "desktop:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\""
+    "desktop": "npm run build && electron dist/desktop/main.js",
+    "desktop:dev": "tsx src/desktop/main.ts",
+    "desktop:build": "tsc && electron-builder --publish=never"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",

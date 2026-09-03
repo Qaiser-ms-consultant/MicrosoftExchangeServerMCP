@@ -1,8 +1,12 @@
 import { app, BrowserWindow, ipcMain, dialog } from "electron";
-import { join, resolve } from "node:path";
+import { join, resolve, dirname } from "node:path";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { spawn, ChildProcess } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 let win: BrowserWindow | null = null;
 let mcpProc: ChildProcess | null = null;
@@ -38,10 +42,14 @@ function createWindow() {
     show: false,
   });
   win.once("ready-to-show", () => win?.show());
-  // In dev, load vite dev server; in prod, load dist
+  // In dev, load vite dev server; in prod, load dist or fallback to src
   const devUrl = process.env.VITE_DEV_SERVER_URL;
   if (devUrl) win.loadURL(devUrl);
-  else win.loadFile(join(__dirname, "../renderer/index.html"));
+  else {
+    const prodPath = join(__dirname, "../renderer/index.html");
+    const srcPath = resolve(process.cwd(), "src/desktop/renderer/index.html");
+    win.loadFile(existsSync(prodPath) ? prodPath : srcPath);
+  }
 }
 
 app.whenReady().then(createWindow);
