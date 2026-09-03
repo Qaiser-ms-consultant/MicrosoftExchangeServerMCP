@@ -53,7 +53,7 @@ tailwind.config = {
 <nav class="bg-[#0e1424] border-b border-[#1b253b] px-6 py-2.5 flex items-center justify-between flex-shrink-0">
 <div>
 <h1 class="text-sm font-semibold text-white tracking-tight">Exchange Agentic Admin</h1>
-<p class="text-[11px] text-slate-400">Autonomous hybrid exchange administration & diagnostics</p>
+<p class="text-[11px] text-slate-400">AI Powered Exchange Operations Intelligence Platform</p>
 </div>
 <div class="flex items-center bg-[#141b2e] p-1 rounded-lg border border-[#222f4b]" role="tablist">
 <button aria-selected="true" class="px-3.5 py-1 rounded-md text-xs font-medium bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm flex items-center gap-1.5" data-tab="home" role="tab"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> Home (Agent)</button>
@@ -229,36 +229,41 @@ tailwind.config = {
 </main>
 
 <script>
-const $ = (s)=>document.querySelector(s);
-const $$ = (s)=>[...document.querySelectorAll(s)];
-window.addEventListener('error', (e)=>{ console.error(e.error||e.message); const el=document.getElementById('modelOut'); if(el) el.textContent='JS Error: '+(e.error?.message||e.message); });
-const isDesktop = typeof window.exchangeDesktop !== 'undefined';
+var $ = function(s){ return document.querySelector(s); };
+var $$ = function(s){ return Array.prototype.slice.call(document.querySelectorAll(s)); };
+window.addEventListener('error', function(e){ console.error(e.error||e.message); var el=document.getElementById('modelOut'); if(el) el.textContent='JS Error: '+(e.error&&e.error.message||e.message); });
+var isDesktop = typeof window.exchangeDesktop !== 'undefined';
 if(!isDesktop){
-  const warn=document.createElement('div');
+  var warn=document.createElement('div');
   warn.style.cssText='background:#fffbeb;border:1px solid #fde68a;color:#92400e;padding:8px 12px;border-radius:8px;margin:8px 12px;font-size:12px';
   warn.textContent='⚠️ Not in Electron — fallback mode. Run via npm run desktop for full features.';
   document.body.prepend(warn);
 }
 // Tabs — use data-tab / data-view
-$$('[data-tab]').forEach(b=>b.addEventListener('click',()=>{
-  $$('[data-tab]').forEach(x=>{ x.setAttribute('aria-selected','false'); x.classList.remove('bg-gradient-to-r','from-blue-600','to-indigo-600','text-white'); x.classList.add('text-slate-400'); });
+$$('[data-tab]').forEach(function(b){ b.addEventListener('click',function(){
+  $$('[data-tab]').forEach(function(x){ x.setAttribute('aria-selected','false'); x.classList.remove('bg-gradient-to-r','from-blue-600','to-indigo-600','text-white'); x.classList.add('text-slate-400'); });
   b.setAttribute('aria-selected','true'); b.classList.add('bg-gradient-to-r','from-blue-600','to-indigo-600','text-white'); b.classList.remove('text-slate-400');
-  const t=b.dataset.tab;
-  document.querySelectorAll('section[data-view]').forEach(v=>{ (v as HTMLElement).style.display = (v as HTMLElement).dataset.view===t ? 'flex' : 'none'; });
-}));
+  var t=b.getAttribute('data-tab');
+  document.querySelectorAll('section[data-view]').forEach(function(v){ v.style.display = v.getAttribute('data-view')===t ? 'flex' : 'none'; });
+}); });
  // Ensure Home visible on load
-document.querySelectorAll('section[data-view]').forEach(v=>{ const isHome=(v as HTMLElement).dataset.view==="home"; (v as HTMLElement).style.display=isHome?'flex':'none'; });
+document.querySelectorAll('section[data-view]').forEach(function(v){ var isHome=v.getAttribute('data-view')==="home"; v.style.display=isHome?'flex':'none'; });
 
 // Theme toggle
-const savedTheme = localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+var savedTheme = localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
 document.documentElement.classList.toggle("dark", savedTheme==="dark");
-document.getElementById("themeToggle")?.addEventListener("click", ()=>{
-  const isDark=document.documentElement.classList.toggle("dark");
+var themeBtn=document.getElementById("themeToggle");
+if(themeBtn) themeBtn.addEventListener("click", function(){
+  var isDark=document.documentElement.classList.toggle("dark");
   localStorage.setItem("theme", isDark?"dark":"light");
 });
+var settingsBtn=document.getElementById("openSettings");
+if(settingsBtn) settingsBtn.addEventListener("click", function(){ var tab=document.querySelector('[data-tab="config"]'); if(tab) tab.click(); });
+  document.getElementById("openSettings")?.addEventListener("click", function(){ document.querySelector('[data-tab="config"]')?.click(); });
+})();
 
 // Provider models — fallback for all 13
-const fallbackModels: Record<string, string[]> = {
+const fallbackModels = {
   OpenAI: ["gpt-4o","gpt-4o-mini","o1","o1-mini","gpt-4-turbo","gpt-3.5-turbo"],
   Anthropic: ["claude-3-5-sonnet-20241022","claude-3-5-haiku-20241022","claude-3-opus-20240229","claude-3-haiku-20240307"],
   Google: ["gemini-1.5-pro","gemini-1.5-flash","gemini-1.0-pro","gemini-pro-vision"],
@@ -273,21 +278,21 @@ const fallbackModels: Record<string, string[]> = {
   Custom: ["custom-model-1","custom-model-2"],
   OpenCode: ["opencode/claude-3-5-sonnet","opencode/gpt-4o","opencode/gemini-1.5-pro","opencode/llama3.1"],
 };
-function populateModelsForProvider(provider: string, models?: any[]){
-  const sel=document.getElementById("model") as HTMLSelectElement | null;
+function populateModelsForProvider(provider, models){
+  const sel=document.getElementById("model") | null;
   if(!sel) return;
   sel.innerHTML="";
-  const list = models && models.length ? models.map((m:any)=>m.id||m.name||String(m)) : (fallbackModels[provider]||["default"]);
+  const list = models && models.length ? models.map((m)=>m.id||m.name||String(m)) : (fallbackModels[provider]||["default"]);
   list.forEach(name=>{ const o=document.createElement('option'); o.value=name; o.textContent=name; sel.appendChild(o); });
 }
-function showStatus(elId: string, msg: string, isError=false){
+function showStatus(elId, msg, isError){
   const el=document.getElementById(elId);
   if(!el) return;
   el.textContent=msg;
   el.style.borderColor = isError ? "#dc2626" : "";
 }
 (function initProviders(){
-  const sel=document.getElementById("provider") as HTMLSelectElement | null;
+  const sel=document.getElementById("provider") | null;
   if(sel){
     // Static options already in HTML, ensure fallback
     if(sel.options.length===0){
@@ -297,46 +302,46 @@ function showStatus(elId: string, msg: string, isError=false){
   }
 })();
 document.getElementById("provider")?.addEventListener('change', async()=>{
-  const provider=(document.getElementById("provider") as HTMLSelectElement).value;
-  const apiKey=(document.getElementById("apiKey") as HTMLInputElement)?.value?.trim();
+  const provider=(document.getElementById("provider")).value;
+  const apiKey=(document.getElementById("apiKey"))?.value?.trim();
   if(!apiKey){ populateModelsForProvider(provider, null); showStatus("modelOut", "Enter API key to fetch live models, showing fallback"); return; }
   try{
     if(!isDesktop) throw new Error("Not in desktop");
-    const res=await (window as any).exchangeDesktop.testProvider({provider, apiKey, baseUrl: (document.getElementById("baseUrl") as HTMLInputElement)?.value});
+    const res=await (window as any).exchangeDesktop.testProvider({provider, apiKey, baseUrl: (document.getElementById("baseUrl"))?.value});
     if(res?.models?.length) populateModelsForProvider(provider, res.models);
     else populateModelsForProvider(provider, null);
     showStatus("modelOut", JSON.stringify(res,null,2).slice(0,1500), !res?.ok);
-  }catch(e:any){ populateModelsForProvider(provider, null); showStatus("modelOut", "Failed to fetch models, showing fallback: "+(e?.message||String(e)), true); }
+  }catch(e){ populateModelsForProvider(provider, null); showStatus("modelOut", "Failed to fetch models, showing fallback: "+(e?.message||String(e)), true); }
 });
-function safeHandler(id: string, fn: () => Promise<void>){
+function safeHandler(id, fn){
   const el=document.getElementById(id);
   if(!el) return;
   el.addEventListener('click', async()=>{
-    const btn=el as HTMLButtonElement;
+    const btn=el;
     const origText=btn.textContent;
-    btn.textContent="Working..."; (btn as HTMLButtonElement).disabled=true;
-    try{ await fn(); }catch(e:any){
+    btn.textContent="Working..."; (btn).disabled=true;
+    try{ await fn(); }catch(e){
       const outId = id==="testModel" ? "modelOut" : id==="testConn" ? "adminOut" : id==="runDoctor"||id==="runDoctorHealth" ? "logView" : "output";
       const target=document.getElementById(outId);
       if(target) target.textContent="Error: "+(e?.message||String(e));
       console.error(e);
-    }finally{ btn.textContent=origText||""; (btn as HTMLButtonElement).disabled=false; }
+    }finally{ btn.textContent=origText||""; (btn).disabled=false; }
   });
 }
 safeHandler("testModel", async()=>{
   if(!isDesktop) throw new Error("Desktop bridge not available — run via npm run desktop");
-  const r=await (window as any).exchangeDesktop.testProvider({provider:(document.getElementById("provider") as HTMLSelectElement).value, apiKey:(document.getElementById("apiKey") as HTMLInputElement).value, baseUrl:(document.getElementById("baseUrl") as HTMLInputElement).value});
+  const r=await (window as any).exchangeDesktop.testProvider({provider:(document.getElementById("provider")).value, apiKey:(document.getElementById("apiKey")).value, baseUrl:(document.getElementById("baseUrl")).value});
   showStatus("modelOut", JSON.stringify(r,null,2));
   const models=r?.models ?? [];
-  if(models.length) populateModelsForProvider((document.getElementById("provider") as HTMLSelectElement).value, models);
+  if(models.length) populateModelsForProvider((document.getElementById("provider")).value, models);
 });
 safeHandler("saveModel", async()=>{
-  const data={ provider:(document.getElementById("provider") as HTMLSelectElement).value, model:(document.getElementById("model") as HTMLSelectElement).value, apiKey:(document.getElementById("apiKey") as HTMLInputElement).value, baseUrl:(document.getElementById("baseUrl") as HTMLInputElement).value };
+  const data={ provider:(document.getElementById("provider")).value, model:(document.getElementById("model")).value, apiKey:(document.getElementById("apiKey")).value, baseUrl:(document.getElementById("baseUrl")).value };
   localStorage.setItem("exchange-desktop-model", JSON.stringify(data));
   showStatus("modelOut", "Saved model config");
 });
 safeHandler("saveAdmin", async()=>{
-  const cfg=`exchange:\n  endpoint: https://${(document.getElementById("fqdn") as HTMLInputElement).value}\n  powershellUri: https://${(document.getElementById("fqdn") as HTMLInputElement).value}/PowerShell\n`;
+  const cfg=`exchange:\n  endpoint: https://${(document.getElementById("fqdn")).value}\n  powershellUri: https://${(document.getElementById("fqdn")).value}/PowerShell\n`;
   if(isDesktop){
     await (window as any).exchangeDesktop.saveConfig(cfg);
     showStatus("adminOut", "Saved to config.yaml: "+await (window as any).exchangeDesktop.configPath());
@@ -347,18 +352,18 @@ safeHandler("saveAdmin", async()=>{
 });
 safeHandler("testConn", async()=>{
   if(!isDesktop) throw new Error("Desktop bridge not available");
-  const r=await (window as any).exchangeDesktop.runDoctor({endpoint:`https://${(document.getElementById("fqdn") as HTMLInputElement).value}`, insecure:(document.getElementById("insecure") as HTMLInputElement).checked});
+  const r=await (window as any).exchangeDesktop.runDoctor({endpoint:`https://${(document.getElementById("fqdn")).value}`, insecure:(document.getElementById("insecure")).checked});
   showStatus("adminOut", JSON.stringify(r,null,2));
 });
 safeHandler("runDoctor", async()=>{
   if(!isDesktop) throw new Error("Desktop bridge not available");
-  const r=await (window as any).exchangeDesktop.runDoctor({endpoint:`https://${(document.getElementById("fqdn") as HTMLInputElement).value}`, insecure:(document.getElementById("insecure") as HTMLInputElement).checked});
+  const r=await (window as any).exchangeDesktop.runDoctor({endpoint:`https://${(document.getElementById("fqdn")).value}`, insecure:(document.getElementById("insecure")).checked});
   const el=document.getElementById("logView"); if(el) el.textContent=JSON.stringify(r,null,2);
   document.querySelector('[data-tab="logs"]')?.dispatchEvent(new Event('click'));
 });
 safeHandler("runDoctorHealth", async()=>{
   if(isDesktop){
-    const r=await (window as any).exchangeDesktop.runDoctor({endpoint:`https://${(document.getElementById("fqdn") as HTMLInputElement).value}`, insecure:(document.getElementById("insecure") as HTMLInputElement).checked});
+    const r=await (window as any).exchangeDesktop.runDoctor({endpoint:`https://${(document.getElementById("fqdn")).value}`, insecure:(document.getElementById("insecure")).checked});
     const el=document.getElementById("logView"); if(el) el.textContent=JSON.stringify(r,null,2);
     document.querySelector('[data-tab="logs"]')?.dispatchEvent(new Event('click'));
   } else {
@@ -368,48 +373,48 @@ safeHandler("runDoctorHealth", async()=>{
 document.getElementById("openHealthDetails")?.addEventListener('click', ()=> document.querySelector('[data-tab="health"]')?.dispatchEvent(new Event('click')));
 // Logs streaming
 if(isDesktop && (window as any).exchangeDesktop.onLog){
-  (window as any).exchangeDesktop.onLog((d:string)=>{ const el=document.getElementById("logView"); if(!el) return; el.textContent+=d; el.scrollTop=el.scrollHeight; });
+  (window as any).exchangeDesktop.onLog((d)=>{ const el=document.getElementById("logView"); if(!el) return; el.textContent+=d; el.scrollTop=el.scrollHeight; });
 }
 document.getElementById("clearLogs")?.addEventListener('click', ()=>{ const el=document.getElementById("logView"); if(el) el.textContent=""; });
 document.getElementById("exportLogs")?.addEventListener('click', ()=>{ const el=document.getElementById("logView"); if(el) navigator.clipboard.writeText(el.textContent||""); });
-document.getElementById("clearPrompt")?.addEventListener('click', ()=>{ const el=document.getElementById("prompt") as HTMLTextAreaElement | null; if(el) el.value=""; });
-document.querySelectorAll("[data-quick]").forEach(b=> b.addEventListener('click', ()=>{ const p=document.getElementById("prompt") as HTMLTextAreaElement | null; if(p) p.value=(b as HTMLElement).getAttribute("data-quick")||""; }));
+document.getElementById("clearPrompt")?.addEventListener('click', ()=>{ const el=document.getElementById("prompt") | null; if(el) el.value=""; });
+document.querySelectorAll("[data-quick]").forEach(b=> b.addEventListener('click', ()=>{ const p=document.getElementById("prompt") | null; if(p) p.value=(b).getAttribute("data-quick")||""; }));
 document.getElementById("copyOut")?.addEventListener('click', ()=> navigator.clipboard.writeText(document.getElementById("output")?.textContent||""));
 document.getElementById("exportOut")?.addEventListener('click', ()=>{ const blob=new Blob([document.getElementById("output")?.textContent||""],{type:"text/markdown"}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download="output.md"; a.click(); });
 // Profiles
 const profileKey="exchange-desktop-profiles";
-function loadProfiles(): Record<string, any>{ try{ return JSON.parse(localStorage.getItem(profileKey)||"{}"); }catch{ return {}; } }
-function saveProfiles(obj: Record<string, any>){ localStorage.setItem(profileKey, JSON.stringify(obj)); refreshProfileSelect(); }
+function loadProfiles(){ try{ return JSON.parse(localStorage.getItem(profileKey)||"{}"); }catch{ return {}; } }
+function saveProfiles(obj){ localStorage.setItem(profileKey, JSON.stringify(obj)); refreshProfileSelect(); }
 function refreshProfileSelect(){
-  const sel=document.getElementById("profileSelect") as HTMLSelectElement | null; if(!sel) return;
+  const sel=document.getElementById("profileSelect") | null; if(!sel) return;
   const profiles=loadProfiles();
   sel.innerHTML='<option>— Load profile —</option>';
   Object.keys(profiles).forEach(k=>{ const o=document.createElement('option'); o.value=k; o.textContent=k; sel.appendChild(o); });
 }
 safeHandler("saveProfile", async()=>{
-  const name=(document.getElementById("profileName") as HTMLInputElement).value.trim(); if(!name) { alert("Enter profile name"); return; }
+  const name=(document.getElementById("profileName")).value.trim(); if(!name) { alert("Enter profile name"); return; }
   const profiles=loadProfiles();
   profiles[name]={
-    fqdn:(document.getElementById("fqdn") as HTMLInputElement).value, user:(document.getElementById("user") as HTMLInputElement).value, pwEnv:(document.getElementById("pwEnv") as HTMLInputElement).value, insecure:(document.getElementById("insecure") as HTMLInputElement).checked,
-    provider:(document.getElementById("provider") as HTMLSelectElement).value, model:(document.getElementById("model") as HTMLSelectElement).value, baseUrl:(document.getElementById("baseUrl") as HTMLInputElement).value
+    fqdn:(document.getElementById("fqdn")).value, user:(document.getElementById("user")).value, pwEnv:(document.getElementById("pwEnv")).value, insecure:(document.getElementById("insecure")).checked,
+    provider:(document.getElementById("provider")).value, model:(document.getElementById("model")).value, baseUrl:(document.getElementById("baseUrl")).value
   };
   saveProfiles(profiles);
   showStatus("modelOut", `Saved profile "${name}"`);
 });
 document.getElementById("loadProfile")?.addEventListener('click', ()=>{
-  const name=(document.getElementById("profileSelect") as HTMLSelectElement).value; const p=loadProfiles()[name]; if(!p) return;
-  (document.getElementById("fqdn") as HTMLInputElement).value=p.fqdn||""; (document.getElementById("user") as HTMLInputElement).value=p.user||""; (document.getElementById("pwEnv") as HTMLInputElement).value=p.pwEnv||""; (document.getElementById("insecure") as HTMLInputElement).checked=!!p.insecure;
-  if(p.provider) (document.getElementById("provider") as HTMLSelectElement).value=p.provider;
-  if(p.model){ const sel=document.getElementById("model") as HTMLSelectElement; const exists = Array.from(sel.options).some(o=>o.value===p.model); if(!exists){ const o=document.createElement('option'); o.value=p.model; o.textContent=p.model; sel.appendChild(o); } sel.value=p.model; }
-  if(p.baseUrl) (document.getElementById("baseUrl") as HTMLInputElement).value=p.baseUrl;
+  const name=(document.getElementById("profileSelect")).value; const p=loadProfiles()[name]; if(!p) return;
+  (document.getElementById("fqdn")).value=p.fqdn||""; (document.getElementById("user")).value=p.user||""; (document.getElementById("pwEnv")).value=p.pwEnv||""; (document.getElementById("insecure")).checked=!!p.insecure;
+  if(p.provider) (document.getElementById("provider")).value=p.provider;
+  if(p.model){ const sel=document.getElementById("model"); const exists = Array.from(sel.options).some(o=>o.value===p.model); if(!exists){ const o=document.createElement('option'); o.value=p.model; o.textContent=p.model; sel.appendChild(o); } sel.value=p.model; }
+  if(p.baseUrl) (document.getElementById("baseUrl")).value=p.baseUrl;
 });
 document.getElementById("deleteProfile")?.addEventListener('click', ()=>{
-  const name=(document.getElementById("profileSelect") as HTMLSelectElement).value; const profiles=loadProfiles(); delete profiles[name]; saveProfiles(profiles);
+  const name=(document.getElementById("profileSelect")).value; const profiles=loadProfiles(); delete profiles[name]; saveProfiles(profiles);
 });
 refreshProfileSelect();
 // Prompt run (mock human-friendly, real would call model + MCP)
 safeHandler("runPrompt", async()=>{
-  const promptEl=document.getElementById("prompt") as HTMLTextAreaElement | null;
+  const promptEl=document.getElementById("prompt") | null;
   const outEl=document.getElementById("output");
   const statusEl=document.getElementById("execText");
   const healthEl=document.getElementById("healthPill");
