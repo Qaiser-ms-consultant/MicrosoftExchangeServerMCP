@@ -532,11 +532,66 @@ All 187 tools always enabled. Resources: `exchange://folders` (`src/resources/fo
 "Test connectivity (404 debug)"                  → exchange_test_connection { target: "powershell" }
 ```
 
-**Mailbox (if enabled):**
+**AI Reports (22) — no API key, rule-based on live data:**
+
+```
+"Executive summary" → ai.exchange_executive_summary
+  → Health: 82/100, Critical: 2 DBs unhealthy, 1 cert 17d, Warning: 3 DBs 90d, 27 inactive 1.2TB, Recommendation: Move 14 DB04→DB07 + renew EXCH02
+
+"Root cause of queue 3452" → ai.root_cause_analysis { "domain": "example.com" }
+  → Likely Root Cause: Outbound queue growth is caused by repeated connection failures to example.com. DNS OK, SMTP timeout (checks queue, SMTP errors, connector, DNS, CPU, disk)
+
+"Anomaly — who is spamming?" → ai.anomaly_detection
+  → 40/day → 2,842 today = 71× — flags sender/queue/DB/CPU/NDR
+
+"Capacity forecast" → ai.capacity_forecast
+  → DB05 90% in 67d, User X 3.2 GB/mo → quota 5mo, EXCH03 CPU constrained
+
+"Cleanup — recover space" → ai.cleanup_recommendation
+  → 143 inactive → 74 >180d / 31 disabled AD / 18 departed / 12 shared / 8 system, 680 GB recoverable
+
+"Security risk" → ai.security_risk_report
+  → HIGH — 3 external forwarding, 2 abnormal volume, SMTP AUTH 17, anonymous relay, legacy
+
+"Who is compromised?" → ai.compromised_account_detection
+  → 25–50/day → 1,820/day, 94% external, 02:14 UTC
+
+"Mail flow spike?" → ai.mail_flow_intelligence
+  → 1.2M (34% vs 7d avg), top senders/domains, NDR 1,824 → Invalid 842 / Blocked 421 …
+
+"NDR intelligence" → ai.ndr_intelligence
+  → 1,824 failures grouped, insight: domain.com stale contacts
+
+"Can I migrate 2013→2019?" → ai.migration_advisor { "targetVersion": "Exchange 2019" }
+  → 87% ready — 1,842 ready / 43 blocked (17 capacity, 11 corrupted…)
+
+"Ask Exchange" → ai.ask_exchange { "query": "Show me all mailboxes over 50 GB" }
+  → generates Get-MailboxStatistics PowerShell for any natural language
+
+"What if I move 500 DB01→DB05?" → ai.what_if_analysis { "sourceDB": "DB01", "targetDB": "DB05", "count": 500 }
+  → 81% capacity, distribute to DB07
+
+"Daily brief" → ai.daily_report
+  → 🟢 Healthy, 1.28M processed, 37 NDRs, 4 delayed, 2 certs expiring — Recommendation: review EXCH02-SMTP
+
+"Things you should know" → ai.things_you_should_know
+  → Proactive 3: DB03 +42%, cert 19d, NDR +63%
+```
+
+**Mailbox (EWS/REST):**
 
 ```
 "List inbox top 5" → exchange_list_messages { folder: "inbox", top: 5 }
 "Send meeting invite" → exchange_create_calendar_event { subject: "...", start: "...", attendees: [...] }
+```
+
+**Reports (80+):**
+
+```
+"Holds" → report.generate_hold_report — LitigationHold 2, InPlace 3
+"OOF enabled" → report.generate_oof_report — 5 with AutoReplyState Scheduled
+"DB growth" → report.database_growth_forecast — DB05 67d to 90%
+"Infrastructure" → report.exchange_infrastructure_summary — servers, DBs, DAGs, certs, queues counts
 ```
 
 ---
