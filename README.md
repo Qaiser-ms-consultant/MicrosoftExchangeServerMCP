@@ -30,7 +30,7 @@ Exchange administrators can use AI assistants such as OpenCode, Claude Code, Cur
 
 ## Features
 
-- **200 tools** covering Exchange Management Shell and the Exchange Admin Center: Recipients, Mail Flow, Servers, Databases, DAG, Monitoring, Compliance, Client Access, Certificates, Security, Logs and Reports.
+- **200 tools** covering Exchange Management Shell and the Exchange Admin Center: Recipients, Mail Flow, Servers, Databases, DAG, Monitoring, Compliance, Client Access, Certificates, Security, Logs and Reports, plus Organization, Diagnostics and AI.
 - **AI Suite (24 tools)** — executive summary, root cause analysis, anomaly detection, capacity forecast, cleanup advisor and more. Generates narrative insights from live data without requiring an external API key.
 - **Reports (80+ tools)** — mailbox, database, DAG, mail flow, infrastructure and compliance reports.
 - **Multiple Exchange versions:** 2013, 2016, 2019 and Subscription Edition with automatic detection.
