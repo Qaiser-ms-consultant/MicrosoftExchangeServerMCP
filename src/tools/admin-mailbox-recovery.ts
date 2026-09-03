@@ -109,4 +109,58 @@ export function registerMailboxRecoveryTools(server: McpServer, ps: PowerShellPr
       return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
     },
   );
+
+  server.tool(
+    "exchange_new_mailbox_import_request",
+    "Create import request from PST (New-MailboxImportRequest) — imports PST file into mailbox. PST must be on UNC share accessible by Exchange Trusted Subsystem.",
+    {
+      mailbox: z.string().describe("Target mailbox identity"),
+      filePath: z.string().describe("UNC path to PST, e.g. \\\\server\\share\\file.pst"),
+      targetRootFolder: z.string().optional().describe("Target folder, e.g. Recovered"),
+      isArchive: z.boolean().optional().describe("Import into archive mailbox"),
+      name: z.string().optional().describe("Request name"),
+    },
+    async ({ mailbox, filePath, targetRootFolder, isArchive, name }) => {
+      let cmd = `New-MailboxImportRequest -Mailbox "${mailbox}" -FilePath "${filePath}"`;
+      if (targetRootFolder) cmd += ` -TargetRootFolder "${targetRootFolder}"`;
+      if (isArchive) cmd += ` -IsArchive`;
+      if (name) cmd += ` -Name "${name}"`;
+      const d = await ps.invokeJson(cmd);
+      return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    "exchange_get_mailbox_import_request",
+    "Get import request status (Get-MailboxImportRequest)",
+    { identity: z.string().optional().describe("Mailbox or request identity, e.g. devlabadmin@devlab2025.local or devlabadmin\\Import1"), mailbox: z.string().optional() },
+    async ({ identity, mailbox }) => {
+      let cmd: string;
+      if (identity) cmd = `Get-MailboxImportRequest -Identity "${identity}" | Select-Object Identity,Mailbox,Status,PercentComplete,FilePath`;
+      else if (mailbox) cmd = `Get-MailboxImportRequest -Mailbox "${mailbox}" | Select-Object Identity,Status,PercentComplete,FilePath | Select-Object -First 20`;
+      else cmd = `Get-MailboxImportRequest | Select-Object Identity,Mailbox,Status,PercentComplete | Select-Object -First 20`;
+      const d = await ps.invokeJson(cmd);
+      return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    "exchange_get_mailbox_import_request_statistics",
+    "Get import request statistics (Get-MailboxImportRequestStatistics) — detailed progress",
+    { identity: z.string().describe("Import request identity, e.g. devlabadmin\\Import1") },
+    async ({ identity }) => {
+      const d = await ps.invokeJson(`Get-MailboxImportRequestStatistics -Identity "${identity}" | Select-Object Identity,Status,PercentComplete,BytesTransferred,EstimatedTransferSize`);
+      return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    "exchange_remove_mailbox_import_request",
+    "Remove import request (Remove-MailboxImportRequest) — cleanup after import",
+    { identity: z.string().describe("Request identity") },
+    async ({ identity }) => {
+      await ps.invokeJson(`Remove-MailboxImportRequest -Identity "${identity}" -Confirm:$false`);
+      return { content: [{ type: "text", text: `Removed import request ${identity}` }] };
+    },
+  );
 }
