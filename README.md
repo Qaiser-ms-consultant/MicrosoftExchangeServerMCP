@@ -43,7 +43,7 @@
 
 ## Features
 
-- **128 tools — all open, no gating** — mapped to **Exchange Management Shell** & **EAC** ([docs](https://learn.microsoft.com/en-us/exchange/exchange-server)): Recipients, Mail Flow, Servers/DB/DAG, Monitoring, Compliance (LitigationHold/OOF/Retention), ClientAccess, Certificates, Security, Logs & Reports. See [Tools Reference](#tools-reference).
+- **187 tools — all open, no gating** — mapped to **Exchange Management Shell** & **EAC** ([docs](https://learn.microsoft.com/en-us/exchange/exchange-server)): Recipients, Mail Flow, Servers/DB/DAG, Monitoring, Compliance (LitigationHold/OOF/Retention), ClientAccess, Certificates, Security, Logs & Reports. See [Tools Reference](#tools-reference).
 - **Multi-version:** 2013 / 2016 / 2019 / SE (auto-detect, REST preferred on 2016+, EWS fallback, PowerShell via WinRM on Windows).
 - **Multi-auth:** Basic (lab), OAuth 2.0 via ADFS/Azure AD (`client_credentials`), Certificate mTLS (`pfx`/`pem`).
 - **Multi-transport:** `stdio` for local clients, `http`/`SSE` for remote/Docker/shared.
@@ -88,7 +88,7 @@ npm start                                    # stdio (default)
 npx exchange-mcp doctor --endpoint https://mail.contoso.com  # both targets
 npm test                                     # 4/4
 npx @modelcontextprotocol/inspector node dist/server.js --config=./config.yaml
-# Open inspector URL, confirm 128 tools
+# Open inspector URL, confirm 187 tools
 
 # 4. Connect a client (see below), then ask:
 #   "list mailboxes with exchange_list_mailboxes"
@@ -123,7 +123,7 @@ Copy one of the examples and edit `config.yaml` (gitignored — never commit sec
 - `config.production.yaml.example` — production template; lab variant commented inside
 
 ```yaml
-# config.yaml — all 128 tools are always enabled (no enableAdminTools/enableMailboxTools gating)
+# config.yaml — all 187 tools are always enabled (no enableAdminTools/enableMailboxTools gating)
 exchange:
   endpoint: https://mail.contoso.com       # or https://exchange.lab.local for lab
   version: auto                           # 2013|2016|2019|auto
@@ -462,7 +462,7 @@ npx @modelcontextprotocol/inspector node dist/server.js --config=./config.yaml
 
 ---
 
-## Tools Reference — 128 tools (all open, no gating)
+## Tools Reference — 187 tools (all open, no gating)
 
 | Group | Cmdlet Base | Tools |
 |---|---|---|
@@ -475,7 +475,7 @@ npx @modelcontextprotocol/inspector node dist/server.js --config=./config.yaml
 | **ClientAccess / Certs / Security / Logs / Reports** (15) | `Test-OwaConnectivity`, `Resolve-DnsName`, `Enable-ExchangeCertificate`, `Search-MailboxAuditLog`, `Get-PublicFolderStatistics`, `Get-ChildItem` logs | `clientaccess.get_virtual_directories`, `clientaccess.test_owa`, `clientaccess.get_autodiscover_info`, `certificate.get_expiring`, `certificate.enable_services`, `security.get_role_group_members`, `security.get_mailbox_audit_log`, `publicfolder.get_statistics`, `log.tail_transport_log`/`tail_iis_log`, `report.generate_health_summary`/`mailbox_size_report`/`certificate_expiry_report` |
 | **Mailbox (EWS/REST)** (13) — optional but now also open | `EWS`, `REST` | `exchange_list_messages`, `exchange_get_message`, `exchange_send_message`, `exchange_reply_message`, `exchange_forward_message`, `exchange_delete_message`, `exchange_move_message`, `exchange_search_messages`, `exchange_list_calendar_events`, `exchange_create_calendar_event`, `exchange_get_availability`, `exchange_list_contacts`, `exchange_list_tasks` (`src/tools/mail-tools.ts:1`, `calendar-tools.ts:1`, `contact-tools.ts:1`) |
 
-All 128 tools always enabled. Resources: `exchange://folders` (`src/resources/folder-resource.ts:1`). Prompts: `triage-inbox`, `schedule-meeting` (`src/prompts/index.ts:1`). Previous gating via `enableAdminTools`/`enableMailboxTools` removed (still accepted in YAML for backward compat but ignored).
+All 187 tools always enabled. Resources: `exchange://folders` (`src/resources/folder-resource.ts:1`). Prompts: `triage-inbox`, `schedule-meeting` (`src/prompts/index.ts:1`). Previous gating via `enableAdminTools`/`enableMailboxTools` removed (still accepted in YAML for backward compat but ignored).
 
 ---
 
