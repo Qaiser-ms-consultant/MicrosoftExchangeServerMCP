@@ -113,19 +113,25 @@ export class PowerShellProvider {
     }
   }
 
+  private isHeavyHealthCommand(command: string): boolean {
+    return /Get-(ServerHealth|HealthReport|ServerComponentState|MonitoringItemIdentity|QueueDigest)|report\.generate_health_summary/i.test(command);
+  }
+
   private async invokeViaWinRM<T>(command: string): Promise<T> {
     const { execFile } = await import("node:child_process");
     const { promisify } = await import("node:util");
     const execFileAsync = promisify(execFile);
     const user = this.config.auth.basic!.username.includes("@") ? this.config.auth.basic!.username : `${this.config.auth.basic!.domain ?? ""}\\${this.config.auth.basic!.username}`;
     const pass = this.config.auth.basic!.password.replace(/'/g, "''");
+    const isHeavy = this.isHeavyHealthCommand(command);
+    const timeout = isHeavy ? 60000 : 30000;
     // Escape command for embedding: ensure no stray ' terminates string — command is inside ScriptBlock { }, single quotes safe
     const psCommand = `
 $ErrorActionPreference = 'SilentlyContinue'
 $WarningPreference = 'SilentlyContinue'
 $sec = ConvertTo-SecureString '${pass}' -AsPlainText -Force
 $cred = New-Object System.Management.Automation.PSCredential('${user.replace(/'/g, "''")}', $sec)
-$opt = New-PSSessionOption -SkipCACheck -SkipCNCheck -SkipRevocationCheck
+$opt = New-PSSessionOption -SkipCACheck -SkipCNCheck -SkipRevocationCheck -OperationTimeout 60000
 $uri = '${this.endpoint.replace(/'/g, "''")}'
 try {
   $sess = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri $uri -Credential $cred -Authentication Basic -AllowRedirection -SessionOption $opt -ErrorAction Stop
@@ -141,7 +147,7 @@ try {
 }
 `;
     try {
-      const { stdout, stderr } = await execFileAsync("powershell", ["-NoProfile", "-Command", psCommand], { timeout: 30000, maxBuffer: 10 * 1024 * 1024 });
+      const { stdout, stderr } = await execFileAsync("powershell", ["-NoProfile", "-Command", psCommand], { timeout, maxBuffer: 10 * 1024 * 1024 });
       if (stderr && stderr.includes("error") && !stdout.trim()) throw new Error(stderr);
       const out = stdout.trim();
       if (!out) return [] as unknown as T;

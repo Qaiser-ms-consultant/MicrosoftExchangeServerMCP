@@ -4,19 +4,21 @@ import type { PowerShellProvider } from "../clients/powershell-provider.js";
 
 // Monitoring & Troubleshooting — per docs/high-availability/managed-availability + queues
 export function registerMonitoringTools(server: McpServer, ps: PowerShellProvider) {
-  server.tool("exchange_get_server_health", "Get server health (Get-ServerHealth) — Managed Availability health sets", {
+  server.tool("exchange_get_server_health", "Get server health (Get-ServerHealth) — Managed Availability health sets (paged to avoid 30s timeout)", {
     server: z.string().describe("Server FQDN"), healthSet: z.string().optional(),
   }, async ({ server, healthSet }) => {
-    const cmd = healthSet ? `Get-ServerHealth -Identity "${server}" -HealthSet "${healthSet}"` : `Get-ServerHealth -Identity "${server}"`;
+    const base = healthSet ? `Get-ServerHealth -Identity "${server}" -HealthSet "${healthSet}"` : `Get-ServerHealth -Identity "${server}"`;
+    const cmd = `${base} | Select-Object -First 10`;
     const data = await ps.invokeJson(cmd);
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
   });
 
-  server.tool("exchange_get_health_report", "Get health report (Get-HealthReport) — rollup per server/DAG", {
+  server.tool("exchange_get_health_report", "Get health report (Get-HealthReport) — rollup per server/DAG (paged)", {
     server: z.string().optional(), healthSet: z.string().optional(),
   }, async ({ server, healthSet }) => {
     let cmd = server ? `Get-HealthReport -Identity "${server}"` : "Get-HealthReport";
     if (healthSet) cmd += ` -HealthSet "${healthSet}"`;
+    cmd += ` | Select-Object -First 10`;
     const data = await ps.invokeJson(cmd);
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
   });
@@ -31,13 +33,13 @@ export function registerMonitoringTools(server: McpServer, ps: PowerShellProvide
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
   });
 
-  server.tool("exchange_get_server_component_state", "Get server component states (ServerWideOffline, etc.)", { server: z.string() }, async ({ server }) => {
-    const data = await ps.invokeJson(`Get-ServerComponentState -Identity "${server}"`);
+  server.tool("exchange_get_server_component_state", "Get server component states (ServerWideOffline, etc.) — scoped to avoid DAG fan-out timeout", { server: z.string() }, async ({ server }) => {
+    const data = await ps.invokeJson(`Get-ServerComponentState -Identity "${server}" | Select-Object -First 20`);
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
   });
 
-  server.tool("exchange_get_monitoring_item", "Get monitoring items (probes/monitors/responders) for a health set", { server: z.string(), healthSet: z.string().optional() }, async ({ server, healthSet }) => {
-    const cmd = healthSet ? `Get-MonitoringItemIdentity -Server "${server}" -HealthSet "${healthSet}"` : `Get-MonitoringItemIdentity -Server "${server}"`;
+  server.tool("exchange_get_monitoring_item", "Get monitoring items (probes/monitors/responders) for a health set (paged)", { server: z.string(), healthSet: z.string().optional() }, async ({ server, healthSet }) => {
+    const cmd = healthSet ? `Get-MonitoringItemIdentity -Server "${server}" -HealthSet "${healthSet}" | Select-Object -First 10` : `Get-MonitoringItemIdentity -Server "${server}" | Select-Object -First 10`;
     const data = await ps.invokeJson(cmd);
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
   });

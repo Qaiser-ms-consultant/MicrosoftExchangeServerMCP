@@ -33,7 +33,8 @@ export class ExchangeClient {
     try {
       return await action(primary);
     } catch (err) {
-      if (err instanceof ExchangeError && primary === "rest" && err.code === "SERVER_ERROR") {
+      if (err instanceof ExchangeError && primary === "rest" && (err.code === "SERVER_ERROR" || err.code === "AUTH_FAILED")) {
+        // On-prem Exchange 2019 has no REST /api/v2.0 (401) — fallback to EWS is correct
         return action("ews");
       }
       throw err;
