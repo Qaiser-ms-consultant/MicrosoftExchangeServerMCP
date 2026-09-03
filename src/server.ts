@@ -20,6 +20,7 @@ import { registerMailboxRecoveryTools } from "./tools/admin-mailbox-recovery.js"
 import { registerReportTools } from "./tools/admin-reports.js";
 import { registerInfraReports } from "./tools/admin-reports-infra.js";
 import { registerAICoreTools } from "./tools/ai-core.js";
+import { registerAIAdvancedTools } from "./tools/ai-advanced.js";
 import { registerResources } from "./resources/folder-resource.js";
 import { registerPrompts } from "./prompts/index.js";
 
@@ -49,6 +50,7 @@ async function main() {
   registerReportTools(server, client.ps);
   registerInfraReports(server, client.ps);
   registerAICoreTools(server, client.ps);
+  registerAIAdvancedTools(server, client.ps);
   registerDiagnosticTools(server, config, client.auth);
   registerResources(server, client);
   registerPrompts(server);
@@ -60,7 +62,7 @@ async function main() {
     const stdio = new StdioServerTransport();
     await server.connect(stdio);
     const insecure = !!(config.exchange.insecure || config.exchange.tls?.rejectUnauthorized === false);
-    console.error(`Exchange MCP server running (stdio) — endpoint=${config.exchange.endpoint} provider=${config.exchange.provider} insecure=${insecure}${insecure ? " [DEV: self-signed allowed]" : ""} | tools=168 (all open)`);
+    console.error(`Exchange MCP server running (stdio) — endpoint=${config.exchange.endpoint} provider=${config.exchange.provider} insecure=${insecure}${insecure ? " [DEV: self-signed allowed]" : ""} | tools=175 (all open)`);
   } else {
     // HTTP/SSE — use Express wrapper (lazy import to keep stdio light)
     const express = await import("express");
