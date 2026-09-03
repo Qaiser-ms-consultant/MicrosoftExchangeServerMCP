@@ -46,8 +46,8 @@ const ALLOWED_CMDLETS = new Set([
   // Mailbox lifecycle / recovery
   "Disable-Mailbox", "Connect-Mailbox", "Undo-SoftDeletedMailbox", "Get-Mailbox", "Remove-Mailbox", "Restore-RecoverableItems",
   "Get-CASMailbox", "Set-CASMailbox", "Get-MailboxRestoreRequest", "New-MailboxRestoreRequest", "New-MailboxImportRequest", "Get-MailboxImportRequest",
-  // Infra reports
-  "Get-OrganizationConfig", "Get-AdSite", "Get-ADPermission", "Get-CimInstance", "Get-WmiObject",
+  // Infra reports + diagnostics
+  "Get-OrganizationConfig", "Get-AdSite", "Get-ADPermission", "Get-CimInstance", "Get-WmiObject", "Test-ExchangeSearch", "Get-MoveRequestStatistics",
 ]);
 
 export class PowerShellProvider {
@@ -172,12 +172,30 @@ try {
     return normalizePsJson(data);
   }
 
-  // Recipients — use Select -First instead of -ResultSize + complex Select due to PSRP serialization quirk with PrimarySmtpAddress
+  // Recipients — fixed OPATH quoting + wildcard handling (Option A)
   async listMailboxes(filter?: string, recipientType?: string, resultSize: number = 20): Promise<any[]> {
+    if (filter) {
+      const raw = filter.trim();
+      // If filter already contains wildcard (*), use as-is (e.g. Ali*), else wrap with *filter*
+      const pattern = raw.includes("*") ? raw : `*${raw}*`;
+      const escPattern = escapePsSingle(pattern);
+      const filterCmd = `Get-Mailbox -Filter "Name -like '${escPattern}'"`;
+      const base = recipientType ? `${filterCmd} -RecipientTypeDetails ${recipientType}` : filterCmd;
+      const cmd = `${base} | Select-Object DisplayName,PrimarySmtpAddress,RecipientType,Name,Identity | Select-Object -First ${resultSize}`;
+      const result = await this.invokeJson(cmd);
+      if (result.length > 0) return result;
+      // Fallback 1: ANR (handles Ali* prefix well)
+      const anrPattern = escapePsSingle(raw.replace(/\*/g, ""));
+      if (anrPattern) {
+        const anr = await this.invokeJson(`Get-Mailbox -Anr "${anrPattern}" | Select-Object DisplayName,PrimarySmtpAddress,RecipientType,Name,Identity | Select-Object -First ${resultSize}`).catch(() => []);
+        if (anr.length > 0) return anr;
+      }
+      // Fallback 2: client-side Where-Object
+      const wherePattern = escapePsSingle(pattern);
+      return this.invokeJson(`Get-Mailbox -ResultSize 100 | Where-Object { $_.Name -like '${wherePattern}' } | Select-Object DisplayName,PrimarySmtpAddress,RecipientType,Name,Identity | Select-Object -First ${resultSize}`);
+    }
     let cmd = "Get-Mailbox";
-    if (filter) cmd += ` -Filter {Name -like "*${filter}*"} `;
     if (recipientType) cmd += ` -RecipientTypeDetails ${recipientType}`;
-    // Use pipeline -First for reliable serialization (avoids 415/empty with -ResultSize + Select)
     cmd += ` | Select-Object DisplayName,PrimarySmtpAddress,RecipientType,Name,Identity | Select-Object -First ${resultSize}`;
     return this.invokeJson(cmd);
   }

@@ -91,10 +91,10 @@ export function registerAISuiteTools(server: McpServer, ps: PowerShellProvider) 
     return { content: [{ type: "text", text: JSON.stringify({ remaining: `${remaining} mailboxes remaining`, throughput: `${throughput} mailboxes/hour`, eta: `Estimated completion: ${eta}`, byStatus: reqs, sample: (stats as any[]).slice(0, 2) }, null, 2) }] };
   });
 
-  // 30. Ask Exchange — front door
+  // 30. Ask Exchange — front door (enhanced to compose any report, including new org/search/migration tools)
   server.tool(
     "ai.ask_exchange",
-    'AI Ask Exchange — natural language to report (e.g. "Show me all mailboxes over 50 GB", "Which databases have >100 GB whitespace?", "Why is EXCH02 unhealthy?") — generates appropriate PowerShell',
+    'AI Ask Exchange — natural language to report (e.g. "Show me all mailboxes over 50 GB", "Which databases have >100 GB whitespace?", "Why is EXCH02 unhealthy?", "Show organization config", "Test Exchange search", "Migration ETA") — generates appropriate PowerShell and reuses existing report tools',
     { query: z.string().describe('Natural language, e.g. "Show me all mailboxes over 50 GB"') },
     async ({ query }) => {
       const q = query.toLowerCase();
@@ -102,25 +102,43 @@ export function registerAISuiteTools(server: McpServer, ps: PowerShellProvider) 
       let hint = "";
       if (q.includes("over 50 gb") || q.includes("50 gb")) {
         cmd = `Get-Mailbox -ResultSize 50 | Get-MailboxStatistics | Where-Object { $_.TotalItemSize.Value.ToBytes() -gt 50GB } | Select-Object DisplayName,TotalItemSize | Select-Object -First 20`;
-        hint = "Filter by TotalItemSize >50GB";
+        hint = "Filter by TotalItemSize >50GB — see also report.largest_mailboxes / report.generate_mailbox_size_report";
       } else if (q.includes("whitespace") && q.includes("100")) {
         cmd = `Get-MailboxDatabase | Where-Object { $_.AvailableNewMailboxSpace.ToBytes() -gt 100GB } | Select-Object Name,AvailableNewMailboxSpace | Select-Object -First 20`;
-        hint = "Whitespace >100GB";
+        hint = "Whitespace >100GB — see report.database_whitespace";
       } else if (q.includes("why") && q.includes("unhealthy")) {
         cmd = `Get-ServerHealth | Where-Object { $_.AlertValue -ne "Healthy" } | Select-Object HealthSet,AlertValue | Select-Object -First 10`;
-        hint = "Unhealthy HealthSets";
+        hint = "Unhealthy HealthSets — see exchange_get_server_health / ai.root_cause_analysis";
       } else if (q.includes("send as") && q.includes("5")) {
         cmd = `Get-Mailbox -ResultSize 20 | ForEach-Object { Get-RecipientPermission -Identity $_.Identity | Measure-Object | Select-Object Count } | Select-Object -First 10`;
-        hint = "Send As >5";
+        hint = "Send As >5 — see report.send_as";
       } else if (q.includes("not logged in") && q.includes("90")) {
         cmd = `Get-Mailbox -ResultSize 50 | Get-MailboxStatistics | Where-Object { $_.LastLogonTime -lt (Get-Date).AddDays(-90) } | Select-Object DisplayName,LastLogonTime | Select-Object -First 20`;
-        hint = "90d inactive";
+        hint = "90d inactive — see report.mailbox_inactive";
+      } else if (q.includes("organization") && (q.includes("config") || q.includes("settings"))) {
+        cmd = `Get-OrganizationConfig | Select-Object Name,ActivityBasedAuthenticationTimeoutInterval,DefaultPublicFolderAgeLimit | Select-Object -First 1`;
+        hint = "Organization config — using organization.get_config standalone";
+      } else if (q.includes("test") && q.includes("search")) {
+        cmd = `Test-ExchangeSearch -Identity "devlabadmin@devlab2025.local" | Select-Object ResultFound,SearchTime | Select-Object -First 1`;
+        hint = "Content index health — using diagnostics.test_exchange_search";
+      } else if (q.includes("move request") || q.includes("migration") && q.includes("eta")) {
+        cmd = `Get-MoveRequestStatistics | Select-Object Identity,Status,PercentComplete,BytesTransferred | Select-Object -First 5`;
+        hint = "MoveRequest polling — using migration.get_moverequest_statistics";
+      } else if (q.includes("migration") && q.includes("readiness")) {
+        cmd = `Get-Mailbox -ResultSize 20 | Select-Object DisplayName,ExchangeVersion | Select-Object -First 10`;
+        hint = "Migration readiness — see ai.migration_advisor";
+      } else if (q.includes("dag") && q.includes("health")) {
+        cmd = `Test-ReplicationHealth | Select-Object Server,Check,Result | Select-Object -First 10`;
+        hint = "DAG health — see report.dag_health";
+      } else if (q.includes("queue") && q.includes("health")) {
+        cmd = `Get-Queue | Select-Object Identity,MessageCount,Status | Sort-Object MessageCount -Descending | Select-Object -First 10`;
+        hint = "Queue health — see report.queue_report";
       } else {
         cmd = `Get-Mailbox -ResultSize 10 | Select-Object DisplayName | Select-Object -First 10`;
-        hint = "Fallback: list mailboxes";
+        hint = "Fallback: list mailboxes — try more specific: 'mailboxes over 50GB', 'organization config', 'test search', 'migration eta'";
       }
       const data = await ps.invokeJson(cmd).catch(() => []);
-      return { content: [{ type: "text", text: JSON.stringify({ query, interpreted: hint, powershell: cmd, result: (data as any[]).slice(0, 5) }, null, 2) }] };
+      return { content: [{ type: "text", text: JSON.stringify({ query, interpreted: hint, powershell: cmd, result: (data as any[]).slice(0, 5), note: "Front door composes existing report.* and admin tools — no need for 20+ new report variants" }, null, 2) }] };
     },
   );
 
