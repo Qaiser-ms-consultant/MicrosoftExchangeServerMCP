@@ -16,6 +16,7 @@
 - [Features](#features)
 - [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
+  - [Simplest Install — Wizard + Auto-Patch](#simplest-install--wizard--auto-patch)
 - [Configuration (MCP Server)](#configuration-mcp-server)
   - [Config File](#config-file)
   - [Lab (Self-Signed Cert) vs Production](#lab-self-signed-cert-vs-production)
@@ -70,17 +71,21 @@ git clone https://github.com/<your-org>/exchange-mcp-server.git
 cd exchange-mcp-server
 npm install
 
-# 1. Configure (generic example → your environment)
-cp config.example.yaml config.yaml          # edit endpoint, username, password
-# or cp config.production.yaml.example config.yaml  # production template
-# Edit: endpoint, username, password, insecure flag
+# 1. Configure — Option A: Wizard (recommended, Production file-based)
+npm run build
+npx exchange-mcp init
+# Prompts: Exchange FQDN (mail.contoso.com), Username, Password env var (EXCHANGE_PASSWORD), insecure? No
+# Tests both PowerShell + EWS (https://<fqdn>/PowerShell + /EWS/Exchange.asmx), writes config.yaml with
+# password: "${EXCHANGE_PASSWORD}" — then set: export EXCHANGE_PASSWORD='...' (or $env:EXCHANGE_PASSWORD in PowerShell)
+# Or manually: cp config.example.yaml config.yaml && edit
 
 # 2. Build & run
 npm run build
 npm start                                    # stdio (default)
 # or: node dist/server.js --config=./config.yaml --transport=http  # http :3000
 
-# 3. Verify
+# 3. Verify (tests PowerShell + EWS)
+npx exchange-mcp doctor --endpoint https://mail.contoso.com  # both targets
 npm test                                     # 4/4
 npx @modelcontextprotocol/inspector node dist/server.js --config=./config.yaml
 # Open inspector URL, confirm 128 tools
@@ -88,6 +93,22 @@ npx @modelcontextprotocol/inspector node dist/server.js --config=./config.yaml
 # 4. Connect a client (see below), then ask:
 #   "list mailboxes with exchange_list_mailboxes"
 #   "show queue health on MAIL01 with exchange_get_queue"
+```
+
+### Simplest Install — Wizard + Auto-Patch (Production, file-based)
+
+```bash
+# After git clone + npm install + npm run build:
+npx exchange-mcp init
+# → creates config.yaml with ${EXCHANGE_PASSWORD}, tests PowerShell + EWS
+
+npx exchange-mcp add --client opencode,claude-code
+# → patches ~/.config/opencode/opencode.jsonc and ~/.claude.json (or runs `claude mcp add`)
+# → backup *.bak.YYYYMMDD
+
+npx exchange-mcp doctor  # re-tests both endpoints
+opencode mcp list        # ✓ exchange connected
+claude mcp list          # ✓ exchange connected
 ```
 
 ---
