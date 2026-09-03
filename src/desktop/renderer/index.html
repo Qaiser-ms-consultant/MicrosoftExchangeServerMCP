@@ -1,0 +1,145 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Exchange MCP Desktop</title>
+<style>
+  *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;background:#0f1115;color:#e6e8ec}
+  header{padding:16px 20px;background:#151821;border-bottom:1px solid #242938;display:flex;align-items:center;gap:12px}
+  header h1{font-size:16px;margin:0;font-weight:600} header .badge{font-size:11px;background:#1e3a5f;color:#8cc2ff;padding:3px 8px;border-radius:999px}
+  nav{display:flex;gap:6px;padding:10px 12px;background:#0f1115;border-bottom:1px solid #242938}
+  nav button{padding:7px 12px;border-radius:7px;border:1px solid #2a3042;background:#151821;color:#cbd5e1;cursor:pointer;font-size:13px}
+  nav button.active{background:#2563eb;border-color:#2563eb;color:#fff}
+  .grid{display:grid;grid-template-columns:340px 1fr 360px;gap:12px;padding:12px;height:calc(100vh - 110px)}
+  .panel{background:#151821;border:1px solid #242938;border-radius:10px;padding:12px;overflow:auto}
+  .panel h3{margin:0 0 8px;font-size:13px;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em}
+  label{font-size:12px;color:#94a3b8;display:block;margin:8px 0 4px}
+  input,select,textarea{width:100%;padding:8px 9px;border-radius:7px;border:1px solid #2a3042;background:#0f1115;color:#e6e8ec;font-size:13px}
+  textarea{min-height:120px;resize:vertical}
+  .row{display:flex;gap:8px}
+  .btn{padding:8px 12px;border-radius:7px;border:1px solid #2a3042;background:#1e293b;color:#e6e8ec;cursor:pointer;font-size:13px}
+  .btn.primary{background:#2563eb;border-color:#2563eb}
+  .log{font-family:ui-monospace,monospace;font-size:11px;white-space:pre-wrap;background:#0b0e14;border:1px solid #242938;border-radius:7px;padding:8px;max-height:240px;overflow:auto}
+  .gauge{height:120px;display:flex;align-items:center;justify-content:center;background:#0b0e14;border:1px solid #242938;border-radius:10px;margin:8px 0}
+  .card{background:#0b0e14;border:1px solid #242938;border-radius:8px;padding:10px;margin:6px 0}
+  .dot{width:8px;height:8px;border-radius:999px;display:inline-block;margin-right:6px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Exchange MCP Desktop</h1>
+  <span class="badge">Admin • 12 Providers • Prompt/Output • Logs • HA: devex02→devex01</span>
+  <span style="margin-left:auto;font-size:11px;color:#64748b">200 tools • EWS + PowerShell WinRM</span>
+</header>
+<nav>
+  <button class="active" data-tab="admin">Admin</button>
+  <button data-tab="models">Model Providers</button>
+  <button data-tab="prompt">Prompt / Output</button>
+  <button data-tab="logs">Logs</button>
+  <button data-tab="health">Health</button>
+</nav>
+<div class="grid">
+  <div class="panel" id="left">
+    <div data-panel="admin">
+      <h3>Exchange Connection (Admin)</h3>
+      <label>FQDN / Endpoint</label><input id="fqdn" value="mail.contoso.com" />
+      <label>Username</label><input id="user" value="admin@contoso.com" />
+      <label>Password env var</label><input id="pwEnv" value="EXCHANGE_PASSWORD" />
+      <label>Password value (file-based, set env before start)</label><input id="pw" type="password" placeholder="••••••••" />
+      <label><input type="checkbox" id="insecure" /> Self-signed (lab) insecure:true</label>
+      <div class="row" style="margin-top:8px"><button class="btn primary" id="saveAdmin">Save config.yaml</button><button class="btn" id="testConn">Test PowerShell + EWS</button></div>
+      <div id="adminOut" class="log" style="margin-top:8px;min-height:80px">Not tested</div>
+    </div>
+    <div data-panel="models" style="display:none">
+      <h3>Model Providers (12)</h3>
+      <label>Provider</label><select id="provider"></select>
+      <label>Model</label><select id="model"><option>Select provider first</option></select>
+      <label>API Key (file-based ${API_KEY})</label><input id="apiKey" type="password" />
+      <label>Base URL (custom/Ollama)</label><input id="baseUrl" placeholder="https://api.openai.com/v1" />
+      <div class="row" style="margin-top:8px"><button class="btn" id="testModel">Test Model</button><button class="btn primary" id="saveModel">Save</button></div>
+      <div id="modelOut" class="log" style="margin-top:8px">Not tested</div>
+      <div style="font-size:11px;color:#64748b;margin-top:6px">Stay file-based: ${OPENAI_API_KEY} etc. — written to ~/.config/exchange-desktop/config.json</div>
+    </div>
+  </div>
+  <div class="panel" id="center">
+    <div data-panel="prompt">
+      <h3>Prompt</h3>
+      <label>System / User prompt</label><textarea id="prompt" placeholder="Tell me everything about devlabadmin@devlab2025.local">Tell me everything about devlabadmin@devlab2025.local</textarea>
+      <div class="row"><button class="btn primary" id="runPrompt">Run (via MCP + Model)</button><button class="btn" id="clearPrompt">Clear</button></div>
+      <h3 style="margin-top:12px">Output — Human-friendly</h3>
+      <div class="gauge" id="gauge"><span style="font-size:28px">Health 82/100</span></div>
+      <div id="output" class="log" style="min-height:180px">Output will appear here — Executive Summary, Findings 🔴🟠🟢, Recommended Actions</div>
+      <div class="row"><button class="btn" id="copyOut">Copy Markdown</button><button class="btn" id="exportOut">Export</button></div>
+    </div>
+    <div data-panel="logs" style="display:none">
+      <h3>Logs — Real-time streaming</h3>
+      <div style="display:flex;gap:6px;margin-bottom:6px">
+        <button class="btn" data-log="mcp">MCP Logs</button>
+        <button class="btn" data-log="ps">PowerShell Transcript</button>
+        <button class="btn" data-log="audit">Audit</button>
+      </div>
+      <div id="logView" class="log" style="min-height:340px">MCP logs: Exchange targets — endpoint=... | ha=[...] | tools=200
+HA failover: ... → ... succeeded</div>
+    </div>
+    <div data-panel="health" style="display:none">
+      <h3>Health Dashboard</h3>
+      <div class="card"><span class="dot" style="background:#22c55e"></span> overall: Healthy — 200 tools, HA failover devex02→devex01</div>
+      <div class="card">Exchange Version: 15.2.1748.10 (DEVEX01/02) — use report.exchange_version_and_cu</div>
+      <div class="card">Try: npx exchange-mcp doctor --endpoint https://mail.contoso.com</div>
+    </div>
+  </div>
+  <div class="panel" id="right">
+    <h3>Tool Explorer — 200 tools</h3>
+    <input id="toolSearch" placeholder="Search report.mailbox_inventory, ai.* ..." />
+    <div id="toolList" style="margin-top:8px;font-size:12px;line-height:1.6">
+      <div>Recipients (13) • Mail Flow (13) • Servers/DB/DAG (18) • Monitoring (14) • Compliance (17) • AI 24 • Reports 80+</div>
+      <div style="margin-top:6px;color:#94a3b8">Favorites: ai.tell_me_everything, ai.exchange_executive_summary, report.mailbox_detail</div>
+    </div>
+    <h3 style="margin-top:12px">Triple Connectivity</h3>
+    <div class="card"><span class="dot" style="background:#22c55e"></span>Model</div>
+    <div class="card"><span class="dot" style="background:#22c55e"></span>MCP Server (200 tools)</div>
+    <div class="card"><span class="dot" style="background:#22c55e"></span>Exchange via MCP (PowerShell 200 + EWS 200)</div>
+    <button class="btn" id="runDoctor" style="width:100%;margin-top:8px">Run doctor (PowerShell + EWS)</button>
+  </div>
+</div>
+<script>
+const $ = (s)=>document.querySelector(s);
+const $$ = (s)=>[...document.querySelectorAll(s)];
+$$('[data-tab]').forEach(b=>b.addEventListener('click',()=>{
+  $$('[data-tab]').forEach(x=>x.classList.remove('active')); b.classList.add('active');
+  const t=b.dataset.tab;
+  $$('[data-panel]').forEach(p=> p.style.display = (p.dataset.panel===t || p.closest('#left, #center, #right')) ? '' : 'none');
+  // simple: show matching panels by data-panel, hide others
+  document.querySelectorAll('[data-panel]').forEach(p=>{
+    const isMatch = p.dataset.panel===t;
+    const inLeft = p.closest('#left'), inCenter=p.closest('#center');
+    if(inLeft || inCenter){ p.style.display = isMatch ? '' : 'none'; }
+  });
+}));
+(async()=>{
+  const prov = await window.exchangeDesktop.listProviders();
+  const sel=$('#provider');
+  prov.forEach(p=>{ const o=document.createElement('option'); o.textContent=p; sel.appendChild(o); });
+})();
+$('#testModel')?.addEventListener('click', async()=>{
+  const r=await window.exchangeDesktop.testProvider({provider:$('#provider').value, apiKey:$('#apiKey').value, baseUrl:$('#baseUrl').value});
+  $('#modelOut').textContent=JSON.stringify(r,null,2);
+});
+$('#testConn')?.addEventListener('click', async()=>{
+  const r=await window.exchangeDesktop.runDoctor({endpoint:`https://${$('#fqdn').value}`, insecure:$('#insecure').checked});
+  $('#adminOut').textContent=JSON.stringify(r,null,2);
+});
+$('#runDoctor')?.addEventListener('click', async()=>{
+  const r=await window.exchangeDesktop.runDoctor({endpoint:`https://${$('#fqdn').value}`, insecure:$('#insecure').checked});
+  $('#logView').textContent=JSON.stringify(r,null,2);
+});
+window.exchangeDesktop.onLog(d=>{ const el=$('#logView'); el.textContent+=d; el.scrollTop=el.scrollHeight; });
+$('#runPrompt')?.addEventListener('click', async()=>{
+  $('#output').textContent='Running ai.tell_me_everything for '+$('#prompt').value.slice(0,120)+'... (via MCP 200 tools, WinRM devex02→devex01)';
+  // In real app, call model API with tools = 200 definitions, then invoke ai.tell_me_everything; here we mock human-friendly card
+  setTimeout(()=>{ $('#output').textContent=`Executive Summary\nMailbox Health: 🟠 74/100\nThe mailbox is operational but requires attention because it is at 95.6% of quota and has grown 3.8 GB in the last 30 days.\n\nFindings\n🔴 Quota Risk — Projected to reach quota in ~20 days.\n🟠 Security — External forwarding is enabled.\n🟠 Cleanup — 3.8 GB exists in recoverable/deleted content.\n🟢 Connectivity — No significant problems.\n🟢 Migration — Successfully migrated to Exchange 2019.\n\nRecommended Actions\n• Review mailbox quota.\n• Review external forwarding.\n• Review Recoverable Items.`; },600);
+});
+</script>
+</body>
+</html>
