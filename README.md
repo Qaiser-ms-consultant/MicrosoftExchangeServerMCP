@@ -33,6 +33,7 @@ Exchange administrators can use AI assistants such as OpenCode, Claude Code, Cur
 - **200 tools** covering Exchange Management Shell and the Exchange Admin Center: Recipients, Mail Flow, Servers, Databases, DAG, Monitoring, Compliance, Client Access, Certificates, Security, Logs and Reports, plus Organization, Diagnostics and AI.
 - **AI Suite (24 tools)** — executive summary, root cause analysis, anomaly detection, capacity forecast, cleanup advisor and more. Generates narrative insights from live data without requiring an external API key.
 - **Reports (80+ tools)** — mailbox, database, DAG, mail flow, infrastructure and compliance reports.
+- **High Availability** — configure multiple Exchange servers for automatic failover (`servers` list with `failover` or `round_robin` strategy, health tracking and retry).
 - **Multiple Exchange versions:** 2013, 2016, 2019 and Subscription Edition with automatic detection.
 - **Multiple authentication methods:** Basic, OAuth 2.0 via ADFS or Azure AD, and Certificate.
 - **Multiple transports:** stdio for local clients and HTTP/SSE for remote or Docker deployments.
@@ -160,6 +161,21 @@ exchange:
   tls: { rejectUnauthorized: false, allowSelfSigned: true }
 ```
 
+High availability example (if one server is unavailable, the server will try the next):
+
+```yaml
+exchange:
+  endpoint: https://exch01.contoso.com
+  powershellUri: https://exch01.contoso.com/PowerShell
+  servers:
+    - https://exch01.contoso.com/PowerShell
+    - https://exch02.contoso.com/PowerShell
+  ha:
+    strategy: failover   # or round_robin
+    retryCount: 2
+# Or via environment: EXCHANGE_SERVERS=https://exch01/PowerShell,https://exch02/PowerShell
+```
+
 ### Authentication
 
 **Basic (simple, suitable for lab):**
@@ -189,6 +205,8 @@ auth: { method: certificate, certificate: { pfxPath: ./cert.pfx, passphrase: '..
 |---|---|---|---|
 | `exchange.endpoint` | `EXCHANGE_ENDPOINT` | `https://mail.contoso.local` | Base URL including scheme and host |
 | `exchange.powershellUri` | `EXCHANGE_POWERSHELL_URL` or `EXCHANGE_SERVER` | `https://mail.contoso.local/PowerShell` | Full PowerShell remoting URL. Setting `EXCHANGE_SERVER` automatically configures both endpoint and PowerShell URI |
+| `exchange.servers` | `EXCHANGE_SERVERS` | — | Comma-separated list of PowerShell URIs for high availability, for example `https://exch01/PowerShell,https://exch02/PowerShell` |
+| `exchange.ha.strategy` | — | `failover` | `failover` (health-first) or `round_robin` |
 | `exchange.insecure` | `EXCHANGE_INSECURE` | `false` | Set to `true` to allow self-signed certificates |
 | `exchange.tls.rejectUnauthorized` | — | `true` | Set to `false` for lab environments |
 | `auth.method` | `AUTH_METHOD` | `basic` | `basic`, `oauth` or `certificate` |
