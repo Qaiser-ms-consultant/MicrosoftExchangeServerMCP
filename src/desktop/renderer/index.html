@@ -53,7 +53,20 @@
     </div>
     <div data-panel="models" style="display:none">
       <h3>Model Providers (12)</h3>
-      <label>Provider</label><select id="provider"></select>
+      <label>Provider</label><select id="provider">
+        <option>OpenAI</option>
+        <option>Anthropic</option>
+        <option>Google</option>
+        <option>Azure OpenAI</option>
+        <option>AWS Bedrock</option>
+        <option>Ollama</option>
+        <option>Mistral</option>
+        <option>Cohere</option>
+        <option>Groq</option>
+        <option>Together</option>
+        <option>OpenRouter</option>
+        <option>Custom</option>
+      </select>
       <label>Model</label><select id="model"><option>Select provider first</option></select>
       <label>API Key (file-based ${API_KEY})</label><input id="apiKey" type="password" />
       <label>Base URL (custom/Ollama)</label><input id="baseUrl" placeholder="https://api.openai.com/v1" />
