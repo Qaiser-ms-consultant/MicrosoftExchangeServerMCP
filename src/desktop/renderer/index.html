@@ -158,11 +158,11 @@
   <div class="view" data-view="config">
     <div class="grid grid-2">
       <div class="card">
-        <div class="card-h"><h3>Model Configuration</h3><span class="hint">12 providers</span></div>
+        <div class="card-h"><h3>Model Configuration</h3><span class="hint">13 providers</span></div>
         <div class="card-b">
           <label>Provider</label>
           <select id="provider">
-            <option>OpenAI</option><option>Anthropic</option><option>Google</option><option>Azure OpenAI</option><option>AWS Bedrock</option><option>Ollama</option><option>Mistral</option><option>Cohere</option><option>Groq</option><option>Together</option><option>OpenRouter</option><option>Custom</option>
+            <option>OpenAI</option><option>Anthropic</option><option>Google</option><option>Azure OpenAI</option><option>AWS Bedrock</option><option>Ollama</option><option>Mistral</option><option>Cohere</option><option>Groq</option><option>Together</option><option>OpenRouter</option><option>Custom</option><option>OpenCode</option>
           </select>
           <label>Model</label><select id="model"><option>Select provider first</option></select>
           <label>API Key</label><input id="apiKey" type="password" placeholder="Stored file-based, never shown" />
@@ -217,12 +217,21 @@ $$('[data-tab]').forEach(b=>b.addEventListener('click',()=>{
   const t=b.dataset.tab;
   document.querySelectorAll('[data-view]').forEach(v=> v.classList.toggle('active', v.dataset.view===t));
 }));
-// Provider models
-const fallbackModels = {
-  OpenAI: ["gpt-4o","gpt-4o-mini","o1","o1-mini"],
-  Anthropic: ["claude-3-5-sonnet-20241022","claude-3-5-haiku-20241022","claude-3-opus-20240229"],
-  Google: ["gemini-1.5-pro","gemini-1.5-flash"],
-  Ollama: ["llama3.1","mistral","qwen2"],
+// Provider models — extensive fallback for all 13 providers (no API key needed to see list)
+const fallbackModels: Record<string, string[]> = {
+  OpenAI: ["gpt-4o","gpt-4o-mini","o1","o1-mini","gpt-4-turbo","gpt-3.5-turbo"],
+  Anthropic: ["claude-3-5-sonnet-20241022","claude-3-5-haiku-20241022","claude-3-opus-20240229","claude-3-haiku-20240307"],
+  Google: ["gemini-1.5-pro","gemini-1.5-flash","gemini-1.0-pro","gemini-pro-vision"],
+  "Azure OpenAI": ["gpt-4o","gpt-4","gpt-35-turbo","o1"],
+  "AWS Bedrock": ["anthropic.claude-3-sonnet","amazon.titan-text-express-v1","ai21.j2-ultra","cohere.command-text-v14"],
+  Ollama: ["llama3.1","mistral","qwen2","gemma2","codellama","phi3"],
+  Mistral: ["mistral-large-latest","mistral-small-latest","mistral-nemo","codestral-latest"],
+  Cohere: ["command-r-plus","command-r","command","embed-english-v3.0"],
+  Groq: ["llama-3.1-70b-versatile","llama-3.1-8b-instant","mixtral-8x7b-32768","gemma-7b-it"],
+  Together: ["meta-llama/Llama-3-70b-Instruct","mistralai/Mixtral-8x7B-Instruct-v0.1","Qwen/Qwen2-72B-Instruct"],
+  OpenRouter: ["openai/gpt-4o","anthropic/claude-3.5-sonnet","google/gemini-pro","meta-llama/llama-3.1-70b"],
+  Custom: ["custom-model-1","custom-model-2"],
+  OpenCode: ["opencode/claude-3-5-sonnet","opencode/gpt-4o","opencode/gemini-1.5-pro","opencode/llama3.1"],
 };
 function populateModelsForProvider(provider, models){
   const sel=$("#model");

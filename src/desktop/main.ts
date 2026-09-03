@@ -68,8 +68,8 @@ ipcMain.handle("config:save", async (_e, content: string) => {
 });
 ipcMain.handle("config:path", async () => ensureConfig());
 
-// IPC: model providers — 12 as per spec, file-based ${API_KEY}
-const PROVIDERS = ["OpenAI","Anthropic","Google","Azure OpenAI","AWS Bedrock","Ollama","Mistral","Cohere","Groq","Together","OpenRouter","Custom"];
+// IPC: model providers — 13 (12 + OpenCode as requested), file-based ${API_KEY}
+const PROVIDERS = ["OpenAI","Anthropic","Google","Azure OpenAI","AWS Bedrock","Ollama","Mistral","Cohere","Groq","Together","OpenRouter","Custom","OpenCode"];
 ipcMain.handle("providers:list", async () => PROVIDERS);
 ipcMain.handle("providers:test", async (_e, { provider, apiKey, baseUrl }: { provider: string; apiKey: string; baseUrl?: string }) => {
   // Model test: GET /v1/models with Bearer — file-based key, no keytar
@@ -77,7 +77,16 @@ ipcMain.handle("providers:test", async (_e, { provider, apiKey, baseUrl }: { pro
     OpenAI: "https://api.openai.com/v1/models",
     Anthropic: "https://api.anthropic.com/v1/models",
     Google: "https://generativelanguage.googleapis.com/v1/models",
+    "Azure OpenAI": "https://api.openai.azure.com/openai/models?api-version=2023-05-15",
+    "AWS Bedrock": "https://bedrock-runtime.us-east-1.amazonaws.com/models",
     Ollama: "http://localhost:11434/api/tags",
+    Mistral: "https://api.mistral.ai/v1/models",
+    Cohere: "https://api.cohere.ai/v1/models",
+    Groq: "https://api.groqu.com/openai/v1/models",
+    Together: "https://api.together.xyz/v1/models",
+    OpenRouter: "https://openrouter.ai/api/v1/models",
+    Custom: "https://api.openai.com/v1/models",
+    OpenCode: "http://localhost:4096/models", // OpenCode local gateway if available, falls back to OpenAI
   };
   const url = baseUrl || urlMap[provider] || "https://api.openai.com/v1/models";
   try {
