@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { resolve } from "node:path";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { PowerShellProvider } from "../clients/powershell-provider.js";
 
@@ -13,7 +15,98 @@ export function registerMailboxReports(server: McpServer, ps: PowerShellProvider
   wrap("report.mailbox_size", "Size and item count (Get-MailboxStatistics)", `Get-Mailbox -ResultSize 20 | Get-MailboxStatistics | Select-Object DisplayName,TotalItemSize,ItemCount,LastLogonTime | Sort-Object TotalItemSize -Descending | Select-Object -First 20`);
   wrap("report.largest_mailboxes", "Top N largest mailboxes", `Get-Mailbox -ResultSize 50 | Get-MailboxStatistics | Select-Object DisplayName,TotalItemSize,ItemCount | Sort-Object TotalItemSize -Descending | Select-Object -First 10`);
   wrap("report.smallest_mailboxes", "Small/inactive mailboxes", `Get-Mailbox -ResultSize 50 | Get-MailboxStatistics | Where-Object { $_.TotalItemSize.Value.ToBytes() -lt 10MB } | Select-Object DisplayName,TotalItemSize | Select-Object -First 10`);
-  add("report.mailbox_growth", "Historical mailbox growth (requires tracking, shows current vs quota)", { days: z.number().optional() }, async (p) => `Get-Mailbox -ResultSize 20 | Get-MailboxStatistics | Select-Object DisplayName,TotalItemSize,LastLogonTime | Select-Object -First 20`);
+  server.tool(
+    "report.mailbox_growth",
+    "Mailbox Growth Report — Current size, Size 7/30/90 days ago, Growth %, Growth rate, Projected size (via local history + linear trend, 30d window)",
+    {
+      identity: z.string().optional().describe("Mailbox identity, omit for top 20"),
+      top: z.number().optional().describe("Top N mailboxes, default 20"),
+    },
+    async ({ identity, top }) => {
+      const n = top ?? 20;
+      const historyPath = resolve(process.cwd(), ".exchange-growth.json");
+      const now = Date.now();
+      const dayMs = 86400000;
+      let history: Record<string, { date: string; bytes: number }[]> = {};
+      try {
+        if (existsSync(historyPath)) history = JSON.parse(readFileSync(historyPath, "utf-8"));
+      } catch {}
+      const parseBytes = (s: string): number => {
+        if (!s) return 0;
+        const m = s.match(/\(([\d,]+) bytes\)/);
+        if (m) return parseInt(m[1].replace(/,/g, ""), 10);
+        const g = s.match(/([\d.]+)\s*GB/i);
+        if (g) return parseFloat(g[1]) * 1024 ** 3;
+        const mb = s.match(/([\d.]+)\s*MB/i);
+        if (mb) return parseFloat(mb[1]) * 1024 ** 2;
+        return 0;
+      };
+      const formatBytes = (b: number) => {
+        if (b >= 1024 ** 3) return `${(b / 1024 ** 3).toFixed(2)} GB`;
+        if (b >= 1024 ** 2) return `${(b / 1024 ** 2).toFixed(1)} MB`;
+        return `${b} bytes`;
+      };
+      const filter = identity ? ` -Identity '${identity.replace(/'/g, "''")}'` : "";
+      const cmd = identity
+        ? `Get-MailboxStatistics -Identity '${identity.replace(/'/g, "''")}' | Select-Object DisplayName,TotalItemSize,ItemCount | Select-Object -First 1`
+        : `Get-Mailbox -ResultSize ${n} | Get-MailboxStatistics | Select-Object DisplayName,TotalItemSize,ItemCount | Select-Object -First ${n}`;
+      const stats = await ps.invokeJson(cmd);
+      const results: any[] = [];
+      for (const s of stats as any[]) {
+        const name = s.DisplayName as string;
+        const curBytes = parseBytes(String(s.TotalItemSize ?? ""));
+        const key = name;
+        if (!history[key]) history[key] = [];
+        history[key].push({ date: new Date(now).toISOString(), bytes: curBytes });
+        // Keep last 90 days, one per day (dedup)
+        const seen = new Set<string>();
+        history[key] = history[key]
+          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+          .filter((e) => {
+            const d = e.date.slice(0, 10);
+            if (seen.has(d) && e !== history[key][history[key].length - 1]) return false;
+            seen.add(d);
+            return true;
+          })
+          .slice(-90);
+        const findAgo = (days: number) => {
+          const target = now - days * dayMs;
+          let best: { bytes: number } | null = null;
+          for (const e of history[key]) {
+            if (new Date(e.date).getTime() <= target) best = e;
+          }
+          return best?.bytes ?? null;
+        };
+        const b7 = findAgo(7);
+        const b30 = findAgo(30);
+        const b90 = findAgo(90);
+        const growth7 = b7 ? ((curBytes - b7) / b7) * 100 : null;
+        const growth30 = b30 ? ((curBytes - b30) / b30) * 100 : null;
+        const growthRatePerDay = b30 ? (curBytes - b30) / 30 : b7 ? (curBytes - b7) / 7 : 0;
+        const projected30 = curBytes + growthRatePerDay * 30;
+        const projected90 = curBytes + growthRatePerDay * 90;
+        results.push({
+          mailbox: name,
+          currentSize: formatBytes(curBytes),
+          currentBytes: curBytes,
+          size7DaysAgo: b7 !== null ? formatBytes(b7) : "N/A (no history)",
+          size30DaysAgo: b30 !== null ? formatBytes(b30) : "N/A",
+          size90DaysAgo: b90 !== null ? formatBytes(b90) : "N/A",
+          growthPercent7d: growth7 !== null ? `${growth7.toFixed(1)}%` : "N/A",
+          growthPercent30d: growth30 !== null ? `${growth30.toFixed(1)}%` : "N/A",
+          growthRate: `${formatBytes(Math.max(0, growthRatePerDay))}/day`,
+          projectedSize30d: formatBytes(projected30),
+          projectedSize90d: formatBytes(projected90),
+          itemCount: s.ItemCount,
+          note: history[key].length < 2 ? "Collecting history — run daily for accurate 7/30/90d deltas" : undefined,
+        });
+      }
+      try {
+        writeFileSync(historyPath, JSON.stringify(history, null, 2), "utf-8");
+      } catch {}
+      return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
+    },
+  );
   wrap("report.fastest_growing_mailboxes", "Users consuming storage fastest (by TotalDeletedItemSize delta — snapshot)", `Get-Mailbox -ResultSize 20 | Get-MailboxStatistics | Select-Object DisplayName,TotalItemSize,TotalDeletedItemSize | Select-Object -First 20`);
   wrap("report.mailbox_quota", "Current usage vs quota (ProhibitSendQuota etc.)", `Get-Mailbox -ResultSize 20 | Select-Object DisplayName,ProhibitSendQuota,IssueWarningQuota,UseDatabaseQuotaDefaults | Select-Object -First 20`);
   wrap("report.mailboxes_near_quota", "Users approaching limits (80% usage)", `Get-Mailbox -ResultSize 50 | Get-MailboxStatistics | Where-Object { $_.StorageLimitStatus -like "*Warning*" } | Select-Object DisplayName,StorageLimitStatus,TotalItemSize | Select-Object -First 20`);

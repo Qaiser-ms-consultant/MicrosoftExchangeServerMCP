@@ -10,4 +10,5 @@ coverage/
 
 config.yaml
 config.local.yaml
+.exchange-growth.json
 
