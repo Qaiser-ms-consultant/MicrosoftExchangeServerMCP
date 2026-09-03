@@ -203,7 +203,15 @@
 <script>
 const $ = (s)=>document.querySelector(s);
 const $$ = (s)=>[...document.querySelectorAll(s)];
+window.addEventListener('error', (e)=>{ console.error(e.error||e.message); const el=document.getElementById('output'); if(el) el.textContent='JS Error: '+(e.error?.message||e.message); });
 const isDesktop = typeof window.exchangeDesktop !== 'undefined';
+console.log('Desktop bridge:', isDesktop ? 'available' : 'NOT available (fallback mode)', 'exchangeDesktop=', typeof (window as any).exchangeDesktop);
+if(!isDesktop){
+  const warn=document.createElement('div');
+  warn.style.cssText='background:#fffbeb;border:1px solid #fde68a;color:#92400e;padding:8px 12px;border-radius:8px;margin:8px 12px;font-size:12px';
+  warn.textContent='⚠️ Desktop bridge not detected — running in browser fallback mode. Some features (Test connection, Save to config.yaml) will use localStorage. Run via npm run desktop for full functionality.';
+  document.body.prepend(warn);
+}
 
 // Theme
 (function(){
