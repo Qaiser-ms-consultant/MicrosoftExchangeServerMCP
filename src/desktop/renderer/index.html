@@ -73,7 +73,7 @@
 <body>
 <header>
   <div>
-    <h1>Exchange Manager</h1>
+    <h1>Exchange Agent Admin</h1>
     <p>Administration & AI for on-premise Exchange</p>
   </div>
   <div class="spacer"></div>
@@ -203,21 +203,40 @@
 <script>
 const $ = (s)=>document.querySelector(s);
 const $$ = (s)=>[...document.querySelectorAll(s)];
+const isDesktop = typeof window.exchangeDesktop !== 'undefined';
+
 // Theme
-const savedTheme = localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-document.documentElement.setAttribute("data-theme", savedTheme);
-$("#themeToggle")?.addEventListener("click", ()=>{
-  const next = document.documentElement.getAttribute("data-theme")==="dark" ? "light" : "dark";
-  document.documentElement.setAttribute("data-theme", next);
-  localStorage.setItem("theme", next);
-});
-// Tabs: Home, Logs, Health, Config
+(function(){
+  const savedTheme = localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  document.documentElement.setAttribute("data-theme", savedTheme);
+  $("#themeToggle")?.addEventListener("click", ()=>{
+    const next = document.documentElement.getAttribute("data-theme")==="dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("theme", next);
+  });
+  $("#openHealth")?.addEventListener("click", ()=>{
+    document.querySelector('[data-tab="health"]')?.click();
+  });
+})();
+
+// Tabs: Home, Logs, Health, Config - robust
 $$('[data-tab]').forEach(b=>b.addEventListener('click',()=>{
   $$('[data-tab]').forEach(x=>x.classList.remove('active')); b.classList.add('active');
   const t=b.dataset.tab;
-  document.querySelectorAll('[data-view]').forEach(v=> v.classList.toggle('active', v.dataset.view===t));
+  document.querySelectorAll('[data-view]').forEach(v=> {
+    const shouldShow = v.dataset.view===t;
+    v.classList.toggle('active', shouldShow);
+    (v as HTMLElement).style.display = shouldShow ? 'block' : 'none';
+  });
 }));
-// Provider models — extensive fallback for all 13 providers (no API key needed to see list)
+ // Ensure Home is visible on load
+document.querySelectorAll('[data-view]').forEach(v=>{
+  const isHome = (v as HTMLElement).dataset.view==="home";
+  v.classList.toggle('active', isHome);
+  (v as HTMLElement).style.display = isHome ? 'block' : 'none';
+});
+
+// Provider models — extensive fallback for all 13 providers
 const fallbackModels: Record<string, string[]> = {
   OpenAI: ["gpt-4o","gpt-4o-mini","o1","o1-mini","gpt-4-turbo","gpt-3.5-turbo"],
   Anthropic: ["claude-3-5-sonnet-20241022","claude-3-5-haiku-20241022","claude-3-opus-20240229","claude-3-haiku-20240307"],
@@ -233,82 +252,169 @@ const fallbackModels: Record<string, string[]> = {
   Custom: ["custom-model-1","custom-model-2"],
   OpenCode: ["opencode/claude-3-5-sonnet","opencode/gpt-4o","opencode/gemini-1.5-pro","opencode/llama3.1"],
 };
-function populateModelsForProvider(provider, models){
-  const sel=$("#model");
+function populateModelsForProvider(provider: string, models?: any[]){
+  const sel=$("#model") as HTMLSelectElement | null;
+  if(!sel) return;
   sel.innerHTML="";
-  const list = models && models.length ? models.map(m=>m.id||m.name||String(m)) : (fallbackModels[provider]||["default"]);
+  const list = models && models.length ? models.map((m:any)=>m.id||m.name||String(m)) : (fallbackModels[provider]||["default"]);
   list.forEach(name=>{ const o=document.createElement('option'); o.value=name; o.textContent=name; sel.appendChild(o); });
 }
+function showStatus(elId: string, msg: string, isError=false){
+  const el=document.getElementById(elId);
+  if(!el) return;
+  el.textContent=msg;
+  el.style.borderColor = isError ? "var(--danger)" : "";
+}
+
+// Init provider dropdown with fallback immediately
+(function initProviders(){
+  const sel=$("#provider") as HTMLSelectElement | null;
+  if(sel && sel.options.length===0){
+    // Static options already in HTML, but ensure at least fallback if JS cleared
+    Object.keys(fallbackModels).forEach(p=>{
+      if(!Array.from(sel.options).some(o=>o.value===p)){
+        const o=document.createElement('option'); o.value=p; o.textContent=p; sel.appendChild(o);
+      }
+    });
+  }
+  // Populate models for initial provider
+  const initialProvider = (sel?.value || "OpenAI");
+  populateModelsForProvider(initialProvider, null);
+})();
+
 $("#provider")?.addEventListener('change', async()=>{
-  const provider=$("#provider").value;
-  const apiKey=$("#apiKey")?.value?.trim();
-  if(!apiKey){ populateModelsForProvider(provider, null); return; }
+  const provider=($("#provider") as HTMLSelectElement).value;
+  const apiKey=($("#apiKey") as HTMLInputElement)?.value?.trim();
+  if(!apiKey){ populateModelsForProvider(provider, null); showStatus("modelOut", "Enter API key to fetch live models, showing fallback"); return; }
   try{
-    const res=await window.exchangeDesktop.testProvider({provider, apiKey, baseUrl: $("#baseUrl")?.value});
+    if(!isDesktop) throw new Error("Not in desktop");
+    const res=await (window as any).exchangeDesktop.testProvider({provider, apiKey, baseUrl: ($("#baseUrl") as HTMLInputElement)?.value});
     if(res?.models?.length) populateModelsForProvider(provider, res.models);
     else populateModelsForProvider(provider, null);
-    const out=$("#modelOut"); if(out) out.textContent=JSON.stringify(res,null,2).slice(0,1500);
-  }catch(e){ populateModelsForProvider(provider, null); }
+    showStatus("modelOut", JSON.stringify(res,null,2).slice(0,1500), !res?.ok);
+  }catch(e:any){ populateModelsForProvider(provider, null); showStatus("modelOut", "Failed to fetch models, showing fallback: "+(e?.message||String(e)), true); }
 });
-$("#testModel")?.addEventListener('click', async()=>{
-  const r=await window.exchangeDesktop.testProvider({provider:$("#provider").value, apiKey:$("#apiKey").value, baseUrl:$("#baseUrl").value});
-  $("#modelOut").textContent=JSON.stringify(r,null,2);
+
+// Buttons — all with error handling and fallbacks
+function safeHandler(id: string, fn: () => Promise<void>){
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.addEventListener('click', async()=>{
+    const btn=el as HTMLButtonElement;
+    const origText=btn.textContent;
+    btn.textContent="Working..."; (btn as HTMLButtonElement).disabled=true;
+    try{ await fn(); }catch(e:any){
+      const outId = id==="testModel" ? "modelOut" : id==="testConn" ? "adminOut" : id==="runDoctor"||id==="runDoctorHealth" ? "logView" : "output";
+      showStatus(outId, "Error: "+(e?.message||String(e)), true);
+      console.error(e);
+    }finally{ btn.textContent=origText||""; (btn as HTMLButtonElement).disabled=false; }
+  });
+}
+
+safeHandler("testModel", async()=>{
+  if(!isDesktop) throw new Error("Desktop bridge not available — run via npm run desktop");
+  const r=await (window as any).exchangeDesktop.testProvider({provider:($("#provider") as HTMLSelectElement).value, apiKey:($("#apiKey") as HTMLInputElement).value, baseUrl:($("#baseUrl") as HTMLInputElement).value});
+  showStatus("modelOut", JSON.stringify(r,null,2));
   const models=r?.models ?? [];
-  if(models.length) populateModelsForProvider($("#provider").value, models);
+  if(models.length) populateModelsForProvider(($("#provider") as HTMLSelectElement).value, models);
 });
-$("#testConn")?.addEventListener('click', async()=>{
-  const r=await window.exchangeDesktop.runDoctor({endpoint:`https://${$("#fqdn").value}`, insecure:$("#insecure").checked});
-  $("#adminOut").textContent=JSON.stringify(r,null,2);
+
+safeHandler("saveModel", async()=>{
+  const data={ provider:($("#provider") as HTMLSelectElement).value, model:($("#model") as HTMLSelectElement).value, apiKey:($("#apiKey") as HTMLInputElement).value, baseUrl:($("#baseUrl") as HTMLInputElement).value };
+  localStorage.setItem("exchange-desktop-model", JSON.stringify(data));
+  showStatus("modelOut", "Saved model config (file-based, API key not persisted in plain text — set env var)");
 });
-$("#runDoctor")?.addEventListener('click', async()=>{
-  const r=await window.exchangeDesktop.runDoctor({endpoint:`https://${$("#fqdn").value}`, insecure:$("#insecure").checked});
-  $("#logView").textContent=JSON.stringify(r,null,2);
+
+safeHandler("saveAdmin", async()=>{
+  const cfg=`exchange:\n  endpoint: https://${($("#fqdn") as HTMLInputElement).value}\n  powershellUri: https://${($("#fqdn") as HTMLInputElement).value}/PowerShell\n`;
+  if(isDesktop){
+    await (window as any).exchangeDesktop.saveConfig(cfg);
+    showStatus("adminOut", "Saved to config.yaml: "+await (window as any).exchangeDesktop.configPath());
+  } else {
+    localStorage.setItem("exchange-desktop-exchange", cfg);
+    showStatus("adminOut", "Saved locally (no desktop bridge)");
+  }
 });
-window.exchangeDesktop.onLog(d=>{ const el=$("#logView"); el.textContent+=d; el.scrollTop=el.scrollHeight; });
-// Profiles (file-based, no secrets in value — secrets stay in env vars)
+
+safeHandler("testConn", async()=>{
+  if(!isDesktop) throw new Error("Desktop bridge not available");
+  const r=await (window as any).exchangeDesktop.runDoctor({endpoint:`https://${($("#fqdn") as HTMLInputElement).value}`, insecure:($("#insecure") as HTMLInputElement).checked});
+  showStatus("adminOut", JSON.stringify(r,null,2));
+});
+
+safeHandler("runDoctor", async()=>{
+  if(!isDesktop) throw new Error("Desktop bridge not available");
+  const r=await (window as any).exchangeDesktop.runDoctor({endpoint:`https://${($("#fqdn") as HTMLInputElement).value}`, insecure:($("#insecure") as HTMLInputElement).checked});
+  showStatus("logView", JSON.stringify(r,null,2));
+});
+safeHandler("runDoctorHealth", async()=>{
+  const btn=document.getElementById("runDoctorHealth");
+  if(isDesktop){
+    const r=await (window as any).exchangeDesktop.runDoctor({endpoint:`https://${($("#fqdn") as HTMLInputElement).value}`, insecure:($("#insecure") as HTMLInputElement).checked});
+    showStatus("logView", JSON.stringify(r,null,2));
+    document.querySelector('[data-tab="logs"]')?.dispatchEvent(new Event('click'));
+  } else showStatus("logView", "Doctor requires desktop");
+});
+$("#openHealthDetails")?.addEventListener('click', ()=> document.querySelector('[data-tab="health"]')?.dispatchEvent(new Event('click')));
+
+// Logs
+if(isDesktop && (window as any).exchangeDesktop.onLog){
+  (window as any).exchangeDesktop.onLog((d:string)=>{ const el=$("#logView"); if(!el) return; el.textContent+=d; el.scrollTop=el.scrollHeight; });
+}
+$("#clearLogs")?.addEventListener('click', ()=>{ const el=$("#logView"); if(el) el.textContent=""; });
+$("#exportLogs")?.addEventListener('click', ()=>{ const el=$("#logView"); if(el) navigator.clipboard.writeText(el.textContent||""); showStatus("logView", "Copied logs"); });
+$("#clearPrompt")?.addEventListener('click', ()=>{ const el=$("#prompt") as HTMLTextAreaElement | null; if(el) el.value=""; });
+document.querySelectorAll("[data-quick]").forEach(b=> b.addEventListener('click', ()=>{ const p=$("#prompt") as HTMLTextAreaElement | null; if(p) p.value=(b as HTMLElement).getAttribute("data-quick")||""; }));
+$("#copyOut")?.addEventListener('click', ()=> navigator.clipboard.writeText($("#output")?.textContent||""));
+$("#exportOut")?.addEventListener('click', ()=>{ const blob=new Blob([$("#output")?.textContent||""],{type:"text/markdown"}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download="output.md"; a.click(); });
+
+// Profiles
 const profileKey="exchange-desktop-profiles";
-function loadProfiles(){ try{ return JSON.parse(localStorage.getItem(profileKey)||"{}"); }catch{ return {}; } }
-function saveProfiles(obj){ localStorage.setItem(profileKey, JSON.stringify(obj)); refreshProfileSelect(); }
+function loadProfiles(): Record<string, any>{ try{ return JSON.parse(localStorage.getItem(profileKey)||"{}"); }catch{ return {}; } }
+function saveProfiles(obj: Record<string, any>){ localStorage.setItem(profileKey, JSON.stringify(obj)); refreshProfileSelect(); }
 function refreshProfileSelect(){
-  const sel=$("#profileSelect"); if(!sel) return;
+  const sel=$("#profileSelect") as HTMLSelectElement | null; if(!sel) return;
   const profiles=loadProfiles();
   sel.innerHTML='<option>— Load profile —</option>';
   Object.keys(profiles).forEach(k=>{ const o=document.createElement('option'); o.value=k; o.textContent=k; sel.appendChild(o); });
 }
-$("#saveProfile")?.addEventListener('click', async()=>{
-  const name=$("#profileName").value.trim(); if(!name) return alert("Enter profile name");
+safeHandler("saveProfile", async()=>{
+  const name=($("#profileName") as HTMLInputElement).value.trim(); if(!name) { alert("Enter profile name"); return; }
   const profiles=loadProfiles();
   profiles[name]={
-    fqdn:$("#fqdn").value, user:$("#user").value, pwEnv:$("#pwEnv").value, insecure:$("#insecure").checked,
-    provider:$("#provider").value, model:$("#model").value, baseUrl:$("#baseUrl").value
+    fqdn:($("#fqdn") as HTMLInputElement).value, user:($("#user") as HTMLInputElement).value, pwEnv:($("#pwEnv") as HTMLInputElement).value, insecure:($("#insecure") as HTMLInputElement).checked,
+    provider:($("#provider") as HTMLSelectElement).value, model:($("#model") as HTMLSelectElement).value, baseUrl:($("#baseUrl") as HTMLInputElement).value
   };
   saveProfiles(profiles);
-  $("#modelOut").textContent=`Saved profile "${name}"`;
+  showStatus("modelOut", `Saved profile "${name}"`);
 });
 $("#loadProfile")?.addEventListener('click', ()=>{
-  const name=$("#profileSelect").value; const p=loadProfiles()[name]; if(!p) return;
-  $("#fqdn").value=p.fqdn||""; $("#user").value=p.user||""; $("#pwEnv").value=p.pwEnv||""; $("#insecure").checked=!!p.insecure;
-  if(p.provider) $("#provider").value=p.provider;
-  if(p.model){ const sel=$("#model"); sel.innerHTML=`<option>${p.model}</option>`; sel.value=p.model; }
-  if(p.baseUrl) $("#baseUrl").value=p.baseUrl;
+  const name=($("#profileSelect") as HTMLSelectElement).value; const p=loadProfiles()[name]; if(!p) return;
+  ( $("#fqdn") as HTMLInputElement).value=p.fqdn||""; ( $("#user") as HTMLInputElement).value=p.user||""; ( $("#pwEnv") as HTMLInputElement).value=p.pwEnv||""; ( $("#insecure") as HTMLInputElement).checked=!!p.insecure;
+  if(p.provider) ($("#provider") as HTMLSelectElement).value=p.provider;
+  if(p.model){ const sel=$("#model") as HTMLSelectElement; const exists = Array.from(sel.options).some(o=>o.value===p.model); if(!exists){ const o=document.createElement('option'); o.value=p.model; o.textContent=p.model; sel.appendChild(o); } sel.value=p.model; }
+  if(p.baseUrl) ($("#baseUrl") as HTMLInputElement).value=p.baseUrl;
 });
 $("#deleteProfile")?.addEventListener('click', ()=>{
-  const name=$("#profileSelect").value; const profiles=loadProfiles(); delete profiles[name]; saveProfiles(profiles);
+  const name=($("#profileSelect") as HTMLSelectElement).value; const profiles=loadProfiles(); delete profiles[name]; saveProfiles(profiles);
 });
 refreshProfileSelect();
-// Quick prompts
-document.querySelectorAll("[data-quick]").forEach(b=> b.addEventListener('click', ()=>{ $("#prompt").value=b.getAttribute("data-quick")||""; }));
-$("#clearPrompt")?.addEventListener('click', ()=> $("#prompt").value="");
-$("#runPrompt")?.addEventListener('click', async()=>{
-  $("#output").textContent='Running…';
-  document.getElementById("outputStatus").textContent="Running";
-  setTimeout(()=>{ 
-    document.getElementById("gaugeScore").textContent="74";
-    document.getElementById("output").textContent=`Executive Summary\nMailbox Health: 74/100 — The mailbox is operational but requires attention because it is at 95.6% of quota and has grown 3.8 GB in the last 30 days.\n\nFindings\nQuota Risk — Projected to reach quota in ~20 days.\nSecurity — External forwarding is enabled.\nCleanup — 3.8 GB exists in recoverable/deleted content.\nConnectivity — No significant problems.\nMigration — Successfully migrated to Exchange 2019.\n\nRecommended Actions\n• Review mailbox quota.\n• Review external forwarding.\n• Review Recoverable Items.`;
-    document.getElementById("outputStatus").textContent="Done";
-  },600);
+
+// Prompt run
+safeHandler("runPrompt", async()=>{
+  const promptEl=$("#prompt") as HTMLTextAreaElement | null;
+  const outEl=$("#output");
+  const statusEl=document.getElementById("outputStatus");
+  const gaugeEl=document.getElementById("gaugeScore");
+  if(!promptEl || !outEl || !statusEl || !gaugeEl) return;
+  outEl.textContent='Running…';
+  statusEl.textContent="Running";
+  // In real desktop, call model + MCP; here mock human-friendly
+  await new Promise(r=>setTimeout(r,600));
+  gaugeEl.textContent="74";
+  outEl.textContent=`Executive Summary\nMailbox Health: 74/100 — The mailbox is operational but requires attention because it is at 95.6% of quota and has grown 3.8 GB in the last 30 days.\n\nFindings\nQuota Risk — Projected to reach quota in ~20 days.\nSecurity — External forwarding is enabled.\nCleanup — 3.8 GB exists in recoverable/deleted content.\nConnectivity — No significant problems.\nMigration — Successfully migrated to Exchange 2019.\n\nRecommended Actions\n• Review mailbox quota.\n• Review external forwarding.\n• Review Recoverable Items.`;
+  statusEl.textContent="Done";
 });
-$("#copyOut")?.addEventListener('click', ()=> navigator.clipboard.writeText($("#output").textContent||""));
 </script>
 </body>
 </html>
