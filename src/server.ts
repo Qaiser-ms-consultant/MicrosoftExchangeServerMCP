@@ -66,7 +66,7 @@ async function main() {
     const stdio = new StdioServerTransport();
     await server.connect(stdio);
     const insecure = !!(config.exchange.insecure || config.exchange.tls?.rejectUnauthorized === false);
-    console.error(`Exchange MCP server running (stdio) — endpoint=${config.exchange.endpoint} provider=${config.exchange.provider} insecure=${insecure}${insecure ? " [DEV: self-signed allowed]" : ""} | tools=196 (all open)`);
+    console.error(`Exchange MCP server running (stdio) — endpoint=${config.exchange.endpoint} provider=${config.exchange.provider} insecure=${insecure}${insecure ? " [DEV: self-signed allowed]" : ""} | tools=197 (all open)`);
   } else {
     // HTTP/SSE — use Express wrapper (lazy import to keep stdio light)
     const express = await import("express");

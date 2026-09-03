@@ -125,7 +125,7 @@ export function registerIndividualMailboxReports(server: McpServer, ps: PowerShe
 
   server.tool(
     "report.mailbox_activity",
-    "Mailbox Activity — useful per-mailbox statistics: Messages received, Messages sent, Internal, External, Average daily, Peak sending/receiving day, Last activity, Last logon (via MessageTrackingLog + Statistics, 30-day window)",
+    "Mailbox Activity — useful per-mailbox statistics: Messages received, Messages sent, Internal, External, Average daily, Peak sending/receiving day, Last activity, Last logon (via MessageTrackingLog + Statistics, 30-day window) — legacy alias for mailflow profile",
     {
       identity: z.string().describe("Mailbox SMTP address, e.g. devlabadmin@devlab2025.local"),
       days: z.number().optional().describe("Window in days, default 30"),
@@ -165,6 +165,111 @@ export function registerIndividualMailboxReports(server: McpServer, ps: PowerShe
                 lastActivity: (lastActivity as any[])[0] ?? null,
                 lastLogon: (stats as any[])[0]?.LastLogonTime ?? null,
                 lastLoggedOnUser: (stats as any[])[0]?.LastLoggedOnUserAccount ?? null,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    },
+  );
+
+  server.tool(
+    "report.mailflow_profile",
+    "Mail Flow Profile — For an individual mailbox: Sending (Messages/day, Recipients/message, External recipients, Top recipient domains, Average message size, Largest messages) + Receiving (Top senders, Top domains, Message volume, Average size) + AI insight (e.g. 72% outbound external)",
+    {
+      identity: z.string().describe("Mailbox SMTP address"),
+      days: z.number().optional().describe("Window in days, default 30"),
+    },
+    async ({ identity, days }) => {
+      const d = days ?? 30;
+      const addr = identity.replace(/'/g, "''");
+      const domain = (identity.split("@")[1] ?? "devlab2025.local").replace(/'/g, "''");
+      const [sentLogs, recvLogs, stats] = await Promise.all([
+        ps.invokeJson(`Get-MessageTrackingLog -ResultSize 500 -Start (Get-Date).AddDays(-${d}) -Sender '${addr}' -EventId SEND | Select-Object Timestamp,Recipients,TotalBytes,MessageSubject | Select-Object -First 200`).catch(() => []),
+        ps.invokeJson(`Get-MessageTrackingLog -ResultSize 500 -Start (Get-Date).AddDays(-${d}) -Recipients '${addr}' -EventId DELIVER | Select-Object Timestamp,Sender,TotalBytes | Select-Object -First 200`).catch(() => []),
+        ps.invokeJson(`Get-MailboxStatistics -Identity '${addr}' | Select-Object LastLogonTime | Select-Object -First 1`).catch(() => []),
+      ]);
+      const sentArr = sentLogs as any[];
+      const recvArr = recvLogs as any[];
+      const messagesPerDay = d ? +(sentArr.length / d).toFixed(1) : 0;
+      const recipientsPerMessage =
+        sentArr.length ? +(sentArr.reduce((sum: number, m: any) => sum + String(m.Recipients ?? "").split(",").filter(Boolean).length, 0) / sentArr.length).toFixed(2) : 0;
+      let externalCount = 0;
+      const domainCounts: Record<string, number> = {};
+      let totalBytesSent = 0;
+      let largest: any[] = [];
+      for (const m of sentArr) {
+        const recips = String(m.Recipients ?? "").split(";").flatMap((s) => s.split(",")).map((s) => s.trim()).filter(Boolean);
+        for (const r of recips) {
+          const dom = r.split("@")[1]?.toLowerCase();
+          if (dom) domainCounts[dom] = (domainCounts[dom] ?? 0) + 1;
+          if (dom && dom !== domain.toLowerCase()) externalCount++;
+        }
+        const b = Number(m.TotalBytes ?? 0);
+        totalBytesSent += b;
+        largest.push({ subject: m.MessageSubject, bytes: b, recipients: m.Recipients });
+      }
+      largest = largest.sort((a, b) => b.bytes - a.bytes).slice(0, 5);
+      const topRecipientDomains = Object.entries(domainCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([dom, cnt]) => ({ domain: dom, count: cnt }));
+      const totalRecipients = sentArr.reduce((sum: number, m: any) => sum + String(m.Recipients ?? "").split(",").filter(Boolean).length, 0);
+      const avgSize = sentArr.length ? Math.round(totalBytesSent / sentArr.length) : 0;
+      const externalPct = sentArr.length ? Math.round((externalCount / Math.max(1, totalRecipients)) * 100) : 0;
+
+      const senderCounts: Record<string, number> = {};
+      const recvDomainCounts: Record<string, number> = {};
+      let totalRecvBytes = 0;
+      for (const m of recvArr) {
+        const s = String(m.Sender ?? "");
+        if (s) senderCounts[s] = (senderCounts[s] ?? 0) + 1;
+        const dom = s.split("@")[1]?.toLowerCase();
+        if (dom) recvDomainCounts[dom] = (recvDomainCounts[dom] ?? 0) + 1;
+        totalRecvBytes += Number(m.TotalBytes ?? 0);
+      }
+      const topSenders = Object.entries(senderCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([s, c]) => ({ sender: s, count: c }));
+      const topDomainsRecv = Object.entries(recvDomainCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([d, c]) => ({ domain: d, count: c }));
+      const avgRecvSize = recvArr.length ? Math.round(totalRecvBytes / recvArr.length) : 0;
+
+      const aiInsight = externalPct >= 70 ? `${externalPct}% of this mailbox's outbound messages are sent to external domains.` : `${100 - externalPct}% internal, ${externalPct}% external — balanced.`;
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                mailbox: identity,
+                windowDays: d,
+                sending: {
+                  messagesPerDay,
+                  totalSent: sentArr.length,
+                  recipientsPerMessage,
+                  externalRecipients: externalCount,
+                  externalPercent: `${externalPct}%`,
+                  topRecipientDomains,
+                  averageMessageSize: avgSize ? `${(avgSize / 1024).toFixed(1)} KB` : "N/A",
+                  averageMessageSizeBytes: avgSize,
+                  largestMessages: largest.map((m) => ({ ...m, size: m.bytes ? `${(m.bytes / 1024).toFixed(1)} KB` : "N/A" })),
+                },
+                receiving: {
+                  topSenders,
+                  topDomains: topDomainsRecv,
+                  messageVolume: recvArr.length,
+                  averageSize: avgRecvSize ? `${(avgRecvSize / 1024).toFixed(1)} KB` : "N/A",
+                  averageSizeBytes: avgRecvSize,
+                },
+                lastLogon: (stats as any[])[0]?.LastLogonTime ?? null,
+                ai: aiInsight,
               },
               null,
               2,
