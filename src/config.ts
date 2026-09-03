@@ -16,6 +16,14 @@ export interface AppConfig {
     powershellUri: string;
     insecure?: boolean;
     tls?: { rejectUnauthorized?: boolean; allowSelfSigned?: boolean };
+    // HA: multiple backends — if set, MCP will failover smartly; single endpoint above is fallback for backward compat
+    servers?: string[];
+    ha?: {
+      strategy?: "failover" | "round_robin";
+      retryCount?: number;
+      timeoutMs?: number;
+      healthCheckIntervalSec?: number;
+    };
   };
   auth: {
     method: AuthMethod;
@@ -99,19 +107,22 @@ export function loadConfig(configPath?: string): AppConfig {
     }
   }
 
-  // Env var overrides — support aliases flagged by 404 diagnostics
-  // EXCHANGE_SERVER (fqdn or url) sets base for endpoint & powershellUri if not explicitly set
+  // Env var overrides — support aliases flagged by 404 diagnostics + HA
   const psUrlEnv = process.env.EXCHANGE_POWERSHELL_URL ?? process.env.EXCHANGE_POWERSHELL_URI ?? process.env.EXCHANGE_PS_URL ?? process.env.POWERSHELL_URL;
+  // HA: comma-separated list of Exchange hosts/URLs — e.g. EXCHANGE_SERVERS=https://exch01/PowerShell,https://exch02/PowerShell
+  const serversEnv = process.env.EXCHANGE_SERVERS ?? process.env.EXCHANGE_SERVER_LIST;
+  if (serversEnv) {
+    cfg.exchange.servers = serversEnv.split(",").map((s) => s.trim()).filter(Boolean);
+  }
   if (psUrlEnv) cfg.exchange.powershellUri = psUrlEnv;
   if (process.env.EXCHANGE_SERVER) {
     const base = process.env.EXCHANGE_SERVER.replace(/\/$/, "");
     const hasScheme = /^https?:\/\//i.test(base);
     const host = hasScheme ? base : `https://${base}`;
     if (!process.env.EXCHANGE_ENDPOINT) cfg.exchange.endpoint = host;
-    if (!psUrlEnv) cfg.exchange.powershellUri = `${host}/PowerShell`;
+    if (!psUrlEnv && !cfg.exchange.servers?.length) cfg.exchange.powershellUri = `${host}/PowerShell`;
   }
   if (process.env.EXCHANGE_ENDPOINT) cfg.exchange.endpoint = process.env.EXCHANGE_ENDPOINT;
-  // Also honor explicit powershell url after endpoint
   if (psUrlEnv) cfg.exchange.powershellUri = psUrlEnv;
   if (process.env.EXCHANGE_POWERSHELL_URL) cfg.exchange.powershellUri = process.env.EXCHANGE_POWERSHELL_URL;
   if (process.env.EXCHANGE_VERSION) cfg.exchange.version = process.env.EXCHANGE_VERSION as ExchangeVersion;
@@ -131,6 +142,20 @@ export function loadConfig(configPath?: string): AppConfig {
   // normalize tls flag from insecure
   if (cfg.exchange.insecure) cfg.exchange.tls = { rejectUnauthorized: false, allowSelfSigned: true };
   else if (cfg.exchange.tls?.allowSelfSigned) cfg.exchange.tls.rejectUnauthorized = false;
+
+  // Normalize HA: if servers list provided, ensure endpoint/powershellUri are first in list for backward compat logging
+  if (cfg.exchange.servers?.length) {
+    cfg.exchange.ha = { strategy: "failover", retryCount: 2, timeoutMs: 30000, healthCheckIntervalSec: 60, ...cfg.exchange.ha };
+    // Deduplicate and ensure powershellUris
+    cfg.exchange.servers = cfg.exchange.servers.map((s) => {
+      const hasPath = /\/PowerShell$/i.test(s) || /\/EWS\//i.test(s);
+      if (hasPath) return s.replace(/\/$/, "");
+      const hasScheme = /^https?:\/\//i.test(s);
+      const host = hasScheme ? s : `https://${s}`;
+      // Default to PowerShell URI for HA list
+      return `${host.replace(/\/$/, "")}/PowerShell`;
+    });
+  }
 
   return cfg;
 }

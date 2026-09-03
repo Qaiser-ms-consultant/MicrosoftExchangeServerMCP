@@ -3,6 +3,7 @@ import type { AppConfig } from "../config.js";
 import type { AuthManager } from "../auth/auth-manager.js";
 import { ExchangeError } from "../errors.js";
 import { getHttpsAgent } from "../utils/tls.js";
+import { withHA, getHAServers } from "../utils/ha.js";
 
 const ALLOWED_CMDLETS = new Set([
   // Recipients
@@ -51,14 +52,18 @@ const ALLOWED_CMDLETS = new Set([
 ]);
 
 export class PowerShellProvider {
-  private endpoint: string;
+  private get endpoint(): string {
+    return this.config.exchange.powershellUri;
+  }
+  // For HA logging
+  get haServers(): string[] {
+    return getHAServers(this.config);
+  }
 
   constructor(
     private config: AppConfig,
     private auth: AuthManager,
-  ) {
-    this.endpoint = config.exchange.powershellUri;
-  }
+  ) {}
 
   private assertAllowed(cmdlet: string) {
     const base = cmdlet.trim().split(/\s+/)[0].replace(/-.*/, (m) => m).split("|")[0].trim();
@@ -76,18 +81,25 @@ export class PowerShellProvider {
 
   async invoke<T>(command: string): Promise<T> {
     this.assertAllowed(command);
+    // HA: try each backend smartly (failover/round_robin) — getHAServers() returns [powershellUri] or servers list
+    return withHA(this.config, (url) => this.invokeForUrl<T>(command, url), {
+      isRetryable: (err: unknown) => {
+        const e = err as ExchangeError;
+        return e?.code === "SERVER_ERROR" || e?.code === "NOT_FOUND" || String((e as any)?.message ?? "").includes("WinRM");
+      },
+    });
+  }
+
+  private async invokeForUrl<T>(command: string, url: string): Promise<T> {
     if (this.shouldUseWinRM()) {
-      // On Windows, Exchange requires proper WSMan/PSRP (WinRM), not plain HTTP POST — use WinRM exclusively
-      return this.invokeViaWinRM<T>(command);
+      return this.invokeViaWinRMForUrl<T>(command, url);
     }
     // Non-Windows fallback: Exchange PowerShell remoting is WSMan/PSRP over SOAP (not plain POST).
-    // This HTTP path will return 415 Unsupported Media Type unless the server exposes a custom
-    // HTTP wrapper. Prefer running the MCP on Windows with WinRM (Basic + SkipCACheck).
     const authHeader = await this.auth.getAuthHeader();
     const extra = await this.auth.getExtraOptions();
     const httpsAgent = await getHttpsAgent(this.config, (extra as any).httpsAgent);
     try {
-      const res = await axios.post(this.endpoint, command, {
+      const res = await axios.post(url, command, {
         headers: {
           "Content-Type": "application/soap+xml;charset=UTF-8",
           Authorization: authHeader,
@@ -98,18 +110,18 @@ export class PowerShellProvider {
         httpsAgent,
         validateStatus: () => true,
       });
-      if (res.status === 401) throw new ExchangeError({ message: `PowerShell auth failed (401) at ${this.endpoint}. Check auth method: Exchange PowerShell virtual directory defaults to Kerberos/NTLM (Negotiate), not Basic. Enable Basic on the PowerShell vdir or use Kerberos/NTLM via WinRM, and verify user/domain.`, code: "AUTH_FAILED", provider: "powershell" });
-      if (res.status === 403) throw new ExchangeError({ message: `PowerShell permission denied (403) at ${this.endpoint}. Verify RBAC role (e.g. Organization Management) for user.`, code: "PERMISSION_DENIED", provider: "powershell" });
-      if (res.status === 404) throw new ExchangeError({ message: `PowerShell endpoint not found (404) at ${this.endpoint}. Misconfigured EXCHANGE_SERVER / EXCHANGE_POWERSHELL_URL. Must be http(s)://<exchange-fqdn>/PowerShell (case-sensitive). Current: endpoint=${this.config.exchange.endpoint}, powershellUri=${this.endpoint}. Fix: set EXCHANGE_POWERSHELL_URL=https://<fqdn>/PowerShell or EXCHANGE_SERVER=<fqdn>. Also verify: 1) Get-PowerShellVirtualDirectory | fl InternalUrl,ExternalUrl 2) Test-WSMan <host> 3) WinRM enabled (Enable-PSRemoting) 4) https vs http (try https://<host>/PowerShell vs http://<host>/PowerShell) 5) ECP vdir is /ecp, PowerShell is /PowerShell (capital P/S).`, code: "NOT_FOUND", provider: "powershell" });
-      if (res.status >= 400) throw new ExchangeError({ message: `PowerShell error ${res.status} at ${this.endpoint}: ${typeof res.data === "string" ? res.data.slice(0, 800) : JSON.stringify(res.data).slice(0, 800)}`, code: "SERVER_ERROR", provider: "powershell" });
+      if (res.status === 401) throw new ExchangeError({ message: `PowerShell auth failed (401) at ${url}. Check auth method: Exchange PowerShell virtual directory defaults to Kerberos/NTLM (Negotiate), not Basic. Enable Basic on the PowerShell vdir or use Kerberos/NTLM via WinRM, and verify user/domain.`, code: "AUTH_FAILED", provider: "powershell" });
+      if (res.status === 403) throw new ExchangeError({ message: `PowerShell permission denied (403) at ${url}. Verify RBAC role (e.g. Organization Management) for user.`, code: "PERMISSION_DENIED", provider: "powershell" });
+      if (res.status === 404) throw new ExchangeError({ message: `PowerShell endpoint not found (404) at ${url}. Misconfigured EXCHANGE_SERVER / EXCHANGE_POWERSHELL_URL. Must be http(s)://<exchange-fqdn>/PowerShell (case-sensitive). Current: endpoint=${this.config.exchange.endpoint}, powershellUri=${url}. Fix: set EXCHANGE_POWERSHELL_URL=https://<fqdn>/PowerShell or EXCHANGE_SERVER=<fqdn>. Also verify: 1) Get-PowerShellVirtualDirectory | fl InternalUrl,ExternalUrl 2) Test-WSMan <host> 3) WinRM enabled (Enable-PSRemoting) 4) https vs http (try https://<host>/PowerShell vs http://<host>/PowerShell) 5) ECP vdir is /ecp, PowerShell is /PowerShell (capital P/S).`, code: "NOT_FOUND", provider: "powershell" });
+      if (res.status >= 400) throw new ExchangeError({ message: `PowerShell error ${res.status} at ${url}: ${typeof res.data === "string" ? res.data.slice(0, 800) : JSON.stringify(res.data).slice(0, 800)}`, code: "SERVER_ERROR", provider: "powershell" });
       return res.data as T;
     } catch (err) {
       if (err instanceof ExchangeError) throw err;
       const msg = (err as Error).message ?? String(err);
       if (msg.includes("ECONNREFUSED") || msg.includes("ENOTFOUND") || msg.includes("ETIMEDOUT")) {
-        throw new ExchangeError({ message: `PowerShell connection failed to ${this.endpoint}: ${msg}. Verify host/port reachable, firewall, WinRM listener (winrm enumerate winrm/config/listener), and that Exchange PowerShell vdir exists. Try EXCHANGE_POWERSHELL_URL=https://<fqdn>:443/PowerShell or http://<fqdn>:80/PowerShell.`, code: "SERVER_ERROR", provider: "powershell", cause: err });
+        throw new ExchangeError({ message: `PowerShell connection failed to ${url}: ${msg}. Verify host/port reachable, firewall, WinRM listener (winrm enumerate winrm/config/listener), and that Exchange PowerShell vdir exists. Try EXCHANGE_POWERSHELL_URL=https://<fqdn>:443/PowerShell or http://<fqdn>:80/PowerShell.`, code: "SERVER_ERROR", provider: "powershell", cause: err });
       }
-      throw new ExchangeError({ message: `PowerShell invoke failed at ${this.endpoint}: ${msg}`, code: "SERVER_ERROR", provider: "powershell", cause: err });
+      throw new ExchangeError({ message: `PowerShell invoke failed at ${url}: ${msg}`, code: "SERVER_ERROR", provider: "powershell", cause: err });
     }
   }
 
@@ -117,7 +129,7 @@ export class PowerShellProvider {
     return /Get-(ServerHealth|HealthReport|ServerComponentState|MonitoringItemIdentity|QueueDigest)|report\.generate_health_summary/i.test(command);
   }
 
-  private async invokeViaWinRM<T>(command: string): Promise<T> {
+  private async invokeViaWinRMForUrl<T>(command: string, url: string): Promise<T> {
     const { execFile } = await import("node:child_process");
     const { promisify } = await import("node:util");
     const execFileAsync = promisify(execFile);
@@ -132,7 +144,7 @@ $WarningPreference = 'SilentlyContinue'
 $sec = ConvertTo-SecureString '${pass}' -AsPlainText -Force
 $cred = New-Object System.Management.Automation.PSCredential('${user.replace(/'/g, "''")}', $sec)
 $opt = New-PSSessionOption -SkipCACheck -SkipCNCheck -SkipRevocationCheck -OperationTimeout 60000
-$uri = '${this.endpoint.replace(/'/g, "''")}'
+$uri = '${url.replace(/'/g, "''")}'
 try {
   $sess = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri $uri -Credential $cred -Authentication Basic -AllowRedirection -SessionOption $opt -ErrorAction Stop
   $result = Invoke-Command -Session $sess -ScriptBlock { ${command} }
@@ -155,9 +167,9 @@ try {
       return out as unknown as T;
     } catch (err: any) {
       const msg = err.stdout ?? err.stderr ?? err.message ?? String(err);
-      if (msg.includes("401") || msg.toLowerCase().includes("auth")) throw new ExchangeError({ message: `WinRM auth failed at ${this.endpoint}: ${msg.slice(0, 600)}`, code: "AUTH_FAILED", provider: "powershell", cause: err });
-      if (msg.includes("404") || msg.toLowerCase().includes("not found")) throw new ExchangeError({ message: `WinRM endpoint not found (404) at ${this.endpoint}: ${msg.slice(0, 600)}`, code: "NOT_FOUND", provider: "powershell", cause: err });
-      throw new ExchangeError({ message: `WinRM invoke failed at ${this.endpoint}: ${msg.slice(0, 800)}`, code: "SERVER_ERROR", provider: "powershell", cause: err });
+      if (msg.includes("401") || msg.toLowerCase().includes("auth")) throw new ExchangeError({ message: `WinRM auth failed at ${url}: ${msg.slice(0, 600)}`, code: "AUTH_FAILED", provider: "powershell", cause: err });
+      if (msg.includes("404") || msg.toLowerCase().includes("not found")) throw new ExchangeError({ message: `WinRM endpoint not found (404) at ${url}: ${msg.slice(0, 600)}`, code: "NOT_FOUND", provider: "powershell", cause: err });
+      throw new ExchangeError({ message: `WinRM invoke failed at ${url}: ${msg.slice(0, 800)}`, code: "SERVER_ERROR", provider: "powershell", cause: err });
     }
   }
 

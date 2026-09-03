@@ -36,8 +36,9 @@ async function main() {
 
   const server = new McpServer({ name: "exchange-mcp-server", version: "0.1.0" });
   const client = new ExchangeClient(config);
-  // Log resolved Exchange targets for 404 diagnostics
-  console.error(`Exchange targets — endpoint=${config.exchange.endpoint} | powershellUri=${config.exchange.powershellUri} | ews=${config.exchange.endpoint}${config.exchange.ewsPath} | rest=${config.exchange.endpoint}${config.exchange.restPath}`);
+  // Log resolved Exchange targets for 404 diagnostics + HA
+  const haServers = (config.exchange as any).servers ?? [config.exchange.powershellUri];
+  console.error(`Exchange targets — endpoint=${config.exchange.endpoint} | powershellUri=${config.exchange.powershellUri} | ews=${config.exchange.endpoint}${config.exchange.ewsPath} | rest=${config.exchange.endpoint}${config.exchange.restPath} | ha=[${haServers.join(", ")}] strategy=${(config.exchange as any).ha?.strategy ?? "single"}`);
 
   // All tools open — no gating (legacy enableAdminTools/enableMailboxTools ignored for backward compat)
   registerMailTools(server, client);

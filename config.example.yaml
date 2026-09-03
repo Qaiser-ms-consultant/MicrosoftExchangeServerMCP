@@ -8,6 +8,16 @@ exchange:
   # If 404, verify with: Get-PowerShellVirtualDirectory | fl InternalUrl,ExternalUrl,*Auth*
   # Env override: EXCHANGE_POWERSHELL_URL or EXCHANGE_SERVER
   powershellUri: https://mail.contoso.com/PowerShell
+  # High Availability — if one server is down, try next smartly (failover/round_robin)
+  # Single-server (default): uses endpoint/powershellUri above
+  # HA example (uncomment for multi-server):
+  # servers:
+  #   - https://exch01.contoso.com/PowerShell
+  #   - https://exch02.contoso.com/PowerShell
+  # ha:
+  #   strategy: failover # failover (health-first) or round_robin
+  #   retryCount: 2
+  # Env: EXCHANGE_SERVERS=https://exch01/PowerShell,https://exch02/PowerShell
   # For lab with self-signed cert: set insecure true (dev only). Production: false + valid cert
   insecure: false
   tls:
