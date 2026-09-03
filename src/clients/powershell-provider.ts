@@ -46,8 +46,8 @@ const ALLOWED_CMDLETS = new Set([
   // Mailbox lifecycle / recovery
   "Disable-Mailbox", "Connect-Mailbox", "Undo-SoftDeletedMailbox", "Get-Mailbox", "Remove-Mailbox", "Restore-RecoverableItems",
   "Get-CASMailbox", "Set-CASMailbox", "Get-MailboxRestoreRequest", "New-MailboxRestoreRequest", "New-MailboxImportRequest", "Get-MailboxImportRequest",
-  // Legacy compat
-  "Get-ADPermission",
+  // Infra reports
+  "Get-OrganizationConfig", "Get-AdSite", "Get-ADPermission", "Get-CimInstance", "Get-WmiObject",
 ]);
 
 export class PowerShellProvider {
