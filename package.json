@@ -1,7 +1,7 @@
 {
-  "name": "exchange-mcp-server",
+  "name": "exchange-agentic-admin",
   "version": "0.1.0",
-  "description": "MCP server for Microsoft Exchange Server On-Premise (EWS / REST / PowerShell)",
+  "description": "Exchange Agentic Admin — AI Powered Exchange Operations Intelligence Platform (MCP server + Desktop for on-premise Exchange: EWS, REST, PowerShell)",
   "type": "module",
   "bin": {
     "exchange-mcp": "./dist/cli/cli.js"
@@ -42,5 +42,11 @@
     "typescript": "^5.5.0",
     "vitest": "^1.6.0",
     "wait-on": "^7.2.0"
+  },
+  "build": {
+    "productName": "Exchange Agentic Admin",
+    "appId": "com.machsol.exchange-agentic-admin",
+    "files": ["dist/**/*", "src/desktop/renderer/**/*", "config.example.yaml"],
+    "directories": { "output": "dist/installer" }
   }
 }

@@ -1,6 +1,6 @@
-# Exchange MCP Server — Microsoft Exchange Server On-Premise
+# Exchange Agentic Admin — AI Powered Exchange Operations Intelligence Platform
 
-> Model Context Protocol server for Exchange Server on-premise administration, monitoring and troubleshooting — PowerShell Remoting, EWS and REST, with AI-powered insights.
+> Model Context Protocol server and desktop platform for Exchange Server on-premise administration, monitoring and troubleshooting — PowerShell Remoting, EWS and REST, with AI-powered operations intelligence.
 
 [![Node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js)](https://nodejs.org)
 [![MCP](https://img.shields.io/badge/MCP-1.x-blueviolet)](https://modelcontextprotocol.io)
@@ -98,9 +98,9 @@ opencode mcp list        # Should show connected
 claude mcp list          # Should show connected
 ```
 
-## Desktop App
+## Desktop App — Exchange Agentic Admin
 
-A standalone Electron desktop app is included for administrators who prefer a graphical interface.
+A standalone Electron desktop app — **Exchange Agentic Admin, AI Powered Exchange Operations Intelligence Platform** — for administrators who prefer a graphical interface over CLI.
 
 **Run in development:**
 

@@ -32,7 +32,7 @@ function createWindow() {
     height: 860,
     minWidth: 1100,
     minHeight: 700,
-    title: "Exchange MCP Desktop — Admin + AI",
+    title: "Exchange Agentic Admin — AI Powered Exchange Operations Intelligence Platform",
     webPreferences: {
       preload: join(__dirname, "preload.js"),
       contextIsolation: true,
