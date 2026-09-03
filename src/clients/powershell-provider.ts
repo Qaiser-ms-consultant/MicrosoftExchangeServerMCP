@@ -43,6 +43,9 @@ const ALLOWED_CMDLETS = new Set([
   "Get-DatabaseAvailabilityGroup", "Set-MailboxDatabaseCopy", "Test-ReplicationHealth",
   "Get-MailboxFolderStatistics", "Get-MoveRequest", "New-MoveRequest", "Resume-MoveRequest", "Add-MailboxPermission", "Remove-MailboxPermission", "New-DistributionGroup", "Set-DistributionGroup", "Remove-DistributionGroup", "Add-DistributionGroupMember", "Remove-DistributionGroupMember", "New-MailContact", "Set-MailContact", "Remove-MailContact",
   "Get-OwaVirtualDirectory", "Test-OwaConnectivity", "Enable-ExchangeCertificate", "Import-ExchangeCertificate", "New-ExchangeCertificate", "Search-MailboxAuditLog", "Get-DlpPolicy", "Test-MAPIConnectivity",
+  // Mailbox lifecycle / recovery
+  "Disable-Mailbox", "Connect-Mailbox", "Undo-SoftDeletedMailbox", "Get-Mailbox", "Remove-Mailbox", "Restore-RecoverableItems",
+  "Get-CASMailbox", "Set-CASMailbox", "Get-MailboxRestoreRequest", "New-MailboxRestoreRequest", "New-MailboxImportRequest", "Get-MailboxImportRequest",
   // Legacy compat
   "Get-ADPermission",
 ]);
