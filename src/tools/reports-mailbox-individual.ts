@@ -110,7 +110,7 @@ export function registerIndividualMailboxReports(server: McpServer, ps: PowerShe
 
   server.tool(
     "report.mailbox_activity_individual",
-    "Individual Activity — per-mailbox LastLogon, LastLoggedOnUser, InboxRules count, Mobile last sync",
+    "Individual Activity — per-mailbox LastLogon, LastLoggedOnUser, InboxRules count, Mobile last sync (legacy)",
     { identity: z.string() },
     async ({ identity }) => {
       const id = identity.replace(/'/g, "''");
@@ -120,6 +120,58 @@ export function registerIndividualMailboxReports(server: McpServer, ps: PowerShe
         ps.invokeJson(`Get-MobileDevice -Mailbox '${id}' | Select-Object -First 1 | Select-Object LastSuccessSync | Select-Object -First 1`).catch(() => []),
       ]);
       return { content: [{ type: "text", text: JSON.stringify({ lastActivity: (stats as any[])[0], inboxRulesCount: rules, lastMobileSync: (mobile as any[])[0] ?? null }, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    "report.mailbox_activity",
+    "Mailbox Activity — useful per-mailbox statistics: Messages received, Messages sent, Internal, External, Average daily, Peak sending/receiving day, Last activity, Last logon (via MessageTrackingLog + Statistics, 30-day window)",
+    {
+      identity: z.string().describe("Mailbox SMTP address, e.g. devlabadmin@devlab2025.local"),
+      days: z.number().optional().describe("Window in days, default 30"),
+    },
+    async ({ identity, days }) => {
+      const d = days ?? 30;
+      const addr = identity.replace(/'/g, "''");
+      const [sent, recv, stats] = await Promise.all([
+        ps.invokeJson(`Get-MessageTrackingLog -ResultSize 500 -Start (Get-Date).AddDays(-${d}) -Sender '${addr}' -EventId SEND | Measure-Object | Select-Object -ExpandProperty Count`).catch(() => 0),
+        ps.invokeJson(`Get-MessageTrackingLog -ResultSize 500 -Start (Get-Date).AddDays(-${d}) -Recipients '${addr}' -EventId DELIVER | Measure-Object | Select-Object -ExpandProperty Count`).catch(() => 0),
+        ps.invokeJson(`Get-MailboxStatistics -Identity '${addr}' | Select-Object LastLogonTime,LastLoggedOnUserAccount,ItemCount | Select-Object -First 1`).catch(() => []),
+      ]);
+      const sentCount = typeof sent === "number" ? sent : Number((sent as any)?.Count ?? sent) || 0;
+      const recvCount = typeof recv === "number" ? recv : Number((recv as any)?.Count ?? recv) || 0;
+      const internal = await ps.invokeJson(`Get-MessageTrackingLog -ResultSize 200 -Start (Get-Date).AddDays(-${d}) -Sender '${addr}' | Where-Object { $_.Recipients -like "*@devlab2025.local*" } | Measure-Object | Select-Object -ExpandProperty Count`).catch(() => 0);
+      const internalCount = typeof internal === "number" ? internal : 0;
+      const externalSent = Math.max(0, sentCount - (internalCount as number));
+      const avgDaily = d ? (sentCount + recvCount) / d : 0;
+      const peakSend = await ps.invokeJson(`Get-MessageTrackingLog -ResultSize 200 -Start (Get-Date).AddDays(-${d}) -Sender '${addr}' -EventId SEND | Group-Object { $_.Timestamp.ToString("yyyy-MM-dd") } | Sort-Object Count -Descending | Select-Object Name,Count -First 1`).catch(() => []);
+      const peakRecv = await ps.invokeJson(`Get-MessageTrackingLog -ResultSize 200 -Start (Get-Date).AddDays(-${d}) -Recipients '${addr}' -EventId DELIVER | Group-Object { $_.Timestamp.ToString("yyyy-MM-dd") } | Sort-Object Count -Descending | Select-Object Name,Count -First 1`).catch(() => []);
+      const lastActivity = await ps.invokeJson(`Get-MessageTrackingLog -ResultSize 10 -Sender '${addr}' -Start (Get-Date).AddDays(-${d}) | Sort-Object Timestamp -Descending | Select-Object Timestamp,EventId,Recipients | Select-Object -First 1`).catch(() => []);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                mailbox: identity,
+                windowDays: d,
+                messagesReceived: recvCount,
+                messagesSent: sentCount,
+                internalMessages: internalCount,
+                externalMessages: externalSent,
+                averageDailyMessages: Math.round(avgDaily * 10) / 10,
+                peakSendingDay: (peakSend as any[])[0] ?? null,
+                peakReceivingDay: (peakRecv as any[])[0] ?? null,
+                lastActivity: (lastActivity as any[])[0] ?? null,
+                lastLogon: (stats as any[])[0]?.LastLogonTime ?? null,
+                lastLoggedOnUser: (stats as any[])[0]?.LastLoggedOnUserAccount ?? null,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
     },
   );
 }
