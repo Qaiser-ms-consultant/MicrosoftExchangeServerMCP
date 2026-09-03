@@ -118,9 +118,45 @@ $$('[data-tab]').forEach(b=>b.addEventListener('click',()=>{
   });
 }));
 (async()=>{
-  const prov = await window.exchangeDesktop.listProviders();
+  const fallback = ["OpenAI","Anthropic","Google","Azure OpenAI","AWS Bedrock","Ollama","Mistral","Cohere","Groq","Together","OpenRouter","Custom"];
   const sel=$('#provider');
-  prov.forEach(p=>{ const o=document.createElement('option'); o.textContent=p; sel.appendChild(o); });
+  const populate = (list)=>{ sel.innerHTML=""; list.forEach(p=>{ const o=document.createElement('option'); o.value=p; o.textContent=p; sel.appendChild(o); }); // trigger model load for first provider
+    sel.dispatchEvent(new Event('change'));
+  };
+  try{
+    if(!window.exchangeDesktop || !window.exchangeDesktop.listProviders) throw new Error("preload not ready");
+    const prov = await window.exchangeDesktop.listProviders();
+    if(Array.isArray(prov) && prov.length) populate(prov);
+    else populate(fallback);
+  }catch(e){
+    console.error("listProviders failed, using fallback", e);
+    populate(fallback);
+    const out=$('#modelOut'); if(out) out.textContent="Providers loaded from fallback (preload error: "+(e && (e as any).message)+")";
+  }
+  // When provider changes, optionally fetch models if API key present
+  sel.addEventListener('change', async()=>{
+    const modelSel=$('#model');
+    if(!modelSel) return;
+    modelSel.innerHTML='<option>Loading models...</option>';
+    try{
+      const apiKey=$('#apiKey')?.value?.trim();
+      if(!apiKey){
+        modelSel.innerHTML='<option>Enter API key then Test Model</option>';
+        return;
+      }
+      const res=await window.exchangeDesktop.testProvider({provider: sel.value, apiKey, baseUrl: ($('#baseUrl') as HTMLInputElement)?.value});
+      const models = res?.models ?? [];
+      if(models.length){
+        modelSel.innerHTML="";
+        models.forEach((m:any)=>{ const o=document.createElement('option'); const name=m.id||m.name||JSON.stringify(m).slice(0,60); o.value=name; o.textContent=name; modelSel.appendChild(o); });
+      } else {
+        modelSel.innerHTML='<option>No models returned — check API key/base URL</option>';
+      }
+      const out=$('#modelOut'); if(out) out.textContent=JSON.stringify(res,null,2).slice(0,1200);
+    }catch(e:any){
+      modelSel.innerHTML='<option>Failed to load models</option>';
+    }
+  });
 })();
 $('#testModel')?.addEventListener('click', async()=>{
   const r=await window.exchangeDesktop.testProvider({provider:$('#provider').value, apiKey:$('#apiKey').value, baseUrl:$('#baseUrl').value});
