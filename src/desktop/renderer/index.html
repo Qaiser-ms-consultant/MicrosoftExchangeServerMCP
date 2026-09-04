@@ -47,7 +47,6 @@ tailwind.config = {
 </div>
 <div class="flex items-center gap-2">
 <button class="p-1.5 rounded-md hover:bg-[#1a2336] text-slate-400 hover:text-slate-200" id="themeToggle" title="Toggle theme"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20.354 15.354A9 9 0 018.646 3.646A9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></button>
-<button class="p-1.5 rounded-md hover:bg-[#1a2336] text-slate-400 hover:text-slate-200" id="startMcp" title="Start MCP"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg></button>
 </div>
 </header>
 
@@ -69,8 +68,7 @@ tailwind.config = {
 <section class="col-span-12 lg:col-span-5 flex flex-col gap-4 h-full overflow-hidden" data-view="home">
 <div class="flex-1 bg-[#121829]/95 backdrop-blur-md border border-[#1f2d48] rounded-xl flex flex-col shadow-xl shadow-black/40 overflow-hidden">
 <div class="px-4 py-3 bg-[#151c30]/70 border-b border-[#1f2d48] flex items-center justify-between">
-<div class="flex items-center gap-2"><span class="text-xs font-bold uppercase tracking-wider text-slate-400">Prompt Console</span><span class="text-[11px] font-mono text-cyan-400 bg-cyan-950/40 border border-cyan-800/50 px-2 py-0.5 rounded-full">MCP Agent v1.2</span></div>
-<div class="flex items-center gap-1.5"><span class="flex h-2 w-2 rounded-full bg-cyan-400"></span><span class="text-[11px] font-medium text-slate-300" id="activeToolsPill">200 Active Tools</span></div>
+<div class="flex items-center gap-2"><span class="text-xs font-bold uppercase tracking-wider text-slate-400">Prompt Console</span></div>
 </div>
 <div class="p-4 flex-1 flex flex-col gap-3">
 <div class="flex items-center justify-between"><label class="text-xs font-medium text-slate-300">Instruction / Task Request</label><span class="text-[10px] text-slate-500 font-mono" id="currentMailboxLabel">devlabadmin@devlab2025.local</span></div>
@@ -137,9 +135,11 @@ tailwind.config = {
 </div>
 <div class="px-4 py-2 bg-[#0d121f] border-b border-[#1b253b] flex items-center justify-between text-xs flex-shrink-0">
 <div class="flex items-center gap-4">
+<div class="flex items-center gap-2 bg-[#141b2e] p-1 rounded-lg border border-[#222f4b]" role="tablist">
 <button class="text-blue-400 font-medium border-b-2 border-blue-500 pb-1 -mb-2" data-output-tab="summary">Executive Summary</button>
 <button class="text-slate-400 hover:text-slate-200 pb-1" data-output-tab="json">Raw MCP JSON</button>
-<button class="text-slate-400 hover:text-slate-200 pb-1" data-output-tab="ps">PowerShell Trace (PS-Remoting)</button>
+<button class="text-slate-400 hover:text-slate-200 pb-1" data-output-tab="ps">PowerShell Trace</button>
+</div>
 </div>
 <span class="text-[11px] font-mono text-slate-500" id="hostPill">Host: devex02.devlab2025.local</span>
 </div>
@@ -585,15 +585,22 @@ document.getElementById("outResult")?.addEventListener("click", async (e)=>{
 });
 // Quick Diagnostic Prompts rotation (8 random from Helping Prompts, rotates every 2 hours)
 (function initQuickPrompts(){
+  console.log("initQuickPrompts starting...");
   const container = document.getElementById("quickPromptButtons");
-  if(!container) return;
+  console.log("container:", container);
+  if(!container) { console.error("quickPromptButtons container not found"); return; }
   // Collect all quick prompts from the Helping Prompts section
   const allPrompts = [];
-  document.querySelectorAll('[data-view="prompts"] [data-quick]').forEach(btn => {
+  const promptsSection = document.querySelector('[data-view="prompts"]');
+  console.log("promptsSection:", promptsSection);
+  const quickButtons = document.querySelectorAll('[data-view="prompts"] [data-quick]');
+  console.log("quickButtons found:", quickButtons.length);
+  quickButtons.forEach(btn => {
     const prompt = btn.getAttribute("data-quick");
     const label = btn.textContent.trim();
     if(prompt && label) allPrompts.push({ prompt, label });
   });
+  console.log("allPrompts collected:", allPrompts.length);
   function shuffle(array){
     for(let i=array.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [array[i],array[j]]=[array[j],array[i]]; }
     return array;
@@ -613,7 +620,8 @@ document.getElementById("outResult")?.addEventListener("click", async (e)=>{
     });
   }
   // Initial render
-  if(allPrompts.length) renderQuickPrompts();
+  if(allPrompts.length) { console.log("Rendering", allPrompts.length, "prompts"); renderQuickPrompts(); }
+  else { console.warn("No prompts found to display"); }
   // Rotate every 2 hours
   setInterval(() => { if(allPrompts.length) renderQuickPrompts(); }, 2 * 60 * 60 * 1000);
 })();
