@@ -62,6 +62,7 @@ function startMcpInternal(){
   mcpProc.stderr?.on("data", (d) => win?.webContents.send("mcp:log", d.toString()));
   mcpProc.stdout?.on("data", (d) => win?.webContents.send("mcp:log", d.toString()));
   attachRpcListener();
+  mcpInitialized = false;
   return { pid: mcpProc.pid, configPath };
 }
 
@@ -148,6 +149,20 @@ function mcpRpc(method:string, params:any){
   mcpProc.stdin.write(request);
   return new Promise<any>((resolve,reject)=>{ pending.set(id,{resolve,reject}); });
 }
+// MCP servers require an initialize handshake before tools/call.
+// Lazily initialized on first use (and reset whenever the child restarts).
+let mcpInitialized = false;
+async function ensureMcpInitialized(){
+  if(mcpInitialized) return;
+  await mcpRpc("initialize", {
+    protocolVersion: "2024-11-05",
+    capabilities: {},
+    clientInfo: { name: "exchange-desktop", version: "0.1.0" },
+  });
+  // Initialized notification gets no response — fire and forget
+  if(mcpProc?.stdin) mcpProc.stdin.write(JSON.stringify({jsonrpc:"2.0",method:"notifications/initialized"})+"\n");
+  mcpInitialized = true;
+}
 // Listen to stdout lines and resolve pending promises
 let rl: any;
 function attachRpcListener(){
@@ -171,15 +186,41 @@ ipcMain.handle("mcp:start", async () => {
   mcpProc.stdout?.on("data", (d) => win?.webContents.send("mcp:log", d.toString()));
   // Attach JSON‑RPC listener after spawning
   attachRpcListener();
+  mcpInitialized = false;
   return { pid: mcpProc.pid, configPath };
 });
-ipcMain.handle("mcp:stop", async () => { if (mcpProc) { mcpProc.kill(); mcpProc=null; } return { ok:true }; });
+ipcMain.handle("mcp:stop", async () => { if (mcpProc) { mcpProc.kill(); mcpProc=null; } mcpInitialized = false; return { ok:true }; });
 
 ipcMain.handle("mcp:isRunning", async () => !!mcpProc);
 ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string }) => {
   console.log("exchange:ask invoked", payload);
-  const result = await mcpRpc("ai.tell_me_everything", { prompt: payload.prompt });
-  return result;
+  const prompt = payload.prompt ?? "";
+  // ai.tell_me_everything needs a mailbox identity — pull an email out of the
+  // free-text prompt, falling back to the raw prompt (Exchange resolves names too)
+  const emailMatch = prompt.match(/[\w.+-]+@[\w-]+\.[\w.]+/);
+  const identity = emailMatch ? emailMatch[0] : prompt.trim();
+  if(!identity) throw new Error("Enter a mailbox (e.g. user@company.com) in the prompt");
+  await ensureMcpInitialized();
+  const result = await mcpRpc("tools/call", {
+    name: "ai.tell_me_everything",
+    arguments: { identity },
+  });
+  // tools/call returns { content: [{ type: "text", text: "<json>" }] } —
+  // map it onto the output-card fields the UI expects
+  const text = (result as any)?.content?.[0]?.text;
+  if(!text) return result;
+  let data: any;
+  try { data = JSON.parse(text); } catch { return { health: text }; }
+  return {
+    name: data.displayName ?? data.mailbox ?? identity,
+    email: data.mailbox ?? identity,
+    db: data.details?.database ?? "",
+    server: data.details?.server ?? "",
+    size: data.details?.totalItemSize ?? "",
+    items: data.details?.itemCount ?? "",
+    health: data.executiveSummary?.health ?? "",
+    raw: data,
+  };
 });
 
 

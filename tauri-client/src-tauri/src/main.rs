@@ -62,6 +62,7 @@ struct McpState {
     reader: Option<BufReader<ChildStdout>>,
     next_id: u64,
     config_path: String,
+    initialized: bool,
 }
 
 impl McpState {
@@ -72,6 +73,7 @@ impl McpState {
             reader: None,
             next_id: 1,
             config_path: String::new(),
+            initialized: false,
         }
     }
 }
@@ -125,6 +127,7 @@ fn spawn_mcp_locked(state: &mut McpState) -> Result<u32, String> {
     state.child = Some(child);
     state.stdin = Some(stdin);
     state.reader = Some(BufReader::new(stdout));
+    state.initialized = false;
     Ok(pid)
 }
 
@@ -157,6 +160,10 @@ fn mcp_rpc(method: &str, params: serde_json::Value) -> Result<serde_json::Value,
         .map_err(|e| format!("MCP write failed: {}", e))?;
     stdin.flush().map_err(|e| format!("MCP flush failed: {}", e))?;
 
+    read_matching_response(&mut state, id)
+}
+
+fn read_matching_response(state: &mut McpState, id: u64) -> Result<serde_json::Value, String> {
     let reader = state.reader.as_mut().ok_or("MCP stdout unavailable")?;
     let mut buf = String::new();
     loop {
@@ -183,6 +190,39 @@ fn mcp_rpc(method: &str, params: serde_json::Value) -> Result<serde_json::Value,
         }
         // Response for another id (shouldn't happen with serialized access) — ignore
     }
+}
+
+fn ensure_mcp_initialized(state: &mut McpState) -> Result<(), String> {
+    if state.initialized {
+        return Ok(());
+    }
+    let id = state.next_id;
+    state.next_id += 1;
+    let request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": { "name": "exchange-desktop", "version": "0.1.0" },
+        },
+    });
+    let line = serde_json::to_string(&request).map_err(|e| e.to_string())? + "\n";
+    let stdin = state.stdin.as_mut().ok_or("MCP stdin unavailable")?;
+    stdin
+        .write_all(line.as_bytes())
+        .map_err(|e| format!("MCP write failed: {}", e))?;
+    stdin.flush().map_err(|e| format!("MCP flush failed: {}", e))?;
+    read_matching_response(state, id)?;
+    // Initialized notification — fire and forget (no response expected)
+    let stdin = state.stdin.as_mut().ok_or("MCP stdin unavailable")?;
+    stdin
+        .write_all(b"{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}\n")
+        .map_err(|e| format!("MCP write failed: {}", e))?;
+    stdin.flush().map_err(|e| format!("MCP flush failed: {}", e))?;
+    state.initialized = true;
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -339,6 +379,7 @@ fn stop_mcp() -> serde_json::Value {
         }
         state.stdin = None;
         state.reader = None;
+        state.initialized = false;
     }
     serde_json::json!({ "ok": true })
 }
@@ -359,12 +400,107 @@ struct AskArgs {
     prompt: String,
 }
 
+fn extract_identity(prompt: &str) -> Option<String> {
+    // Pull user@domain out of free text; fall back to the raw prompt
+    let bytes = prompt.as_bytes();
+    let mut at: Option<usize> = None;
+    for (i, b) in bytes.iter().enumerate() {
+        if *b == b'@' {
+            at = Some(i);
+            break;
+        }
+    }
+    let at = at?;
+    let mut start = at;
+    while start > 0 {
+        let c = bytes[start - 1] as char;
+        if c.is_alphanumeric() || c == '.' || c == '_' || c == '%' || c == '+' || c == '-' {
+            start -= 1;
+        } else {
+            break;
+        }
+    }
+    let mut end = at + 1;
+    while end < bytes.len() {
+        let c = bytes[end] as char;
+        if c.is_alphanumeric() || c == '.' || c == '-' {
+            end += 1;
+        } else {
+            break;
+        }
+    }
+    let candidate = &prompt[start..end];
+    if candidate.contains('@') && candidate.contains('.') {
+        Some(candidate.to_string())
+    } else {
+        None
+    }
+}
+
 #[tauri::command]
 fn ask_exchange(args: AskArgs) -> Result<serde_json::Value, String> {
-    mcp_rpc(
-        "ai.tell_me_everything",
-        serde_json::json!({ "prompt": args.prompt }),
-    )
+    let prompt = args.prompt.trim().to_string();
+    let identity = extract_identity(&prompt).unwrap_or(prompt.clone());
+    if identity.is_empty() {
+        return Err("Enter a mailbox (e.g. user@company.com) in the prompt".to_string());
+    }
+    // MCP handshake first (required before tools/call)
+    {
+        let lock = mcp();
+        let mut state = lock.map_err(|e| format!("MCP lock poisoned: {}", e))?;
+        // Ensure child alive (mcp_rpc does this too, but handshake needs it first)
+        let alive = match state.child.as_mut() {
+            Some(child) => matches!(child.try_wait(), Ok(None)),
+            None => false,
+        };
+        if !alive {
+            spawn_mcp_locked(&mut state)?;
+        }
+        ensure_mcp_initialized(&mut state)?;
+    }
+    let result = mcp_rpc(
+        "tools/call",
+        serde_json::json!({
+            "name": "ai.tell_me_everything",
+            "arguments": { "identity": identity },
+        }),
+    )?;
+    // tools/call returns { content: [{ type: "text", text: "<json>" }] } —
+    // map it onto the output-card fields the UI expects
+    let text = result
+        .get("content")
+        .and_then(|c| c.get(0))
+        .and_then(|b| b.get("text"))
+        .and_then(|t| t.as_str());
+    let text = match text {
+        Some(t) => t,
+        None => return Ok(result),
+    };
+    let data: serde_json::Value = match serde_json::from_str(text) {
+        Ok(d) => d,
+        Err(_) => return Ok(serde_json::json!({ "health": text })),
+    };
+    let get = |v: &serde_json::Value, k: &str| {
+        v.get(k)
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string()
+    };
+    let details = data.get("details").cloned().unwrap_or(serde_json::Value::Null);
+    let summary = data
+        .get("executiveSummary")
+        .cloned()
+        .unwrap_or(serde_json::Value::Null);
+    Ok(serde_json::json!({
+        "name": data.get("displayName").and_then(|v| v.as_str()).unwrap_or_else(|| data.get("mailbox").and_then(|v| v.as_str()).unwrap_or(&identity)),
+        "email": data.get("mailbox").and_then(|v| v.as_str()).unwrap_or(&identity),
+        "db": get(&details, "database"),
+        "server": get(&details, "server"),
+        "size": get(&details, "totalItemSize"),
+        "items": get(&details, "itemCount"),
+        "health": get(&summary, "health"),
+        "raw": data,
+    }))
 }
 
 #[derive(Deserialize)]
