@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.tauri.app/config/1",
+  "package": {
+    "productName": "Exchange Agentic Admin",
+    "version": "0.1.0"
+  },
+  "build": {
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "",
+    "devPath": "../src",
+    "distDir": "../src"
+  },
+  "tauri": {
+    "bundle": {
+      "active": true,
+      "targets": "all",
+      "identifier": "com.machsol.exchange-agentic-admin",
+      "icon": ["icons/icon.ico", "icons/icon.icns", "icons/icon.png"]
+    },
+    "allowlist": {
+      "all": false,
+      "shell": {
+        "all": false,
+        "open": true
+      },
+      "dialog": {
+        "all": true
+      },
+      "fs": {
+        "all": false,
+        "readFile": true,
+        "writeFile": true,
+        "scope": ["$APPDATA/exchange-desktop/*", "$HOME/.config/exchange-desktop/*"]
+      }
+    },
+    "windows": [
+      {
+        "title": "Exchange Agentic Admin",
+        "width": 1280,
+        "height": 860,
+        "minWidth": 1100,
+        "minHeight": 700
+      }
+    ]
+  }
+}

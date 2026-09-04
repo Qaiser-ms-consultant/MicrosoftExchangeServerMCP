@@ -7,7 +7,7 @@
     "exchange-mcp": "./dist/cli/cli.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node -e \"import('node:fs').then(fs=>fs.cpSync('src/desktop/renderer','dist/desktop/renderer',{recursive:true}))\" && node -e \"const fs=require('fs'); let c=fs.readFileSync('dist/desktop/preload.js','utf8'); fs.writeFileSync('dist/desktop/preload.js', c.replace(/^export \\{\\};?$/m,''))\"",
     "start": "node dist/server.js",
     "dev": "tsx src/server.ts",
     "test": "vitest run",
@@ -17,11 +17,16 @@
     "init": "tsx src/cli/init.ts",
     "doctor": "tsx src/cli/doctor.ts",
     "desktop": "npm run build && electron dist/desktop/main.js",
-    "desktop:dev": "tsx src/desktop/main.ts",
-    "desktop:build": "tsc && electron-builder --publish=never"
+    "desktop:dev": "concurrently -k \"tsc -w\" \"wait-on dist/desktop/main.js && node -e \\\"const fs=require('fs'); let c=fs.readFileSync('dist/desktop/preload.js','utf8'); fs.writeFileSync('dist/desktop/preload.js', c.replace(/^export \\{\\};?$/m,''))\\\" && electron dist/desktop/main.js --enable-logging\"",
+    "desktop:build": "npm run build && electron-builder --publish=never",
+    "tauri:check": "node scripts/tauri-frontend-check.cjs",
+    "tauri:dev": "npm run build && npx --yes @tauri-apps/cli@^1.5 dev",
+    "tauri:build": "npm run build && npx --yes @tauri-apps/cli@^1.5 build",
+    "tauri:build-win": "powershell -ExecutionPolicy Bypass -File scripts/build-tauri.ps1"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
+    "@tauri-apps/api": "^2.11.1",
     "axios": "^1.7.0",
     "commander": "^15.0.0",
     "express": "^5.2.1",
@@ -46,7 +51,13 @@
   "build": {
     "productName": "Exchange Agentic Admin",
     "appId": "com.machsol.exchange-agentic-admin",
-    "files": ["dist/**/*", "src/desktop/renderer/**/*", "config.example.yaml"],
-    "directories": { "output": "dist/installer" }
+    "files": [
+      "dist/**/*",
+      "src/desktop/renderer/**/*",
+      "config.example.yaml"
+    ],
+    "directories": {
+      "output": "dist/installer"
+    }
   }
 }

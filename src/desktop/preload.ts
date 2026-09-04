@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("exchangeDesktop", {
   loadConfig: () => ipcRenderer.invoke("config:load"),
@@ -9,6 +9,6 @@ contextBridge.exposeInMainWorld("exchangeDesktop", {
   startMcp: () => ipcRenderer.invoke("mcp:start"),
   stopMcp: () => ipcRenderer.invoke("mcp:stop"),
   runDoctor: (opts: { endpoint?: string; insecure?: boolean }) => ipcRenderer.invoke("doctor:run", opts),
-  openFile: () => ipcRenderer.invoke("dialog:openFile"),
-  onLog: (cb: (data: string) => void) => ipcRenderer.on("mcp:log", (_e, d) => cb(d)),
+  askExchange: (payload: { prompt: string }) => ipcRenderer.invoke("exchange:ask", payload),
+  isMcpRunning: () => ipcRenderer.invoke("mcp:isRunning"),
 });

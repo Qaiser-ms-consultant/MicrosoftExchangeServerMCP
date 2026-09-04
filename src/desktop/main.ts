@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, dialog } from "electron";
+import { createInterface } from "readline";
 import { join, resolve, dirname } from "node:path";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
@@ -46,13 +47,31 @@ function createWindow() {
   const devUrl = process.env.VITE_DEV_SERVER_URL;
   if (devUrl) win.loadURL(devUrl);
   else {
-    const prodPath = join(__dirname, "../renderer/index.html");
+    const prodPath = join(__dirname, "renderer/index.html");
     const srcPath = resolve(process.cwd(), "src/desktop/renderer/index.html");
     win.loadFile(existsSync(prodPath) ? prodPath : srcPath);
   }
 }
 
-app.whenReady().then(createWindow);
+// Auto‑start MCP when the app is ready
+function startMcpInternal(){
+  if (mcpProc) { try { mcpProc.kill(); } catch {} }
+  const configPath = ensureConfig();
+  const serverPath = resolve(process.cwd(), "dist/server.js");
+  mcpProc = spawn("node", [serverPath, `--config=${configPath}`], { stdio: ["pipe","pipe","pipe"] });
+  mcpProc.stderr?.on("data", (d) => win?.webContents.send("mcp:log", d.toString()));
+  mcpProc.stdout?.on("data", (d) => win?.webContents.send("mcp:log", d.toString()));
+  attachRpcListener();
+  return { pid: mcpProc.pid, configPath };
+}
+
+app.whenReady().then(async () => {
+  createWindow();
+  const startInfo = await startMcpInternal();
+  console.log('MCP auto‑started', startInfo);
+});
+
+
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
 app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 
@@ -68,8 +87,8 @@ ipcMain.handle("config:save", async (_e, content: string) => {
 });
 ipcMain.handle("config:path", async () => ensureConfig());
 
-// IPC: model providers — 13 (12 + OpenCode as requested), file-based ${API_KEY}
-const PROVIDERS = ["OpenAI","Anthropic","Google","Azure OpenAI","AWS Bedrock","Ollama","Mistral","Cohere","Groq","Together","OpenRouter","Custom","OpenCode"];
+// IPC: model providers — 14 (12 + OpenCode + Ollama Cloud), file-based ${API_KEY}
+const PROVIDERS = ["OpenAI","Anthropic","Google","Azure OpenAI","AWS Bedrock","Ollama","Ollama Cloud","Mistral","Cohere","Groq","Together","OpenRouter","Custom","OpenCode"];
 ipcMain.handle("providers:list", async () => PROVIDERS);
 ipcMain.handle("providers:test", async (_e, { provider, apiKey, baseUrl }: { provider: string; apiKey: string; baseUrl?: string }) => {
   // Model test: GET /v1/models with Bearer — file-based key, no keytar
@@ -80,6 +99,7 @@ ipcMain.handle("providers:test", async (_e, { provider, apiKey, baseUrl }: { pro
     "Azure OpenAI": "https://api.openai.azure.com/openai/models?api-version=2023-05-15",
     "AWS Bedrock": "https://bedrock-runtime.us-east-1.amazonaws.com/models",
     Ollama: "http://localhost:11434/api/tags",
+    "Ollama Cloud": "https://api.ollama.com/v1/models",
     Mistral: "https://api.mistral.ai/v1/models",
     Cohere: "https://api.cohere.ai/v1/models",
     Groq: "https://api.groqu.com/openai/v1/models",
@@ -95,11 +115,53 @@ ipcMain.handle("providers:test", async (_e, { provider, apiKey, baseUrl }: { pro
     else if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
     const res = await fetch(url, { headers } as any);
     const json: any = await res.json().catch(() => ({}));
-    return { ok: res.ok, status: res.status, models: json.data?.slice(0,5) ?? json.models?.slice(0,5) ?? [], raw: JSON.stringify(json).slice(0,600) };
+    
+    // Extract models from various API response formats
+    let models: any[] = [];
+    if (Array.isArray(json.data)) models = json.data;
+    else if (Array.isArray(json.models)) models = json.models;
+    else if (Array.isArray(json)) models = json;
+    else if (json && typeof json === 'object') {
+      // Try common nested patterns
+      for (const key of Object.keys(json)) {
+        if (Array.isArray(json[key])) { models = json[key]; break; }
+      }
+    }
+    
+    // Normalize model objects to have id/name
+    const normalizedModels = models.slice(0, 50).map((m: any) => ({
+      id: m.id || m.name || m.model || m.id || JSON.stringify(m),
+      name: m.name || m.id || m.model || m.id || JSON.stringify(m)
+    }));
+    
+    return { ok: res.ok, status: res.status, models: normalizedModels, raw: JSON.stringify(json).slice(0,600) };
   } catch (e: any) { return { ok: false, error: e.message }; }
 });
 
-// IPC: MCP spawn + logs (real-time streaming)
+// JSON‑RPC client for the MCP child process
+const pending = new Map<number, { resolve: (v:any)=>void; reject: (e:any)=>void }>();
+let rpcId = 1;
+function mcpRpc(method:string, params:any){
+  if(!mcpProc?.stdin || !mcpProc?.stdout){ throw new Error("MCP not started"); }
+  const id = rpcId++;
+  const request = JSON.stringify({jsonrpc:"2.0",id,method,params})+"\n";
+  mcpProc.stdin.write(request);
+  return new Promise<any>((resolve,reject)=>{ pending.set(id,{resolve,reject}); });
+}
+// Listen to stdout lines and resolve pending promises
+let rl: any;
+function attachRpcListener(){
+  if(!mcpProc?.stdout) return;
+  rl = createInterface({ input: mcpProc.stdout as any, crlfDelay: Infinity });
+  rl.on("line", (line:string)=>{
+    try{ const msg = JSON.parse(line); if(msg.id && pending.has(msg.id)){
+        const {resolve,reject}=pending.get(msg.id)!; pending.delete(msg.id);
+        if(msg.error) reject(msg.error); else resolve(msg.result);
+      } }
+      catch{ /* non‑JSON log line – ignore */ }
+  });
+}
+// Ensure listener is attached when MCP starts
 ipcMain.handle("mcp:start", async () => {
   if (mcpProc) { try { mcpProc.kill(); } catch {} }
   const configPath = ensureConfig();
@@ -107,18 +169,19 @@ ipcMain.handle("mcp:start", async () => {
   mcpProc = spawn("node", [serverPath, `--config=${configPath}`], { stdio: ["pipe","pipe","pipe"] });
   mcpProc.stderr?.on("data", (d) => win?.webContents.send("mcp:log", d.toString()));
   mcpProc.stdout?.on("data", (d) => win?.webContents.send("mcp:log", d.toString()));
+  // Attach JSON‑RPC listener after spawning
+  attachRpcListener();
   return { pid: mcpProc.pid, configPath };
 });
 ipcMain.handle("mcp:stop", async () => { if (mcpProc) { mcpProc.kill(); mcpProc=null; } return { ok:true }; });
 
-// IPC: doctor — PowerShell + EWS both (reuses src/cli/doctor.ts logic)
-ipcMain.handle("doctor:run", async (_e, opts: { endpoint?: string; insecure?: boolean }) => {
-  const { testConnectivity } = await import("../cli/doctor.js");
-  const endpoint = opts?.endpoint ?? "https://mail.contoso.com";
-  const ps = endpoint.replace(/\/$/, "") + "/PowerShell";
-  const ewsPath = "/EWS/Exchange.asmx";
-  return testConnectivity({ endpoint, powershellUri: ps, ewsPath, insecure: !!opts?.insecure });
+ipcMain.handle("mcp:isRunning", async () => !!mcpProc);
+ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string }) => {
+  console.log("exchange:ask invoked", payload);
+  const result = await mcpRpc("ai.tell_me_everything", { prompt: payload.prompt });
+  return result;
 });
+
 
 // Dialog helpers
 ipcMain.handle("dialog:openFile", async () => {

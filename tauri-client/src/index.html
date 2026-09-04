@@ -7,21 +7,21 @@
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <script type="module">import YAML from 'https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js'; window.YAML = YAML;</script>
 <script>
- tailwind.config = {
-   darkMode: 'class',
-   theme: {
-     extend: {
-       colors: {
-         brand: { 50: '#f0fdfa', 100: '#ccfbf1', 500: '#0d9488', 600: '#0f766e', 700: '#115e59' },
-         surface: { base: '#090d16', card: '#111726', elevated: '#1a2236', border: '#1f2a40', borderLight: '#2a3854' }
-       },
-       fontFamily: {
-         sans: ['Inter','system-ui','-apple-system','sans-serif'],
-         mono: ['JetBrains Mono','monospace']
-       }
-     }
-   }
- }
+tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        brand: { 50: '#f0fdfa', 100: '#ccfbf1', 500: '#0d9488', 600: '#0f766e', 700: '#115e59' },
+        surface: { base: '#090d16', card: '#111726', elevated: '#1a2236', border: '#1f2a40', borderLight: '#2a3854' }
+      },
+      fontFamily: {
+        sans: ['Inter','system-ui','-apple-system','sans-serif'],
+        mono: ['JetBrains Mono','monospace']
+      }
+    }
+  }
+}
 </script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#25334d;border-radius:9999px}::-webkit-scrollbar-thumb:hover{background:#3b4f74}</style>
@@ -46,7 +46,7 @@
 </div>
 </div>
 <div class="flex items-center gap-2">
-<button class="p-1.5 rounded-md hover:bg-[#1a2336] text-slate-400 hover:text-slate-200" id="themeToggle" title="Toggle theme"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20.354 15.354A9 9 0 018.646 3.646A9 9 0 0012 21a9 9 0 008.354-5.646z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></button>
+<button class="p-1.5 rounded-md hover:bg-[#1a2336] text-slate-400 hover:text-slate-200" id="themeToggle" title="Toggle theme"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20.354 15.354A9 9 0 018.646 3.646A9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></button>
 <button class="p-1.5 rounded-md hover:bg-[#1a2336] text-slate-400 hover:text-slate-200" id="startMcp" title="Start MCP"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg></button>
 </div>
 </header>
@@ -68,4 +68,372 @@
 <section class="col-span-12 lg:col-span-5 flex flex-col gap-4 h-full overflow-hidden" data-view="home">
 <div class="flex-1 bg-[#121829]/95 backdrop-blur-md border border-[#1f2d48] rounded-xl flex flex-col shadow-xl shadow-black/40 overflow-hidden">
 <div class="px-4 py-3 bg-[#151c30]/70 border-b border-[#1f2d48] flex items-center justify-between">
-<div class="flex items-center gap-2"><span class="text-xs font-bold uppercase tracking-wider text-slate-400">Prompt Console</span><span class="text-[11px] font-mono font-... (truncated)"
+<div class="flex items-center gap-2"><span class="text-xs font-bold uppercase tracking-wider text-slate-400">Prompt Console</span><span class="text-[11px] font-mono text-cyan-400 bg-cyan-950/40 border border-cyan-800/50 px-2 py-0.5 rounded-full">MCP Agent v1.2</span></div>
+<div class="flex items-center gap-1.5"><span class="flex h-2 w-2 rounded-full bg-cyan-400"></span><span class="text-[11px] font-medium text-slate-300" id="activeToolsPill">200 Active Tools</span></div>
+</div>
+<div class="p-4 flex-1 flex flex-col gap-3">
+<div class="flex items-center justify-between"><label class="text-xs font-medium text-slate-300">Instruction / Task Request</label><span class="text-[10px] text-slate-500 font-mono" id="currentMailboxLabel">devlabadmin@devlab2025.local</span></div>
+<div class="relative flex-1 group">
+<textarea class="w-full h-full p-3.5 bg-[#0b0f19] text-slate-100 rounded-lg border border-[#22304d] text-sm font-mono focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition resize-none leading-relaxed placeholder-slate-600" id="prompt" placeholder="Give a command to your Exchange Agent..." rows="6">Tell me everything about devlabadmin@devlab2025.local</textarea>
+<div class="absolute bottom-2.5 right-3 text-[10px] font-mono text-slate-500 bg-[#0b0f19]/80 px-1.5 py-0.5 rounded border border-[#1b253b]" id="tokenCount">48 tokens</div>
+</div>
+<div class="grid grid-cols-2 gap-2 text-xs">
+<div class="bg-[#0b0f19] border border-[#1d2943] rounded-lg p-2.5 flex items-center justify-between">
+<span class="text-slate-400 text-[11px]">Model Target:</span>
+<select id="provider" class="bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200 focus:border-blue-500 outline-none cursor-pointer" style="background: #0b0f19; color: #e2e8f0;">
+<option>OpenAI</option><option>Anthropic</option><option>Google</option><option>Azure OpenAI</option><option>AWS Bedrock</option><option>Ollama</option><option>Ollama Cloud</option><option>Mistral</option><option>Cohere</option><option>Groq</option><option>Together</option><option>OpenRouter</option><option>Custom</option><option>OpenCode</option>
+</select>
+</div>
+<div class="bg-[#0b0f19] border border-[#1d2943] rounded-lg p-2.5 flex items-center justify-between">
+<span class="text-slate-400 text-[11px]">Model:</span>
+<select id="model" class="bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200 focus:border-blue-500 outline-none cursor-pointer" style="background: #0b0f19; color: #e2e8f0;"><option>Select provider first</option></select>
+</div>
+</div>
+<div class="bg-[#0b0f19] border border-[#1d2943] rounded-lg p-2.5 flex flex-col gap-2">
+<div class="flex items-center justify-between"><span class="text-[11px] text-slate-400">API Key</span><span class="text-[10px] text-slate-500">file-based ${API_KEY}</span></div>
+<input id="apiKey" type="password" placeholder="Stored file-based, never shown" class="w-full p-2 bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200 placeholder-slate-600 focus:border-blue-500 outline-none" />
+<input id="baseUrl" placeholder="https://api.openai.com/v1 (custom/Ollama)" class="w-full p-2 bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200 placeholder-slate-600 focus:border-blue-500 outline-none" />
+<div class="flex gap-2"><button class="flex-1 px-3 py-1.5 rounded-md bg-[#1a2336] hover:bg-[#1e2d4a] border border-[#23314e] text-xs text-slate-300" id="testModel">Test connection</button><button class="flex-1 px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium" id="saveModel">Save</button></div>
+<div id="modelOut" class="text-[11px] font-mono text-slate-400 bg-[#0b0f19] border border-[#1d2943] rounded p-2 max-h-20 overflow-auto">Not tested</div>
+</div>
+<div class="pt-2 flex items-center justify-between border-t border-[#1b263e]">
+<div class="flex items-center gap-2">
+<button class="px-5 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-medium text-xs flex items-center gap-2 shadow-lg shadow-blue-500/20" id="runPrompt"><svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg> Run Agent <kbd class="text-[9px] bg-blue-800/60 border border-blue-400/30 px-1 rounded font-mono">⌘↵</kbd></button>
+<button class="px-3.5 py-2 rounded-lg bg-[#141c2e] hover:bg-[#1c273e] text-slate-300 border border-[#23314e] text-xs" id="clearPrompt">Clear</button>
+</div>
+<span class="text-[11px] text-slate-500">Uses your selected MCP host</span>
+</div>
+</div>
+<div class="p-4 bg-[#0e1423] border-t border-[#1a253c]">
+<div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2.5 flex items-center justify-between"><span>Quick Diagnostic Prompts</span><span class="text-[10px] text-slate-500 font-mono">Pre-built recipes</span></div>
+<div class="flex flex-wrap gap-2">
+<button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300 flex items-center gap-1.5" data-quick="Tell me everything about devlabadmin@devlab2025.local"><span class="text-blue-400">📊</span> Executive summary</button>
+<button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300 flex items-center gap-1.5" data-quick="Who is spamming?"><span class="text-amber-400">⚠️</span> Who is spamming?</button>
+<button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300 flex items-center gap-1.5" data-quick="Capacity forecast"><span class="text-cyan-400">📈</span> Capacity forecast</button>
+<button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300 flex items-center gap-1.5" data-quick="Check mailbox quarantine for devlabadmin@devlab2025.local"><span class="text-rose-400">🛡️</span> Mailbox quarantine</button>
+<button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300 flex items-center gap-1.5" data-quick="Test replication health"><span class="text-purple-400">🔄</span> Replication sync</button>
+</div>
+</div>
+</div>
+</section>
+
+<!-- RIGHT: Output & Analysis -->
+<section class="col-span-12 lg:col-span-7 flex flex-col h-full overflow-hidden" data-view="home">
+<div class="flex-1 bg-[#121829]/95 backdrop-blur-md border border-[#1f2d48] rounded-xl flex flex-col shadow-xl shadow-black/40 overflow-hidden">
+<div class="px-4 py-3 bg-[#151c30]/70 border-b border-[#1f2d48] flex items-center justify-between flex-shrink-0">
+<div class="flex items-center gap-3">
+<span class="text-xs font-bold uppercase tracking-wider text-slate-400">Output & Analysis</span>
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" id="execBadge"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> <span id="execText">Idle</span></span>
+</div>
+<div class="flex items-center gap-2">
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-950/40 text-emerald-300 border border-emerald-800/40 text-xs font-mono font-medium" id="healthPill"><svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg><span id="healthText">— / 100 Health</span></div>
+<div class="h-4 w-[1px] bg-[#1f2d48]"></div>
+<button class="p-1.5 rounded-md hover:bg-[#1a2338] text-slate-300 hover:text-white border border-transparent hover:border-[#2b3a58] text-xs flex items-center gap-1" id="copyOut"><svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> Copy</button>
+<button class="p-1.5 rounded-md hover:bg-[#1a2338] text-slate-300 hover:text-white border border-transparent hover:border-[#2b3a58] text-xs flex items-center gap-1" id="exportOut"><svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> Export</button>
+</div>
+</div>
+<div class="px-4 py-2 bg-[#0d121f] border-b border-[#1b253b] flex items-center justify-between text-xs flex-shrink-0">
+<div class="flex items-center gap-4">
+<button class="text-blue-400 font-medium border-b-2 border-blue-500 pb-1 -mb-2" data-output-tab="summary">Executive Summary</button>
+<button class="text-slate-400 hover:text-slate-200 pb-1" data-output-tab="json">Raw MCP JSON</button>
+<button class="text-slate-400 hover:text-slate-200 pb-1" data-output-tab="ps">PowerShell Trace (PS-Remoting)</button>
+</div>
+<span class="text-[11px] font-mono text-slate-500" id="hostPill">Host: devex02.devlab2025.local</span>
+</div>
+<div class="flex-1 p-5 overflow-y-auto space-y-4 bg-[#0a0e17]" id="outputScroll" data-purpose="output-scroll-container">
+<div class="p-4 rounded-lg bg-[#111726] border border-[#1d2a42] flex items-start justify-between" id="identityCard">
+<div class="flex items-center gap-3.5">
+<div class="w-11 h-11 rounded-full bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center font-bold text-white text-sm shadow-md shadow-blue-500/10 ring-2 ring-blue-500/20" id="avatarDA">DA</div>
+<div>
+<div class="flex items-center gap-2">
+<h2 class="text-sm font-semibold text-white" id="outName">DevLab Administrator</h2>
+<span class="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1.5 py-0.5 rounded font-mono" id="outType">UserMailbox</span>
+</div>
+<p class="text-xs text-slate-400 font-mono" id="outEmail">devlabadmin@devlab2025.local</p>
+<div class="flex items-center gap-3 mt-1.5 text-[11px] text-slate-400 font-mono">
+<span>Database: <strong class="text-slate-200 font-medium" id="outDB">DB01-EAST</strong></span><span>•</span><span>Server: <strong class="text-slate-200 font-medium" id="outServer">EX01-DEVLAB</strong></span>
+</div>
+</div>
+</div>
+<div class="text-right">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30" id="outStatus">Active / Healthy</span>
+<p class="text-[10px] text-slate-500 mt-1" id="outLastLogon">Last Logged In: Today 09:42 EST</p>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-3" id="metricsGrid">
+<div class="p-3 bg-[#111726] border border-[#1d2a42] rounded-lg"><div class="text-[11px] text-slate-400 mb-1 flex items-center justify-between"><span>Total Mailbox Size</span><span class="text-cyan-400 font-mono text-[10px]" id="quotaPct">14.2%</span></div><div class="text-lg font-bold text-white font-mono" id="outSize">7.12 <span class="text-xs font-normal text-slate-400">GB</span></div><div class="w-full bg-[#1b253b] h-1.5 rounded-full mt-2 overflow-hidden"><div class="bg-cyan-500 h-full rounded-full" id="quotaBar" style="width: 14.2%"></div></div><div class="text-[10px] text-slate-500 mt-1 font-mono" id="outQuota">Quota Cap: 50.00 GB</div></div>
+<div class="p-3 bg-[#111726] border border-[#1d2a42] rounded-lg"><div class="text-[11px] text-slate-400 mb-1 flex items-center justify-between"><span>Item Count</span><span class="text-indigo-400 font-mono text-[10px]">In sync</span></div><div class="text-lg font-bold text-white font-mono" id="outItems">34,189 <span class="text-xs font-normal text-slate-400">items</span></div><div class="text-[10px] text-slate-500 mt-3 font-mono" id="outDeleted">Deleted Items: 421 (112 MB)</div></div>
+<div class="p-3 bg-[#111726] border border-[#1d2a42] rounded-lg"><div class="text-[11px] text-slate-400 mb-1 flex items-center justify-between"><span>Send / Receive Limit</span><span class="text-emerald-400 font-mono text-[10px]">Normal</span></div><div class="text-lg font-bold text-white font-mono">35 <span class="text-xs font-normal text-slate-400">MB / msg</span></div><div class="text-[10px] text-slate-500 mt-3 font-mono">Max Recipients: 500</div></div>
+</div>
+<div class="p-4 rounded-lg bg-[#111726] border border-[#1d2a42] space-y-3" id="highlightsCard">
+<h3 class="text-xs font-semibold text-slate-200 uppercase tracking-wider flex items-center gap-2"><svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> Mailflow & Permission Highlights</h3>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+<div class="p-2.5 bg-[#0b0f19] rounded-md border border-[#1a253a]"><span class="text-slate-400 block text-[11px]">Active Transport Rules Applied:</span><span class="font-medium text-slate-200" id="outRules">Default-Internal-Disclaimer, DLP-PCI-High</span></div>
+<div class="p-2.5 bg-[#0b0f19] rounded-md border border-[#1a253a]"><span class="text-slate-400 block text-[11px]">Mailbox Forwarding / Redirection:</span><span class="font-medium text-emerald-400" id="outFwd">None (Secure configuration)</span></div>
+<div class="p-2.5 bg-[#0b0f19] rounded-md border border-[#1a253a]"><span class="text-slate-400 block text-[11px]">Litigation Hold Status:</span><span class="font-medium text-amber-400" id="outHold">Enabled (Indefinite Duration)</span></div>
+<div class="p-2.5 bg-[#0b0f19] rounded-md border border-[#1a253a]"><span class="text-slate-400 block text-[11px]">Primary SMTP Address:</span><span class="font-mono text-cyan-300" id="outPrimarySmtp">devlabadmin@devlab2025.local</span></div>
+</div>
+</div>
+<div class="p-4 rounded-lg bg-gradient-to-r from-[#111827] to-[#121c33] border border-blue-900/40" id="aiRecCard">
+<div class="flex items-center gap-2 text-xs font-semibold text-blue-400 mb-2"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg><span>AI Agent Recommendations</span></div>
+<ul class="text-xs text-slate-300 space-y-2 list-disc list-inside" id="aiRecList">
+<li>Mailbox database replica is currently 0 copy queue length; health is optimal.</li>
+<li>No anomalous login locations or password spray attempts detected in transport logs for the last 48h.</li>
+<li>Optional recommendation: Run <code class="bg-blue-950 text-blue-300 px-1 py-0.5 rounded font-mono text-[11px]">Start-ManagedFolderAssistant -Identity devlabadmin</code> to clean up 421 expired staging items.</li>
+</ul>
+</div>
+</div>
+<div class="px-4 py-2 bg-[#0c111e] border-t border-[#1b253b] flex items-center justify-between text-[11px] text-slate-500 font-mono flex-shrink-0">
+<div class="flex items-center gap-3"><span>PowerShell Module: Microsoft.Exchange.Management.v15</span><span>•</span><span>Protocol: Kerberos WinRM</span></div>
+<div class="text-slate-400" id="tokenCount">JSON Tokens: 1,842 in / 420 out</div>
+</div>
+</div>
+</section>
+
+<!-- LOGS/HEALTH/CONFIG (hidden by default, shown via tabs) -->
+<section class="col-span-12 lg:col-span-12 hidden" data-view="health">
+<div class="grid grid-cols-3 gap-4">
+<div class="bg-[#121829] border border-[#1f2d48] rounded-xl p-4"><div class="flex items-center justify-between"><span class="text-xs font-bold uppercase tracking-wider text-slate-400">Overall</span><span class="px-2 py-0.5 rounded-full text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Healthy</span></div><div class="text-2xl font-bold text-white mt-2">82<span class="text-sm font-normal text-slate-400">/100</span></div><button class="mt-3 px-3 py-1.5 rounded-md bg-[#1a2336] border border-[#23314e] text-xs text-slate-300" id="runDoctorHealth">Run health checks</button></div>
+<div class="bg-[#121829] border border-[#1f2d48] rounded-xl p-4"><h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Servers</h3><p class="text-xs text-slate-500 mt-2">Version and CU via report.exchange_version_and_cu</p></div>
+<div class="bg-[#121829] border border-[#1f2d48] rounded-xl p-4"><h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Transport</h3><p class="text-xs text-slate-500 mt-2">Queue: report.queue_report</p></div>
+</div>
+<div class="bg-[#121829] border border-[#1f2d48] rounded-xl p-4 mt-4 flex items-center justify-between"><span class="text-xs font-bold uppercase tracking-wider text-slate-400">Quick checks</span><div class="flex gap-2"><button class="px-3 py-1.5 rounded-md bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs" id="runDoctor">Run doctor (PowerShell + EWS)</button><button class="px-3 py-1.5 rounded-md bg-[#141d30] border border-[#22304d] text-xs text-slate-300" id="openHealthDetails">View details</button></div></div>
+</section>
+
+<script>
+var $ = function(s){ return document.querySelector(s); };
+var $$ = function(s){ return Array.prototype.slice.call(document.querySelectorAll(s)); };
+window.addEventListener('error', function(e){ console.error(e.error||e.message); var el=document.getElementById('modelOut'); if(el) el.textContent='JS Error: '+(e.error&&e.error.message||e.message); });
+// Tauri compatibility shim: if running inside Tauri (__TAURI__ present) but the
+// Electron-style bridge is missing, build window.exchangeDesktop on top of
+// Tauri's invoke() so all existing safeHandler code keeps working unchanged.
+(function initTauriBridge(){
+  try {
+    var tauri = window.__TAURI__;
+    if (tauri && !window.exchangeDesktop) {
+      var invoke = tauri.invoke || (tauri.tauri && tauri.tauri.invoke);
+      if (invoke) {
+        window.exchangeDesktop = {
+          loadConfig: function(){ return invoke('load_config'); },
+          saveConfig: function(content){ return invoke('save_config', { content: content }); },
+          configPath: function(){ return invoke('config_path'); },
+          listProviders: function(){ return invoke('providers_list'); },
+          testProvider: function(p){ return invoke('test_provider', p || {}); },
+          startMcp: function(){ return invoke('start_mcp'); },
+          stopMcp: function(){ return invoke('stop_mcp'); },
+          runDoctor: function(opts){ return invoke('run_doctor', opts || {}); },
+          askExchange: function(payload){ return invoke('ask_exchange', payload || {}); },
+          isMcpRunning: function(){ return invoke('is_mcp_running'); },
+          onLog: null
+        };
+      }
+    }
+  } catch (e) { console.error('Tauri bridge init failed', e); }
+})();
+var isDesktop = typeof window.exchangeDesktop !== 'undefined';
+console.log("isDesktop:", isDesktop, "exchangeDesktop:", window.exchangeDesktop, "isTauri:", typeof window.__TAURI__ !== 'undefined');
+if(!isDesktop){
+  var warn=document.createElement('div');
+  warn.style.cssText='background:#fffbeb;border:1px solid #fde68a;color:#92400e;padding:8px 12px;border-radius:8px;margin:8px 12px;font-size:12px';
+  warn.textContent='⚠️ Not in Electron — fallback mode. Run via npm run desktop for full features.';
+  document.body.prepend(warn);
+} else {
+  // Initialize UI state based on MCP status
+(async()=>{
+  const runBtn=document.getElementById('runPrompt');
+  if(runBtn) runBtn.disabled=true;
+  const isRunning=await window.exchangeDesktop.isMcpRunning?.();
+  if(isRunning && runBtn) runBtn.disabled=false;
+})();
+
+}
+// Tabs — use data-tab / data-view
+$$('[data-tab]').forEach(function(b){ b.addEventListener('click',function(){
+  $$('[data-tab]').forEach(function(x){ x.setAttribute('aria-selected','false'); x.classList.remove('bg-gradient-to-r','from-blue-600','to-indigo-600','text-white'); x.classList.add('text-slate-400'); });
+  b.setAttribute('aria-selected','true'); b.classList.add('bg-gradient-to-r','from-blue-600','to-indigo-600','text-white'); b.classList.remove('text-slate-400');
+  var t=b.getAttribute('data-tab');
+  document.querySelectorAll('section[data-view]').forEach(function(v){ v.style.display = v.getAttribute('data-view')===t ? 'flex' : 'none'; });
+}); });
+// Ensure Home visible on load
+document.querySelectorAll('section[data-view]').forEach(function(v){ var isHome=v.getAttribute('data-view')==="home"; v.style.display=isHome?'flex':'none'; });
+
+// Theme toggle
+var savedTheme = localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+document.documentElement.classList.toggle("dark", savedTheme==="dark");
+var themeBtn=document.getElementById("themeToggle");
+if(themeBtn) themeBtn.addEventListener("click", function(){
+  var isDark=document.documentElement.classList.toggle("dark");
+  localStorage.setItem("theme", isDark?"dark":"light");
+});
+var settingsBtn=document.getElementById("openSettings");
+if(settingsBtn) settingsBtn.addEventListener('click',()=>{ var tab=document.querySelector('[data-tab="logs"]'); if(tab) tab.click(); });
+
+// Provider models — fallback for all 13
+const fallbackModels = {
+  OpenAI: ["gpt-4o","gpt-4o-mini","o1","o1-mini","gpt-4-turbo","gpt-3.5-turbo"],
+  Anthropic: ["claude-3-5-sonnet-20241022","claude-3-5-haiku-20241022","claude-3-opus-20240229","claude-3-haiku-20240307"],
+  Google: ["gemini-1.5-pro","gemini-1.5-flash","gemini-1.0-pro","gemini-pro-vision"],
+  "Azure OpenAI": ["gpt-4o","gpt-4","gpt-35-turbo","o1"],
+  "AWS Bedrock": ["anthropic.claude-3-sonnet","amazon.titan-text-express-v1","ai21.j2-ultra","cohere.command-text-v14"],
+  Ollama: ["llama3.1","mistral","qwen2","gemma2","codellama","phi3"],
+  "Ollama Cloud": ["llama3.1","mistral","qwen2","gemma2","codellama","phi3","llama3.2","nemotron3"],
+  Mistral: ["mistral-large-latest","mistral-small-latest","mistral-nemo","codestral-latest"],
+  Cohere: ["command-r-plus","command-r","command","embed-english-v3.0"],
+  Groq: ["llama-3.1-70b-versatile","llama-3.1-8b-instant","mixtral-8x7b-32768","gemma-7b-it"],
+  Together: ["meta-llama/Llama-3-70b-Instruct","mistralai/Mixtral-8x7B-Instruct-v0.1","Qwen/Qwen2-72B-Instruct"],
+  OpenRouter: ["openai/gpt-4o","anthropic/claude-3.5-sonnet","google/gemini-pro","meta-llama/llama-3.1-70b"],
+  Custom: ["custom-model-1","custom-model-2"],
+  OpenCode: ["opencode/claude-3-5-sonnet","opencode/gpt-4o","opencode/gemini-1.5-pro","opencode/llama3.1"],
+};
+function populateModelsForProvider(provider, models, isConfigTab){
+  const selId = isConfigTab ? "cfg-model" : "model";
+  const sel=document.getElementById(selId) || null;
+  if(!sel) { console.error("Model dropdown not found:", selId); return; }
+  console.log("populateModelsForProvider:", provider, models);
+  sel.innerHTML="";
+  const list = models && models.length ? models.map((m)=>m.id||m.name||String(m)) : (fallbackModels[provider]||["default"]);
+  console.log("list:", list);
+  list.forEach(name=>{ const o=document.createElement('option'); o.value=name; o.textContent=name; sel.appendChild(o); });
+}
+function showStatus(elId, msg, isError){
+  const el=document.getElementById(elId);
+  if(!el) return;
+  el.textContent=msg;
+  el.style.borderColor = isError ? "#dc2626" : "";
+}
+(function initProviders(){
+  const sel=document.getElementById("provider");
+  if (sel) {
+    // Clear any existing options and populate provider list
+    sel.innerHTML = "";
+    Object.keys(fallbackModels).forEach(p=>{ const o=document.createElement('option'); o.value=p; o.textContent=p; sel.appendChild(o); });
+    populateModelsForProvider(sel.value || "OpenAI", null, false);
+  }
+})();
+// Provider change: always show fallback models first, no API key required
+document.getElementById("provider")?.addEventListener('change', ()=>{
+  const provider=(document.getElementById("provider")).value;
+  populateModelsForProvider(provider, null, false);
+  showStatus("modelOut", `Showing fallback models for ${provider}. Enter API key and click "Test connection" to fetch live models.`);
+});
+function safeHandler(id, fn, outIdOverride){
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.addEventListener('click', async()=>{
+    const btn=el;
+    const origText=btn.textContent;
+    btn.textContent="Working..."; btn.disabled = true;
+    try{ await fn(); }catch(e){
+      const outId = outIdOverride || (id==="testModel" ? "modelOut" : id==="cfg-testModel" ? "cfg-modelOut" : id==="testConn" ? "adminOut" : id==="runDoctor"||id==="runDoctorHealth" ? "logView" : "output");
+      const target=document.getElementById(outId);
+      if(target) target.textContent="Error: "+(e?.message||String(e));
+      console.error(e);
+    }finally{ btn.textContent=origText||""; btn.disabled = false; }
+});
+}
+safeHandler("testModel", async()=>{
+  if(!isDesktop) throw new Error("Desktop bridge not available — run via npm run desktop");
+  const provider=(document.getElementById("provider")).value;
+  const apiKey=(document.getElementById("apiKey")).value?.trim();
+  if(!apiKey){ showStatus("modelOut", "Enter API key first"); return; }
+  const r=await window.exchangeDesktop.testProvider({provider, apiKey, baseUrl:(document.getElementById("baseUrl")).value});
+  showStatus("modelOut", JSON.stringify(r,null,2));
+  if(r?.ok && r?.models?.length){
+    populateModelsForProvider(provider, r.models, false);
+    showStatus("modelOut", `✅ Connected! Fetched ${r.models.length} live models.`);
+  } else {
+    showStatus("modelOut", `❌ ${r?.error || "Failed to fetch models"} - showing fallback`);
+  }
+});
+safeHandler("saveModel", async()=>{
+  const data={ provider:(document.getElementById("provider")).value, model:(document.getElementById("model")).value, apiKey:(document.getElementById("apiKey")).value, baseUrl:(document.getElementById("baseUrl")).value };
+    // Save provider/model/apiKey into the config file (YAML) – use existing saveConfig helper
+    const cfgText = await window.exchangeDesktop.loadConfig();
+    let cfgObj = {};
+    try { cfgObj = YAML.parse(cfgText); } catch(e){ console.error('Failed to parse config YAML',e); }
+    cfgObj.provider = data.provider;
+    cfgObj.model = data.model;
+    cfgObj.apiKey = data.apiKey;
+    cfgObj.baseUrl = data.baseUrl;
+    const newYaml = YAML.stringify(cfgObj);
+    await window.exchangeDesktop.saveConfig(newYaml);
+    showStatus("modelOut", "Saved model config to file");
+
+});
+safeHandler("runDoctor", async()=>{
+  if(!isDesktop) throw new Error("Desktop bridge not available");
+  const cfgText = await window.exchangeDesktop.loadConfig();
+  let cfg = {};
+  try { cfg = YAML.parse(cfgText); } catch(e){ console.error('Failed to parse config YAML', e); }
+  const r=await window.exchangeDesktop.runDoctor({endpoint: cfg.endpoint, insecure: cfg.insecure});
+  const el=document.getElementById("logView"); if(el) el.textContent=JSON.stringify(r,null,2);
+  document.querySelector('[data-tab="logs"]').dispatchEvent(new Event('click'));
+});
+safeHandler("startMcp", async()=>{
+  const r=await window.exchangeDesktop.startMcp();
+  showStatus("modelOut", `MCP started (PID ${r.pid})`);
+});
+document.getElementById("openHealthDetails")?.addEventListener('click', ()=> document.querySelector('[data-tab="health"]')?.dispatchEvent(new Event('click')));
+// Logs streaming
+if(isDesktop && window.exchangeDesktop.onLog){
+  window.exchangeDesktop.onLog((d)=>{ const el=document.getElementById("logView"); if(!el) return; el.textContent+=d; el.scrollTop=el.scrollHeight; });
+}
+document.getElementById("clearLogs")?.addEventListener('click', ()=>{ const el=document.getElementById("logView"); if(el) el.textContent=""; });
+document.getElementById("exportLogs")?.addEventListener('click', ()=>{ const el=document.getElementById("logView"); if(el) navigator.clipboard.writeText(el.textContent||""); });
+document.getElementById("clearPrompt")?.addEventListener('click', ()=>{ const el=document.getElementById("prompt") | null; if(el) el.value=""; });
+document.querySelectorAll("[data-quick]").forEach(b=> b.addEventListener('click', ()=>{ const p=document.getElementById("prompt") | null; if(p) p.value=(b).getAttribute("data-quick")||""; }));
+// Gather output from cards for copy/export
+function getOutputText(){
+  const parts=[];
+  const nameEl=document.getElementById("outName");
+  const emailEl=document.getElementById("outEmail");
+  const dbEl=document.getElementById("outDB");
+  const serverEl=document.getElementById("outServer");
+  const sizeEl=document.getElementById("outSize");
+  const itemsEl=document.getElementById("outItems");
+  const healthEl=document.getElementById("healthText");
+  if(nameEl) parts.push(`Name: ${nameEl.textContent}`);
+  if(emailEl) parts.push(`Email: ${emailEl.textContent}`);
+  if(dbEl) parts.push(`Database: ${dbEl.textContent}`);
+  if(serverEl) parts.push(`Server: ${serverEl.textContent}`);
+  if(sizeEl) parts.push(`Size: ${sizeEl.textContent}`);
+  if(itemsEl) parts.push(`Items: ${itemsEl.textContent}`);
+  if(healthEl) parts.push(`Health: ${healthEl.textContent}`);
+  return parts.join('\n');
+}
+document.getElementById("copyOut")?.addEventListener('click', ()=> navigator.clipboard.writeText(getOutputText()));
+document.getElementById("exportOut")?.addEventListener('click', ()=>{ const blob=new Blob([getOutputText()],{type:"text/markdown"}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download="output.md"; a.click(); });
+document.addEventListener('DOMContentLoaded', async () => {
+  // Auto‑enable Run button when MCP is ready (auto‑started)
+  try {
+    if(!window.exchangeDesktop || !window.exchangeDesktop.isMcpRunning) return;
+    const isRunning = await window.exchangeDesktop.isMcpRunning();
+    const runBtn = document.getElementById('runPrompt');
+    if(isRunning && runBtn) runBtn.disabled = false;
+  } catch(e){ console.error('isMcpRunning check failed', e); }
+});
+
+
+safeHandler("runPrompt", async()=>{
+  const promptEl=document.getElementById("prompt");
+  const statusEl=document.getElementById("execText");
+  const healthEl=document.getElementById("healthPill");
+  if(!promptEl || !statusEl) return;
+  statusEl.textContent="Running…";
+  if(healthEl) healthEl.textContent="Running…";
+  const start=Date.now();
+  const result = await window.exchangeDesktop.askExchange({prompt: promptEl.value});
+  const elapsed = ((Date.now()-start)/1000).toFixed(2);
+  const {name,email,db,server,size,items,health}=result||{};
+  if(name) document.getElementById("outName").textContent=name;
+  if(email) document.getElementById("outEmail").textContent=email;
+  if(db) document.getElementById("outDB").textContent=db;
+  if(server) document.getElementById("outServer").textContent=server;
+  if(size) document.getElementById("outSize").innerHTML=`${size.split(" ")[0]} <span class="text-xs font-normal text-slate-400">GB</span>`;
+  if(items) document.getElementById("outItems").innerHTML=`${items} <span class="text-xs font-normal text-slate-400">items</span>`;
+  if(health) healthEl.textContent=health;
+  statusEl.textContent=`Execution Completed in ${elapsed}s`;
+});
+</script>
+</body>
+</html>
