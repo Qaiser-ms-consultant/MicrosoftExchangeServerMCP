@@ -451,8 +451,8 @@ if(isDesktop && window.exchangeDesktop.onLog){
 }
 document.getElementById("clearLogs")?.addEventListener('click', ()=>{ const el=document.getElementById("logView"); if(el) el.textContent=""; });
 document.getElementById("exportLogs")?.addEventListener('click', ()=>{ const el=document.getElementById("logView"); if(el) navigator.clipboard.writeText(el.textContent||""); });
-document.getElementById("clearPrompt")?.addEventListener('click', ()=>{ const el=document.getElementById("prompt") | null; if(el) el.value=""; });
-document.querySelectorAll("[data-quick]").forEach(b=> b.addEventListener('click', ()=>{ const p=document.getElementById("prompt") | null; if(p) p.value=(b).getAttribute("data-quick")||""; const home=document.querySelector('[data-tab="home"]'); if(home) home.click(); }));
+document.getElementById("clearPrompt")?.addEventListener('click', ()=>{ const el=document.getElementById("prompt"); if(el) el.value=""; });
+document.querySelectorAll("[data-quick]").forEach(b=> b.addEventListener('click', ()=>{ const p=document.getElementById("prompt"); if(p){ p.value=(b).getAttribute("data-quick")||""; p.focus(); } const home=document.querySelector('[data-tab="home"]'); if(home) home.click(); }));
 // Gather generic output text for copy/export
 function getOutputText(){
   const el=document.getElementById("outResult");
