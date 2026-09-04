@@ -149,6 +149,14 @@ tailwind.config = {
 </div>
 <pre class="text-xs font-mono text-slate-200 whitespace-pre-wrap break-words max-h-[60vh] overflow-y-auto" id="outResult">Run a prompt to see results here.</pre>
 </div>
+<div class="p-4 rounded-lg bg-[#111726] border border-[#1d2a42]" id="jsonCard" style="display:none">
+<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Raw MCP JSON</h3>
+<pre class="text-[11px] font-mono text-slate-300 whitespace-pre-wrap break-words max-h-[60vh] overflow-y-auto" id="jsonPre">Run a prompt to see raw MCP JSON here.</pre>
+</div>
+<div class="p-4 rounded-lg bg-[#111726] border border-[#1d2a42]" id="psCard" style="display:none">
+<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">PowerShell Trace (PS-Remoting)</h3>
+<p class="text-xs text-slate-400">Per-query PowerShell capture isn't wired yet — commands execute inside the MCP server process. The Raw MCP JSON tab holds the complete result for this query.</p>
+</div>
 </div>
 <div class="px-4 py-2 bg-[#0c111e] border-t border-[#1b253b] flex items-center justify-between text-[11px] text-slate-500 font-mono flex-shrink-0">
 <div class="flex items-center gap-3"><span>PowerShell Module: Microsoft.Exchange.Management.v15</span><span>•</span><span>Protocol: Kerberos WinRM</span></div>
@@ -190,6 +198,19 @@ if(!isDesktop){
   restoreModelConfig();
 
 }
+// Output tabs — Summary / Raw MCP JSON / PowerShell Trace
+$$('[data-output-tab]').forEach(function(b){ b.addEventListener('click',function(){
+  $$('[data-output-tab]').forEach(function(x){ x.classList.remove('text-blue-400','font-medium','border-b-2','border-blue-500'); if(!x.classList.contains('text-slate-400')) x.classList.add('text-slate-400'); });
+  b.classList.remove('text-slate-400'); b.classList.add('text-blue-400','font-medium','border-b-2','border-blue-500');
+  ['resultCard','jsonCard','psCard'].forEach(function(id){ const el=document.getElementById(id); if(el) el.style.display='none'; });
+  const map={summary:'resultCard',json:'jsonCard',ps:'psCard'};
+  const show=document.getElementById(map[b.getAttribute('data-output-tab')]);
+  if(show) show.style.display='';
+  if(b.getAttribute('data-output-tab')==='json'){
+    const j=document.getElementById('jsonPre');
+    if(j) j.textContent=(window.__lastRaw===undefined)?'Run a prompt to see raw MCP JSON here.':((typeof window.__lastRaw==="string")?window.__lastRaw:JSON.stringify(window.__lastRaw,null,2));
+  }
+}); });
 // Tabs — use data-tab / data-view
 $$('[data-tab]').forEach(function(b){ b.addEventListener('click',function(){
   $$('[data-tab]').forEach(function(x){ x.setAttribute('aria-selected','false'); x.classList.remove('bg-gradient-to-r','from-blue-600','to-indigo-600','text-white'); x.classList.add('text-slate-400'); });
@@ -484,6 +505,7 @@ safeHandler("runPrompt", async()=>{
   const elapsed = ((Date.now()-start)/1000).toFixed(2);
   const data = (res && res.result !== undefined) ? res.result : res;
   const tool = (res && res.tool) || "";
+  window.__lastRaw = data;
   if(res && res.needsConfirm){
     window.__pendingWrite = { tool, args: res.args || (data && data.parameters) || {} };
     const out2=document.getElementById("outResult");
@@ -507,6 +529,7 @@ document.getElementById("outResult")?.addEventListener("click", async (e)=>{
     const pEl=document.getElementById("prompt");
     const res2 = await window.exchangeDesktop.askExchange({prompt: pEl?pEl.value:"", confirmed: true, tool: pw.tool, args: pw.args});
     const data2 = (res2 && res2.result !== undefined) ? res2.result : res2;
+    window.__lastRaw = data2;
     renderResult((res2 && res2.tool)||pw.tool, data2);
     const s=document.getElementById("outStatus"); if(s) s.textContent="Completed";
     window.__pendingWrite=null;
