@@ -461,6 +461,7 @@ fn route_query(prompt: &str) -> Option<(String, serde_json::Value, bool)> {
     if has_any(&p, &["queue", "delayed", "stuck", "backlog", "mailflow", "mail flow", "pending mail"]) { return Some(("exchange_get_queue".into(), serde_json::json!({}), false)); }
     if has_any(&p, &["health", "healthy", "unhealthy"]) { return Some(("exchange_get_health_report".into(), serde_json::json!({}), false)); }
     if has_any(&p, &["database", "databases", "db01", "db0"]) && has_any(&p, &["list", "number", "count", "how many", "show", "all"]) { return Some(("database.list".into(), serde_json::json!({}), false)); }
+    if p.contains("databases") && !has_any(&p, &["dismount", "mount", "backup", "whitespace", "growth", "repair"]) { return Some(("database.list".into(), serde_json::json!({}), false)); }
     if p.contains("disk") { return Some(("server.get_disk_space".into(), serde_json::json!({}), false)); }
     if has_any(&p, &["whitespace", "growth", "storage", "size of database", "forecast", "capacity"]) { return Some(("database.get_whitespace_and_growth".into(), serde_json::json!({}), false)); }
     if p.contains("backup") { return Some(("database.get_backup_status".into(), serde_json::json!({}), false)); }

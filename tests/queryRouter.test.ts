@@ -47,6 +47,12 @@ describe("routeQuery", () => {
   it("routes database count prompts", () => {
     expect(routeQuery("number of mailbox databases")).toEqual({ tool: "database.list", args: {}, write: false });
   });
+  it("routes bare databases questions", () => {
+    expect(routeQuery("mailbox databases?")).toEqual({ tool: "database.list", args: {}, write: false });
+  });
+  it("still routes dismount as write, not list", () => {
+    expect(routeQuery("dismount database DB01")).toEqual({ tool: "database.dismount", args: { identity: "DB01" }, write: true });
+  });
   it("routes capacity forecast prompts", () => {
     expect(routeQuery("capacity forecast")).toEqual({ tool: "database.get_whitespace_and_growth", args: {}, write: false });
   });

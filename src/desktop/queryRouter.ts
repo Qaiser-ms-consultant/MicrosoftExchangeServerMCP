@@ -28,6 +28,7 @@ export function routeQuery(prompt: string): Route {
   if (has("queue", "delayed", "stuck", "backlog", "mailflow", "mail flow", "pending mail") && !has("retry", "suspend")) return { tool: "exchange_get_queue", args: {}, write: false };
   if (has("health", "healthy", "unhealthy")) return { tool: "exchange_get_health_report", args: {}, write: false };
   if (has("database", "databases", "db01", "db0") && has("list", "number", "count", "how many", "show", "all")) return { tool: "database.list", args: {}, write: false };
+  if (has("databases") && !has("dismount", "mount", "backup", "whitespace", "growth", "repair")) return { tool: "database.list", args: {}, write: false };
   if (has("disk")) return { tool: "server.get_disk_space", args: {}, write: false };
   if (has("whitespace", "growth", "storage", "size of database", "forecast", "capacity")) return { tool: "database.get_whitespace_and_growth", args: {}, write: false };
   if (has("backup")) return { tool: "database.get_backup_status", args: {}, write: false };
