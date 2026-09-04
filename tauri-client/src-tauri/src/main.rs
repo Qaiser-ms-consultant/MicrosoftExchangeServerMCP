@@ -460,12 +460,12 @@ fn route_query(prompt: &str) -> Option<(String, serde_json::Value, bool)> {
     if has_any(&p, &["version", "cumulative", " cu", "build", "patch"]) { return Some(("report.exchange_version_and_cu".into(), serde_json::json!({}), false)); }
     if has_any(&p, &["queue", "delayed", "stuck", "backlog", "mailflow", "mail flow", "pending mail"]) { return Some(("exchange_get_queue".into(), serde_json::json!({}), false)); }
     if has_any(&p, &["health", "healthy", "unhealthy"]) { return Some(("exchange_get_health_report".into(), serde_json::json!({}), false)); }
-    if has_any(&p, &["database", "databases", "db01", "db0"]) && has_any(&p, &["list"]) { return Some(("database.list".into(), serde_json::json!({}), false)); }
-    if has_any(&p, &["whitespace", "growth", "storage", "disk usage", "size of database"]) { return Some(("database.get_whitespace_and_growth".into(), serde_json::json!({}), false)); }
+    if has_any(&p, &["database", "databases", "db01", "db0"]) && has_any(&p, &["list", "number", "count", "how many", "show", "all"]) { return Some(("database.list".into(), serde_json::json!({}), false)); }
+    if p.contains("disk") { return Some(("server.get_disk_space".into(), serde_json::json!({}), false)); }
+    if has_any(&p, &["whitespace", "growth", "storage", "size of database", "forecast", "capacity"]) { return Some(("database.get_whitespace_and_growth".into(), serde_json::json!({}), false)); }
     if p.contains("backup") { return Some(("database.get_backup_status".into(), serde_json::json!({}), false)); }
     if p.contains("dag") { return Some(("dag.list".into(), serde_json::json!({}), false)); }
     if has_any(&p, &["cert", "expir"]) { return Some(("exchange_get_exchange_certificate".into(), serde_json::json!({}), false)); }
-    if has_any(&p, &["disk space", "disk free"]) { return Some(("server.get_disk_space".into(), serde_json::json!({}), false)); }
     if has_any(&p, &["uptime", "reboot", "last boot"]) { return Some(("server.get_uptime".into(), serde_json::json!({}), false)); }
     if p.contains("service") && has_any(&p, &["status", "running"]) { return Some(("server.get_services_status".into(), serde_json::json!({}), false)); }
     if p.contains("connector") { return Some(("exchange_list_send_connectors".into(), serde_json::json!({}), false)); }
@@ -520,6 +520,7 @@ fn route_query(prompt: &str) -> Option<(String, serde_json::Value, bool)> {
             return Some(("mailbox.add_permission".into(), serde_json::Value::Object(m), true));
         }
     }
+    if has_any(&p, &["mailbox", "mailboxes"]) && has_any(&p, &["list", "number", "count", "how many", "show", "all"]) { return Some(("exchange_list_mailboxes".into(), serde_json::json!({}), false)); }
     if let Some(e) = email { return Some(("ai.tell_me_everything".into(), obj(vec![("identity", e)]), false)); }
     None
 }

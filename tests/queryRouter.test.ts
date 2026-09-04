@@ -38,6 +38,21 @@ describe("routeQuery", () => {
   it("routes disk space prompts", () => {
     expect(routeQuery("disk space on server")).toEqual({ tool: "server.get_disk_space", args: {}, write: false });
   });
+  it("routes short disk size prompts", () => {
+    expect(routeQuery("disk size")).toEqual({ tool: "server.get_disk_space", args: {}, write: false });
+  });
+  it("routes disk usage prompts to disk space", () => {
+    expect(routeQuery("disk usage")).toEqual({ tool: "server.get_disk_space", args: {}, write: false });
+  });
+  it("routes database count prompts", () => {
+    expect(routeQuery("number of mailbox databases")).toEqual({ tool: "database.list", args: {}, write: false });
+  });
+  it("routes capacity forecast prompts", () => {
+    expect(routeQuery("capacity forecast")).toEqual({ tool: "database.get_whitespace_and_growth", args: {}, write: false });
+  });
+  it("routes mailbox count prompts", () => {
+    expect(routeQuery("how many mailboxes")).toEqual({ tool: "exchange_list_mailboxes", args: {}, write: false });
+  });
   it("routes uptime prompts", () => {
     expect(routeQuery("server uptime")).toEqual({ tool: "server.get_uptime", args: {}, write: false });
   });

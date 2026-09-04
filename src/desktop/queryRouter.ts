@@ -27,12 +27,12 @@ export function routeQuery(prompt: string): Route {
   if (has("version", "cumulative", " cu", "build", "patch")) return { tool: "report.exchange_version_and_cu", args: {}, write: false };
   if (has("queue", "delayed", "stuck", "backlog", "mailflow", "mail flow", "pending mail") && !has("retry", "suspend")) return { tool: "exchange_get_queue", args: {}, write: false };
   if (has("health", "healthy", "unhealthy")) return { tool: "exchange_get_health_report", args: {}, write: false };
-  if (has("database", "databases", "db01", "db0") && has("list")) return { tool: "database.list", args: {}, write: false };
-  if (has("whitespace", "growth", "storage", "disk usage", "size of database")) return { tool: "database.get_whitespace_and_growth", args: {}, write: false };
+  if (has("database", "databases", "db01", "db0") && has("list", "number", "count", "how many", "show", "all")) return { tool: "database.list", args: {}, write: false };
+  if (has("disk")) return { tool: "server.get_disk_space", args: {}, write: false };
+  if (has("whitespace", "growth", "storage", "size of database", "forecast", "capacity")) return { tool: "database.get_whitespace_and_growth", args: {}, write: false };
   if (has("backup")) return { tool: "database.get_backup_status", args: {}, write: false };
   if (has("dag")) return { tool: "dag.list", args: {}, write: false };
   if (has("cert", "expir")) return { tool: "exchange_get_exchange_certificate", args: {}, write: false };
-  if (has("disk space", "disk free")) return { tool: "server.get_disk_space", args: {}, write: false };
   if (has("uptime", "reboot", "last boot")) return { tool: "server.get_uptime", args: {}, write: false };
   if (has("service") && has("status", "running")) return { tool: "server.get_services_status", args: {}, write: false };
   if (has("connector")) return { tool: "exchange_list_send_connectors", args: {}, write: false };
@@ -64,6 +64,7 @@ export function routeQuery(prompt: string): Route {
     const rights = /sendas/i.test(prompt) ? "SendAs" : "FullAccess";
     return { tool: "mailbox.add_permission", args: { identity: email, ...(m ? { user: m[1] } : {}), accessRights: rights }, write: true };
   }
+  if (has("mailbox", "mailboxes") && has("list", "number", "count", "how many", "show", "all")) return { tool: "exchange_list_mailboxes", args: {}, write: false };
   if (email) return { tool: "ai.tell_me_everything", args: { identity: email }, write: false };
   return { help: true };
 }
