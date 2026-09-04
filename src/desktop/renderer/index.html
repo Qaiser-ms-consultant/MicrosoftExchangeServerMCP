@@ -174,7 +174,11 @@ tailwind.config = {
 <div class="bg-[#121829] border border-[#1f2d48] rounded-xl p-4"><h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Servers</h3><p class="text-xs text-slate-500 mt-2">Version and CU via report.exchange_version_and_cu</p></div>
 <div class="bg-[#121829] border border-[#1f2d48] rounded-xl p-4"><h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Transport</h3><p class="text-xs text-slate-500 mt-2">Queue: report.queue_report</p></div>
 </div>
-<div class="bg-[#121829] border border-[#1f2d48] rounded-xl p-4 mt-4 flex items-center justify-between"><span class="text-xs font-bold uppercase tracking-wider text-slate-400">Quick checks</span><div class="flex gap-2"><button class="px-3 py-1.5 rounded-md bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs" id="runDoctor">Run doctor (PowerShell + EWS)</button><button class="px-3 py-1.5 rounded-md bg-[#141d30] border border-[#22304d] text-xs text-slate-300" id="openHealthDetails">View details</button></div></div>
+<div class="bg-[#121829] border border-[#1f2d48] rounded-xl p-4 mt-4 flex items-center justify-between"><span class="text-xs font-bold uppercase tracking-wider text-slate-400">Quick Diagnostic Prompts</span><div class="flex gap-2"><button class="px-3 py-1.5 rounded-md bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs" id="runDoctor">Run doctor (PowerShell + EWS)</button><button class="px-3 py-1.5 rounded-md bg-[#141d30] border border-[#22304d] text-xs text-slate-300" id="openHealthDetails">View details</button></div></div>
+<div class="bg-[#121829] border border-[#1f2d48] rounded-xl p-4 mt-4" id="quickPrompts">
+<div class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5">Quick Diagnostic Prompts</div>
+<div class="flex flex-wrap gap-2" id="quickPromptButtons"></div>
+</div>
 </section>
 
 <!-- HELPING PROMPTS (hidden by default, shown via tab; click inserts into prompt box) -->
@@ -579,6 +583,40 @@ document.getElementById("outResult")?.addEventListener("click", async (e)=>{
     return;
   }
 });
+// Quick Diagnostic Prompts rotation (8 random from Helping Prompts, rotates every 2 hours)
+(function initQuickPrompts(){
+  const container = document.getElementById("quickPromptButtons");
+  if(!container) return;
+  // Collect all quick prompts from the Helping Prompts section
+  const allPrompts = [];
+  document.querySelectorAll('[data-view="prompts"] [data-quick]').forEach(btn => {
+    const prompt = btn.getAttribute("data-quick");
+    const label = btn.textContent.trim();
+    if(prompt && label) allPrompts.push({ prompt, label });
+  });
+  function shuffle(array){
+    for(let i=array.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [array[i],array[j]]=[array[j],array[i]]; }
+    return array;
+  }
+  function renderQuickPrompts(){
+    if(!container) return;
+    const picked = shuffle([...allPrompts]).slice(0, 8);
+    container.innerHTML = picked.map(p => `<button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="${p.prompt}">${p.label}</button>`).join("");
+    // Re-attach click handlers for the new buttons
+    container.querySelectorAll("[data-quick]").forEach(b => {
+      b.addEventListener("click", () => {
+        const p = document.getElementById("prompt");
+        if(p){ p.value = b.getAttribute("data-quick") || ""; p.focus(); }
+        const home = document.querySelector('[data-tab="home"]');
+        if(home) home.click();
+      });
+    });
+  }
+  // Initial render
+  if(allPrompts.length) renderQuickPrompts();
+  // Rotate every 2 hours
+  setInterval(() => { if(allPrompts.length) renderQuickPrompts(); }, 2 * 60 * 60 * 1000);
+})();
 </script>
 </body>
 </html>
