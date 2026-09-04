@@ -379,9 +379,12 @@ document.getElementById("copyOut")?.addEventListener('click', ()=> navigator.cli
 document.getElementById("exportOut")?.addEventListener('click', ()=>{ const blob=new Blob([getOutputText()],{type:"text/markdown"}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download="output.md"; a.click(); });
 document.addEventListener('DOMContentLoaded', async () => {
   // Auto‑enable Run button when MCP is ready (auto‑started)
-  const isRunning = await window.exchangeDesktop.isMcpRunning?.();
-  const runBtn = document.getElementById('runPrompt');
-  if(isRunning && runBtn) runBtn.disabled = false;
+  try {
+    if(!window.exchangeDesktop || !window.exchangeDesktop.isMcpRunning) return;
+    const isRunning = await window.exchangeDesktop.isMcpRunning();
+    const runBtn = document.getElementById('runPrompt');
+    if(isRunning && runBtn) runBtn.disabled = false;
+  } catch(e){ console.error('isMcpRunning check failed', e); }
 });
 
 
@@ -404,7 +407,7 @@ safeHandler("runPrompt", async()=>{
   if(items) document.getElementById("outItems").innerHTML=`${items} <span class="text-xs font-normal text-slate-400">items</span>`;
   if(health) healthEl.textContent=health;
   statusEl.textContent=`Execution Completed in ${elapsed}s`;
-});});
+});
 </script>
 </body>
 </html>
