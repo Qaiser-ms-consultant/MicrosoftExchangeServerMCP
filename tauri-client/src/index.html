@@ -366,27 +366,90 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 
+function esc(s){ return String(s ?? "").replace(/[&<>"']/g, (c)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function pill(text, ok){ return `<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${ok===true?"bg-emerald-500/10 text-emerald-400 border border-emerald-500/30":ok===false?"bg-red-500/10 text-red-400 border border-red-500/30":"bg-slate-500/10 text-slate-300 border border-slate-500/30"}">${esc(text)}</span>`; }
+function kvTable(obj){
+  if(obj===null||obj===undefined) return `<span class="text-slate-500">n/a</span>`;
+  if(Array.isArray(obj)){
+    if(!obj.length) return `<span class="text-slate-500">empty</span>`;
+    if(obj.every((x)=>x!==null&&typeof x==="object"&&!Array.isArray(x))){
+      const cols=[...new Set(obj.flatMap((x)=>Object.keys(x)))].slice(0,6);
+      return `<table class="w-full text-xs"><thead><tr>${cols.map((c)=>`<th class="text-left text-slate-400 font-medium pb-1 pr-3">${esc(c)}</th>`).join("")}</tr></thead><tbody>${obj.slice(0,50).map((r)=>`<tr class="border-t border-[#1a253a]">${cols.map((c)=>`<td class="py-1 pr-3 font-mono text-slate-200">${esc(typeof r[c]==="object"?JSON.stringify(r[c]):r[c])}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+    }
+    return `<ul class="list-disc list-inside space-y-1 text-xs text-slate-200">${obj.slice(0,50).map((x)=>`<li class="font-mono">${esc(typeof x==="object"?JSON.stringify(x):x)}</li>`).join("")}</ul>`;
+  }
+  if(typeof obj==="object"){
+    return `<dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">${Object.entries(obj).slice(0,60).map(([k,v])=>`<dt class="text-slate-400">${esc(k)}</dt><dd class="font-mono text-slate-200 break-words">${esc(typeof v==="object"?JSON.stringify(v):v)}</dd>`).join("")}</dl>`;
+  }
+  return `<span class="font-mono text-slate-200">${esc(obj)}</span>`;
+}
+function rawBlock(data){
+  return `<details class="mt-3"><summary class="text-[11px] text-slate-500 cursor-pointer hover:text-slate-300">Raw JSON</summary><pre class="mt-1 p-2 bg-[#0b0f19] rounded border border-[#1a253a] text-[11px] font-mono text-slate-300 whitespace-pre-wrap break-words max-h-64 overflow-y-auto"></pre></details>`;
+}
+function setRaw(data){
+  const pre=document.querySelector("#outResult details pre");
+  if(pre) pre.textContent=(typeof data==="string")?data:JSON.stringify(data,null,2);
+}
+function renderResult(tool, data){
+  const out=document.getElementById("outResult");
+  if(!out) return;
+  let html="";
+  if(tool==="help"&&data&&data.examples){
+    html=`<p class="text-xs text-slate-300 mb-2">${esc(data.message||"Try one of these:")}</p><ul class="list-disc list-inside space-y-1 text-xs text-cyan-300 font-mono">${data.examples.map((e)=>`<li><button data-example="${esc(e)}" class="hover:underline">${esc(e)}</button></li>`).join("")}</ul>`;
+  } else if(data&&typeof data==="object"&&data.executiveSummary&&data.findings){
+    html=`<div class="flex items-center gap-2 mb-2"><span class="text-sm font-semibold text-white">${esc(data.executiveSummary.health||"Report")}</span></div><p class="text-xs text-slate-300 mb-3">${esc(data.executiveSummary.summary||"")}</p><h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Findings</h4><ul class="space-y-2 mb-3">${(data.findings||[]).map((f)=>`<li class="p-2 bg-[#0b0f19] rounded border border-[#1a253a] text-xs"><span class="mr-1">${esc(f.icon||"")}</span><strong class="text-slate-100">${esc(f.title||"")}</strong><span class="text-slate-300"> — ${esc(f.detail||"")}</span></li>`).join("")}</ul>${data.recommendedActions?`<h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Recommended actions</h4><ul class="list-disc list-inside text-xs text-slate-300 space-y-1">${data.recommendedActions.map((r)=>`<li>${esc(r)}</li>`).join("")}</ul>`:""}`;
+  } else {
+    html=kvTable(data);
+  }
+  out.innerHTML=html+rawBlock();
+  setRaw(data);
+}
 safeHandler("runPrompt", async()=>{
   const promptEl=document.getElementById("prompt");
   const statusEl=document.getElementById("execText");
   const healthEl=document.getElementById("healthPill");
-  const outEl=document.getElementById("outResult");
+  const out=document.getElementById("outResult");
   const statusBadge=document.getElementById("outStatus");
   if(!promptEl || !statusEl) return;
   statusEl.textContent="Running…";
   if(healthEl) healthEl.textContent="Running…";
-  if(outEl) outEl.textContent="Running…";
+  if(out) out.textContent="Running…";
   if(statusBadge) statusBadge.textContent="Running…";
   const start=Date.now();
-  const result = await window.exchangeDesktop.askExchange({prompt: promptEl.value});
+  const res = await window.exchangeDesktop.askExchange({prompt: promptEl.value});
   const elapsed = ((Date.now()-start)/1000).toFixed(2);
-  // Generic output: render the full result (any shape) as readable text
-  const payload = (result && result.result) ? result.result : result;
-  if(outEl) outEl.textContent = (typeof payload === "string") ? payload : JSON.stringify(payload, null, 2);
-  const health = (payload && (payload.health || (payload.executiveSummary && payload.executiveSummary.health))) || "";
-  if(healthEl) healthEl.textContent = health || "Done";
-  if(statusBadge) statusBadge.textContent = "Completed";
+  const data = (res && res.result !== undefined) ? res.result : res;
+  const tool = (res && res.tool) || "";
+  if(res && res.needsConfirm){
+    window.__pendingWrite = { tool, args: res.args || (data && data.parameters) || {} };
+    const out2=document.getElementById("outResult");
+    if(out2) out2.innerHTML=`<div class="p-3 rounded border border-amber-500/40 bg-amber-500/5 text-xs"><p class="text-amber-300 font-semibold mb-1">Confirm action: ${esc(tool)}</p>${kvTable(data.parameters||{})}<div class="flex gap-2 mt-3"><button id="confirmWrite" class="px-3 py-1.5 rounded-md bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs">Confirm</button><button id="cancelWrite" class="px-3 py-1.5 rounded-md bg-[#141d30] border border-[#22304d] text-xs text-slate-300">Cancel</button></div></div>`;
+    if(statusBadge) statusBadge.textContent="Needs confirm";
+  } else if(res && res.needsInfo){
+    renderResult("info", { message: (data&&data.message)||"More info needed", missing: res.missing||[] });
+    if(statusBadge) statusBadge.textContent="Needs info";
+  } else {
+    renderResult(tool, data);
+    if(statusBadge) statusBadge.textContent="Completed";
+  }
+  if(healthEl) healthEl.textContent="Done";
   statusEl.textContent=`Execution Completed in ${elapsed}s`;
+});
+document.getElementById("outResult")?.addEventListener("click", async (e)=>{
+  const ex=e.target.closest("[data-example]");
+  if(ex){ const p=document.getElementById("prompt"); if(p){ p.value=ex.getAttribute("data-example")||""; } document.getElementById("runPrompt")?.click(); return; }
+  if(e.target.closest("#cancelWrite")){ const o=document.getElementById("outResult"); if(o) o.textContent="Cancelled."; const s=document.getElementById("outStatus"); if(s) s.textContent="Idle"; return; }
+  if(e.target.closest("#confirmWrite")){
+    const pw = window.__pendingWrite;
+    if(!pw) return;
+    const pEl=document.getElementById("prompt");
+    const res2 = await window.exchangeDesktop.askExchange({prompt: pEl?pEl.value:"", confirmed: true, tool: pw.tool, args: pw.args});
+    const data2 = (res2 && res2.result !== undefined) ? res2.result : res2;
+    renderResult((res2 && res2.tool)||pw.tool, data2);
+    const s=document.getElementById("outStatus"); if(s) s.textContent="Completed";
+    window.__pendingWrite=null;
+    return;
+  }
 });
 </script>
 </body>

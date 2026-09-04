@@ -60,6 +60,10 @@ const snake = (camel) => camel.replace(/([A-Z])/g, (c) => "_" + c.toLowerCase())
 const missing = [...used].filter((m) => !rs.includes(`fn ${snake(m)}`));
 if (missing.length) fail(`Rust commands missing for: ${missing.join(", ")}`);
 console.log(`bridge coverage OK (${[...used].join(", ")})`);
+for (const needle of ['id="outResult"', "renderResult", "needsConfirm", "data-example", "Raw JSON"]) {
+  if (!html.includes(needle)) fail(`missing renderer piece: ${needle}`);
+}
+console.log("friendly-card pieces OK");
 
 // Tauri command registration check
 if (!rs.includes("invoke_handler") || !rs.includes("ask_exchange")) {
