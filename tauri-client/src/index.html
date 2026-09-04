@@ -319,7 +319,23 @@ async function restoreModelConfig(){
     }
     if(cfg.apiKey){ const k=document.getElementById("apiKey"); if(k) k.value=cfg.apiKey; }
     if(cfg.baseUrl){ const b=document.getElementById("baseUrl"); if(b) b.value=cfg.baseUrl; }
-    if(cfg.provider||cfg.model||cfg.apiKey||cfg.baseUrl) showStatus("modelOut", "Restored saved model config from file");
+    if(cfg.provider||cfg.model||cfg.apiKey||cfg.baseUrl){
+      showStatus("modelOut", "Restored saved model config from file");
+      // Auto-test the restored connection and refresh the live model list
+      if(cfg.apiKey){
+        showStatus("modelOut", "Restored saved config — testing connection…");
+        const ok = await testAndPopulateModels();
+        if(ok && cfg.model){
+          const msel=document.getElementById("model");
+          if(msel){
+            if(![...msel.options].some((o)=>o.value===cfg.model)){
+              const o=document.createElement('option'); o.value=cfg.model; o.textContent=cfg.model; msel.appendChild(o);
+            }
+            msel.value=cfg.model;
+          }
+        }
+      }
+    }
   }catch(e){ console.error('restoreModelConfig failed', e); }
 }
 // Provider change: always show fallback models first, no API key required
@@ -343,20 +359,21 @@ function safeHandler(id, fn, outIdOverride){
     }finally{ btn.textContent=origText||""; btn.disabled = false; }
 });
 }
-safeHandler("testModel", async()=>{
+async function testAndPopulateModels(){
   if(!isDesktop) throw new Error("Desktop bridge not available — run via npm run desktop");
   const provider=(document.getElementById("provider")).value;
   const apiKey=(document.getElementById("apiKey")).value?.trim();
-  if(!apiKey){ showStatus("modelOut", "Enter API key first"); return; }
+  if(!apiKey){ showStatus("modelOut", "Enter API key first"); return false; }
   const r=await window.exchangeDesktop.testProvider({provider, apiKey, baseUrl:(document.getElementById("baseUrl")).value});
-  showStatus("modelOut", JSON.stringify(r,null,2));
   if(r?.ok && r?.models?.length){
     populateModelsForProvider(provider, r.models, false);
     showStatus("modelOut", `✅ Connected! Fetched ${r.models.length} live models.`);
-  } else {
-    showStatus("modelOut", `❌ ${r?.error || "Failed to fetch models"} - showing fallback`);
+    return true;
   }
-});
+  showStatus("modelOut", `❌ ${r?.error || "Failed to fetch models"} - showing fallback`);
+  return false;
+}
+safeHandler("testModel", testAndPopulateModels);
 safeHandler("saveModel", async()=>{
   const data={ provider:(document.getElementById("provider")).value, model:(document.getElementById("model")).value, apiKey:(document.getElementById("apiKey")).value, baseUrl:(document.getElementById("baseUrl")).value };
     // Save provider/model/apiKey into the config file (YAML) – use existing saveConfig helper
