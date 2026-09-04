@@ -119,4 +119,376 @@ describe("routeQuery", () => {
   it("returns help when nothing matches", () => {
     expect(routeQuery("hello there")).toEqual({ help: true });
   });
+
+  // AI insight reports
+  it("routes daily report prompts", () => {
+    expect(routeQuery("daily exchange report")).toEqual({ tool: "ai.daily_report", args: {}, write: false });
+  });
+  it("routes things you should know prompts", () => {
+    expect(routeQuery("things i should know")).toEqual({ tool: "ai.things_you_should_know", args: {}, write: false });
+  });
+  it("routes management report prompts", () => {
+    expect(routeQuery("management report")).toEqual({ tool: "ai.management_report", args: {}, write: false });
+  });
+  it("routes anomaly detection prompts", () => {
+    expect(routeQuery("anomaly detection")).toEqual({ tool: "ai.anomaly_detection", args: {}, write: false });
+  });
+  it("routes cleanup recommendation prompts", () => {
+    expect(routeQuery("cleanup recommendations")).toEqual({ tool: "ai.cleanup_recommendation", args: {}, write: false });
+  });
+  it("routes migration prioritization prompts", () => {
+    expect(routeQuery("migration batches in what order")).toEqual({ tool: "ai.migration_prioritization", args: {}, write: false });
+  });
+  it("routes migration ETA prompts", () => {
+    expect(routeQuery("migration ETA")).toEqual({ tool: "ai.migration_eta", args: {}, write: false });
+  });
+  it("routes migration readiness prompts", () => {
+    expect(routeQuery("migration readiness")).toEqual({ tool: "ai.migration_advisor", args: {}, write: false });
+  });
+  it("routes what-if analysis prompts", () => {
+    const r = routeQuery("what if i move 500 mailboxes from DB01 to DB05?");
+    expect(r).toEqual({ tool: "ai.change_impact_report", args: { change: "what if i move 500 mailboxes from DB01 to DB05?" }, write: false });
+  });
+  it("routes incident report prompts", () => {
+    const r = routeQuery("outage last night");
+    expect(r).toEqual({ tool: "ai.incident_report", args: { incident: "outage last night" }, write: false });
+  });
+  it("routes permission risk report prompts", () => {
+    expect(routeQuery("permission risk report")).toEqual({ tool: "ai.permission_risk_report", args: {}, write: false });
+  });
+  it("routes security risk report prompts", () => {
+    expect(routeQuery("security risk report")).toEqual({ tool: "ai.security_risk_report", args: {}, write: false });
+  });
+  it("routes compromised account detection prompts", () => {
+    expect(routeQuery("compromised accounts")).toEqual({ tool: "ai.compromised_account_detection", args: {}, write: false });
+  });
+  it("routes mail flow intelligence prompts", () => {
+    expect(routeQuery("who is spamming")).toEqual({ tool: "ai.mail_flow_intelligence", args: {}, write: false });
+  });
+  it("routes bounce rate stats prompts", () => {
+    expect(routeQuery("bounce rate stats")).toEqual({ tool: "ai.mail_flow_intelligence", args: {}, write: false });
+  });
+  it("routes config risk prompts", () => {
+    expect(routeQuery("config hardening risks")).toEqual({ tool: "ai.configuration_risk", args: {}, write: false });
+  });
+  it("routes root cause analysis prompts", () => {
+    expect(routeQuery("root cause of delayed mail")).toEqual({ tool: "ai.root_cause_analysis", args: {}, write: false });
+  });
+  it("routes mailbox size report prompts", () => {
+    expect(routeQuery("mailbox size report")).toEqual({ tool: "report.generate_mailbox_size_report", args: {}, write: false });
+  });
+  it("routes growth trend prompts", () => {
+    expect(routeQuery("growth trend")).toEqual({ tool: "report.generate_database_growth_trend", args: {}, write: false });
+  });
+  it("routes transport queue report prompts", () => {
+    expect(routeQuery("transport queue report")).toEqual({ tool: "report.generate_transport_queue_report", args: {}, write: false });
+  });
+  it("routes archive report prompts", () => {
+    expect(routeQuery("archive report")).toEqual({ tool: "report.generate_archive_report", args: {}, write: false });
+  });
+  it("routes inactive mailbox report prompts", () => {
+    expect(routeQuery("inactive mailbox report")).toEqual({ tool: "report.generate_inactive_mailbox_report", args: {}, write: false });
+  });
+  it("routes mobile device report prompts", () => {
+    expect(routeQuery("mobile device report")).toEqual({ tool: "report.generate_mobile_device_report", args: {}, write: false });
+  });
+  it("routes oof report prompts", () => {
+    expect(routeQuery("oof report")).toEqual({ tool: "report.generate_oof_report", args: {}, write: false });
+  });
+  it("routes dag report prompts", () => {
+    expect(routeQuery("dag report")).toEqual({ tool: "report.generate_dag_report", args: {}, write: false });
+  });
+  it("routes hold report prompts", () => {
+    expect(routeQuery("hold report")).toEqual({ tool: "report.generate_hold_report", args: {}, write: false });
+  });
+  it("routes full summary prompts", () => {
+    expect(routeQuery("full exchange summary")).toEqual({ tool: "report.generate_full_summary", args: {}, write: false });
+  });
+  it("routes build compliance prompts", () => {
+    expect(routeQuery("build compliance")).toEqual({ tool: "report.exchange_build_compliance", args: {}, write: false });
+  });
+  it("routes server role report prompts", () => {
+    expect(routeQuery("server role report")).toEqual({ tool: "report.server_role_report", args: {}, write: false });
+  });
+  it("routes ad site mapping prompts", () => {
+    expect(routeQuery("ad site mapping")).toEqual({ tool: "report.ad_site_exchange_mapping", args: {}, write: false });
+  });
+  it("routes dependency check prompts", () => {
+    expect(routeQuery("dependency check")).toEqual({ tool: "report.exchange_dependency", args: {}, write: false });
+  });
+  it("routes infrastructure summary prompts", () => {
+    expect(routeQuery("infrastructure summary")).toEqual({ tool: "report.exchange_infrastructure_summary", args: {}, write: false });
+  });
+  it("routes organization config prompts", () => {
+    expect(routeQuery("organization config")).toEqual({ tool: "organization.get_config", args: {}, write: false });
+  });
+  it("routes mail contacts prompts", () => {
+    expect(routeQuery("list mail contacts")).toEqual({ tool: "exchange_list_mail_contacts", args: {}, write: false });
+  });
+  it("routes mail users prompts", () => {
+    expect(routeQuery("list mail users")).toEqual({ tool: "exchange_list_mail_users", args: {}, write: false });
+  });
+  it("routes dynamic distribution groups prompts", () => {
+    expect(routeQuery("dynamic distribution groups")).toEqual({ tool: "exchange_list_dynamic_distribution_groups", args: {}, write: false });
+  });
+  it("routes distribution group prompts", () => {
+    expect(routeQuery("list distribution groups")).toEqual({ tool: "exchange_list_distribution_groups", args: {}, write: false });
+  });
+  it("routes role group prompts", () => {
+    expect(routeQuery("role groups")).toEqual({ tool: "exchange_get_role_groups", args: {}, write: false });
+  });
+  it("routes journal rule prompts", () => {
+    expect(routeQuery("journal rules")).toEqual({ tool: "exchange_get_journal_rule", args: {}, write: false });
+  });
+  it("routes retention tag prompts", () => {
+    expect(routeQuery("retention tags")).toEqual({ tool: "exchange_get_retention_policy_tag", args: {}, write: false });
+  });
+  it("routes litigation hold prompts", () => {
+    const r = routeQuery("litigation hold for alice@contoso.com");
+    expect(r).toEqual({ tool: "exchange_get_litigation_hold", args: { identity: "alice@contoso.com" }, write: false });
+  });
+  it("routes in-place hold prompts", () => {
+    const r = routeQuery("in-place hold for alice@contoso.com");
+    expect(r).toEqual({ tool: "exchange_get_inplace_hold", args: { identity: "alice@contoso.com" }, write: false });
+  });
+  it("routes OOF status prompts", () => {
+    const r = routeQuery("OOF status for alice@contoso.com");
+    expect(r).toEqual({ tool: "exchange_get_oof", args: { identity: "alice@contoso.com" }, write: false });
+  });
+  it("routes inbox rule prompts", () => {
+    const r = routeQuery("inbox rules for alice@contoso.com");
+    expect(r).toEqual({ tool: "exchange_get_inbox_rules", args: { mailbox: "alice@contoso.com" }, write: false });
+  });
+  it("routes mailbox audit prompts", () => {
+    const r = routeQuery("mailbox audit for alice@contoso.com");
+    expect(r).toEqual({ tool: "security.get_mailbox_audit_log", args: { identity: "alice@contoso.com" }, write: false });
+  });
+  it("routes admin audit log prompts", () => {
+    expect(routeQuery("audit log")).toEqual({ tool: "exchange_search_admin_audit_log", args: {}, write: false });
+  });
+  it("routes archive status prompts", () => {
+    const r = routeQuery("archive status for alice@contoso.com");
+    expect(r).toEqual({ tool: "exchange_get_archive_status", args: { identity: "alice@contoso.com" }, write: false });
+  });
+  it("routes quota prompts", () => {
+    const r = routeQuery("quota for alice@contoso.com");
+    expect(r).toEqual({ tool: "exchange_get_mailbox_quota", args: { identity: "alice@contoso.com" }, write: false });
+  });
+  it("routes mobile device prompts", () => {
+    const r = routeQuery("mobile devices for alice@contoso.com");
+    expect(r).toEqual({ tool: "exchange_get_mobile_device", args: { mailbox: "alice@contoso.com" }, write: false });
+  });
+  it("routes public folder prompts", () => {
+    expect(routeQuery("public folders")).toEqual({ tool: "exchange_get_public_folder", args: {}, write: false });
+  });
+  it("routes folder statistics prompts", () => {
+    const r = routeQuery("folder statistics for alice@contoso.com");
+    expect(r).toEqual({ tool: "mailbox.get_folder_statistics", args: { identity: "alice@contoso.com" }, write: false });
+  });
+  it("routes move request status prompts", () => {
+    expect(routeQuery("move request status")).toEqual({ tool: "mailbox.get_move_request_status", args: {}, write: false });
+  });
+  it("routes import request prompts", () => {
+    expect(routeQuery("import request status")).toEqual({ tool: "exchange_get_mailbox_import_request", args: {}, write: false });
+  });
+  it("routes restore request prompts", () => {
+    expect(routeQuery("restore request status")).toEqual({ tool: "exchange_get_mailbox_restore_request", args: {}, write: false });
+  });
+  it("routes soft-deleted mailbox prompts", () => {
+    expect(routeQuery("soft-deleted mailboxes")).toEqual({ tool: "exchange_get_softdeleted_mailbox", args: {}, write: false });
+  });
+  it("routes mailbox detail prompts", () => {
+    const r = routeQuery("mailbox detail for alice@contoso.com");
+    expect(r).toEqual({ tool: "report.mailbox_detail", args: { identity: "alice@contoso.com" }, write: false });
+  });
+  it("routes mailbox health prompts", () => {
+    const r = routeQuery("mailbox health for alice@contoso.com");
+    expect(r).toEqual({ tool: "report.mailbox_health_individual", args: { identity: "alice@contoso.com" }, write: false });
+  });
+  it("routes mailbox compliance prompts", () => {
+    const r = routeQuery("mailbox compliance for alice@contoso.com");
+    expect(r).toEqual({ tool: "report.mailbox_compliance_individual", args: { identity: "alice@contoso.com" }, write: false });
+  });
+  it("routes forwarding prompts", () => {
+    const r = routeQuery("forwarding for alice@contoso.com");
+    expect(r).toEqual({ tool: "report.mailbox_forwarding_individual", args: { identity: "alice@contoso.com" }, write: false });
+  });
+  it("routes client access prompts", () => {
+    const r = routeQuery("client access for alice@contoso.com");
+    expect(r).toEqual({ tool: "report.mailbox_client_access_individual", args: { identity: "alice@contoso.com" }, write: false });
+  });
+  it("routes mailbox size prompts", () => {
+    const r = routeQuery("mailbox size for alice@contoso.com");
+    expect(r).toEqual({ tool: "report.mailbox_size_individual", args: { identity: "alice@contoso.com" }, write: false });
+  });
+  it("routes mailbox activity prompts", () => {
+    const r = routeQuery("mailbox activity for alice@contoso.com");
+    expect(r).toEqual({ tool: "report.mailbox_activity_individual", args: { identity: "alice@contoso.com" }, write: false });
+  });
+  it("routes flow profile prompts", () => {
+    const r = routeQuery("flow profile for alice@contoso.com");
+    expect(r).toEqual({ tool: "report.mailflow_profile", args: { identity: "alice@contoso.com" }, write: false });
+  });
+  it("routes cleanup advisor prompts", () => {
+    const r = routeQuery("cleanup advisor for alice@contoso.com");
+    expect(r).toEqual({ tool: "ai.mailbox_cleanup_advisor", args: { identity: "alice@contoso.com" }, write: false });
+  });
+  it("routes accepted domains prompts", () => {
+    expect(routeQuery("accepted domains")).toEqual({ tool: "exchange_list_accepted_domains", args: {}, write: false });
+  });
+  it("routes virtual directory prompts", () => {
+    expect(routeQuery("virtual directories")).toEqual({ tool: "exchange_get_virtual_directory", args: {}, write: false });
+  });
+  it("routes autodiscover prompts", () => {
+    const r = routeQuery("autodiscover for contoso.com");
+    expect(r).toEqual({ tool: "clientaccess.get_autodiscover_info", args: { domain: "contoso.com" }, write: false });
+  });
+  it("routes test OWA prompts", () => {
+    expect(routeQuery("test OWA")).toEqual({ tool: "clientaccess.test_owa", args: {}, write: false });
+  });
+  it("routes transport config prompts", () => {
+    expect(routeQuery("transport config")).toEqual({ tool: "exchange_get_transport_config", args: {}, write: false });
+  });
+  it("routes copy status prompts", () => {
+    expect(routeQuery("copy status")).toEqual({ tool: "exchange_get_database_copy_status", args: {}, write: false });
+  });
+  it("routes witness status prompts", () => {
+    expect(routeQuery("witness status")).toEqual({ tool: "dag.get_witness_status", args: {}, write: false });
+  });
+  it("routes smtp test prompts", () => {
+    const r = routeQuery("smtp test for contoso.com");
+    expect(r).toEqual({ tool: "mailflow.test_smtp_connectivity", args: { host: "contoso.com" }, write: false });
+  });
+  it("routes search mailbox prompts", () => {
+    const r = routeQuery('search mailbox for alice@contoso.com with "quarantine"');
+    expect(r).toEqual({ tool: "exchange_search_mailbox", args: { identity: "alice@contoso.com", searchQuery: "quarantine" }, write: false });
+  });
+  it("routes event log prompts", () => {
+    expect(routeQuery("event log errors")).toEqual({ tool: "server.get_event_log_errors", args: {}, write: false });
+  });
+  it("routes performance counter prompts", () => {
+    expect(routeQuery("performance counters")).toEqual({ tool: "server.get_performance_counters", args: {}, write: false });
+  });
+  it("routes connectivity test prompts", () => {
+    expect(routeQuery("test exchange connect")).toEqual({ tool: "exchange_test_connection", args: {}, write: false });
+  });
+  it("routes inbox messages prompts", () => {
+    expect(routeQuery("show inbox")).toEqual({ tool: "exchange_list_messages", args: {}, write: false });
+  });
+  it("routes calendar events prompts", () => {
+    expect(routeQuery("calendar events")).toEqual({ tool: "exchange_list_calendar_events", args: {}, write: false });
+  });
+  it("routes tasks prompts", () => {
+    expect(routeQuery("my tasks")).toEqual({ tool: "exchange_list_tasks", args: {}, write: false });
+  });
+  it("routes content index health prompts", () => {
+    expect(routeQuery("content index health")).toEqual({ tool: "diagnostics.test_exchange_search", args: {}, write: false });
+  });
+  it("routes endpoint connectivity check prompts", () => {
+    expect(routeQuery("test exchange connect")).toEqual({ tool: "exchange_test_connection", args: {}, write: false });
+  });
+  it("routes SMTP test prompts", () => {
+    const r = routeQuery("smtp test for contoso.com");
+    expect(r).toEqual({ tool: "mailflow.test_smtp_connectivity", args: { host: "contoso.com" }, write: false });
+  });
+  it("routes autodiscover prompts", () => {
+    const r = routeQuery("autodiscover for contoso.com");
+    expect(r).toEqual({ tool: "clientaccess.get_autodiscover_info", args: { domain: "contoso.com" }, write: false });
+  });
+  it("routes copy status prompts", () => {
+    expect(routeQuery("copy status")).toEqual({ tool: "exchange_get_database_copy_status", args: {}, write: false });
+  });
+  it("routes witness status prompts", () => {
+    expect(routeQuery("witness status")).toEqual({ tool: "dag.get_witness_status", args: {}, write: false });
+  });
+  it("routes event log prompts", () => {
+    expect(routeQuery("event log errors")).toEqual({ tool: "server.get_event_log_errors", args: {}, write: false });
+  });
+  it("routes performance counter prompts", () => {
+    expect(routeQuery("performance counters")).toEqual({ tool: "server.get_performance_counters", args: {}, write: false });
+  });
+  it("routes connectivity test prompts", () => {
+    expect(routeQuery("test exchange connect")).toEqual({ tool: "exchange_test_connection", args: {}, write: false });
+  });
+  it("routes inbox messages prompts", () => {
+    expect(routeQuery("show inbox")).toEqual({ tool: "exchange_list_messages", args: {}, write: false });
+  });
+  it("routes calendar events prompts", () => {
+    expect(routeQuery("calendar events")).toEqual({ tool: "exchange_list_calendar_events", args: {}, write: false });
+  });
+  it("routes tasks prompts", () => {
+    expect(routeQuery("my tasks")).toEqual({ tool: "exchange_list_tasks", args: {}, write: false });
+  });
+  it("routes content index health prompts", () => {
+    expect(routeQuery("content index health")).toEqual({ tool: "diagnostics.test_exchange_search", args: {}, write: false });
+  });
+  it("routes endpoint connectivity check prompts", () => {
+    expect(routeQuery("test exchange connect")).toEqual({ tool: "exchange_test_connection", args: {}, write: false });
+  });
+  it("routes SMTP test prompts", () => {
+    const r = routeQuery("smtp test for contoso.com");
+    expect(r).toEqual({ tool: "mailflow.test_smtp_connectivity", args: { host: "contoso.com" }, write: false });
+  });
+  it("routes autodiscover prompts", () => {
+    const r = routeQuery("autodiscover for contoso.com");
+    expect(r).toEqual({ tool: "clientaccess.get_autodiscover_info", args: { domain: "contoso.com" }, write: false });
+  });
+  it("routes copy status prompts", () => {
+    expect(routeQuery("copy status")).toEqual({ tool: "exchange_get_database_copy_status", args: {}, write: false });
+  });
+  it("routes witness status prompts", () => {
+    expect(routeQuery("witness status")).toEqual({ tool: "dag.get_witness_status", args: {}, write: false });
+  });
+  it("routes search mailbox prompts", () => {
+    const r = routeQuery('search mailbox for alice@contoso.com with "quarantine"');
+    expect(r).toEqual({ tool: "exchange_search_mailbox", args: { identity: "alice@contoso.com", searchQuery: "quarantine" }, write: false });
+  });
+  it("routes autodiscover prompts", () => {
+    const r = routeQuery("autodiscover for contoso.com");
+    expect(r).toEqual({ tool: "clientaccess.get_autodiscover_info", args: { domain: "contoso.com" }, write: false });
+  });
+  it("routes SMTP test prompts", () => {
+    const r = routeQuery("smtp test for contoso.com");
+    expect(r).toEqual({ tool: "mailflow.test_smtp_connectivity", args: { host: "contoso.com" }, write: false });
+  });
+  it("routes search mailbox prompts with quoted query", () => {
+    const r = routeQuery('search mailbox for alice@contoso.com with "quarantine"');
+    expect(r).toEqual({ tool: "exchange_search_mailbox", args: { identity: "alice@contoso.com", searchQuery: "quarantine" }, write: false });
+  });
+  it("routes autodiscover prompts", () => {
+    const r = routeQuery("autodiscover for contoso.com");
+    expect(r).toEqual({ tool: "clientaccess.get_autodiscover_info", args: { domain: "contoso.com" }, write: false });
+  });
+  it("routes SMTP test prompts", () => {
+    const r = routeQuery("smtp test for contoso.com");
+    expect(r).toEqual({ tool: "mailflow.test_smtp_connectivity", args: { host: "contoso.com" }, write: false });
+  });
+  it("routes search mailbox prompts with quoted query", () => {
+    const r = routeQuery('search mailbox for alice@contoso.com with "quarantine"');
+    expect(r).toEqual({ tool: "exchange_search_mailbox", args: { identity: "alice@contoso.com", searchQuery: "quarantine" }, write: false });
+  });
+  // Write intents
+  it("routes suspend copy as write", () => {
+    const r = routeQuery("suspend copy DB01");
+    expect(r).toEqual({ tool: "database.suspend_copy", args: { identity: "DB01" }, write: true });
+  });
+  it("routes resume copy as write", () => {
+    const r = routeQuery("resume copy DB01");
+    expect(r).toEqual({ tool: "database.resume_copy", args: { identity: "DB01" }, write: true });
+  });
+  it("routes move active database as write", () => {
+    expect(routeQuery("move active database")).toEqual({ tool: "database.move_active", args: {}, write: true });
+  });
+  it("routes add copy as write", () => {
+    expect(routeQuery("add copy DB01")).toEqual({ tool: "database.add_copy", args: {}, write: true });
+  });
+  it("routes remove copy as write", () => {
+    expect(routeQuery("remove copy DB01")).toEqual({ tool: "database.remove_copy", args: {}, write: true });
+  });
+  it("routes set activation policy as write", () => {
+    expect(routeQuery("set activation policy")).toEqual({ tool: "dag.set_activation_policy", args: {}, write: true });
+  });
+  it("returns help when nothing matches", () => {
+    expect(routeQuery("hello there")).toEqual({ help: true });
+  });
 });
