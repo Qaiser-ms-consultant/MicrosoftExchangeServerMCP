@@ -398,6 +398,85 @@ fn is_mcp_running() -> bool {
 struct AskArgs {
     #[serde(default)]
     prompt: String,
+    #[serde(default)]
+    confirmed: bool,
+    #[serde(default)]
+    tool: Option<String>,
+    #[serde(default)]
+    args: Option<serde_json::Value>,
+}
+
+fn write_required_args(tool: &str) -> &'static [&'static str] {
+    match tool {
+        "database.mount" | "database.dismount" | "exchange_retry_queue" | "exchange_suspend_queue" => &["identity"],
+        "server.restart_service" => &["name"],
+        "mailbox.new_move_request" => &["identity", "targetDatabase"],
+        "mailbox.set_quota" => &["identity"],
+        "database.new_repair_request" => &["database"],
+        "mailbox.add_permission" => &["identity", "user"],
+        _ => &[],
+    }
+}
+
+fn has_any(hay: &str, needles: &[&str]) -> bool {
+    needles.iter().any(|n| hay.contains(n))
+}
+
+// Returns (tool, args, write) or None for help. Mirrors queryRouter.ts rule order.
+fn route_query(prompt: &str) -> Option<(String, serde_json::Value, bool)> {
+    let p = prompt.to_lowercase();
+    let email = extract_identity(prompt);
+    let obj = |pairs: Vec<(&str, String)>| {
+        let mut m = serde_json::Map::new();
+        for (k, v) in pairs {
+            m.insert(k.to_string(), serde_json::Value::String(v));
+        }
+        serde_json::Value::Object(m)
+    };
+    if has_any(&p, &["version", "cumulative", " cu", "build", "patch"]) { return Some(("report.exchange_version_and_cu".into(), serde_json::json!({}), false)); }
+    if has_any(&p, &["queue", "delayed", "stuck", "backlog", "mailflow", "mail flow", "pending mail"]) { return Some(("exchange_get_queue".into(), serde_json::json!({}), false)); }
+    if has_any(&p, &["health", "healthy", "unhealthy"]) { return Some(("exchange_get_health_report".into(), serde_json::json!({}), false)); }
+    if has_any(&p, &["database", "databases", "db01", "db0"]) && has_any(&p, &["list"]) { return Some(("database.list".into(), serde_json::json!({}), false)); }
+    if has_any(&p, &["whitespace", "growth", "storage", "disk usage", "size of database"]) { return Some(("database.get_whitespace_and_growth".into(), serde_json::json!({}), false)); }
+    if p.contains("backup") { return Some(("database.get_backup_status".into(), serde_json::json!({}), false)); }
+    if p.contains("dag") { return Some(("dag.list".into(), serde_json::json!({}), false)); }
+    if has_any(&p, &["cert", "expir"]) { return Some(("exchange_get_exchange_certificate".into(), serde_json::json!({}), false)); }
+    if has_any(&p, &["disk space", "disk free"]) { return Some(("server.get_disk_space".into(), serde_json::json!({}), false)); }
+    if has_any(&p, &["uptime", "reboot", "last boot"]) { return Some(("server.get_uptime".into(), serde_json::json!({}), false)); }
+    if p.contains("service") && has_any(&p, &["status", "running"]) { return Some(("server.get_services_status".into(), serde_json::json!({}), false)); }
+    if p.contains("connector") { return Some(("exchange_list_send_connectors".into(), serde_json::json!({}), false)); }
+    if p.contains("transport rule") { return Some(("exchange_get_transport_rules".into(), serde_json::json!({}), false)); }
+    if p.contains("server") && p.contains("list") { return Some(("exchange_list_servers".into(), serde_json::json!({}), false)); }
+    if p.contains("topology") { return Some(("report.exchange_topology".into(), serde_json::json!({}), false)); }
+    if has_any(&p, &["overview", "environment"]) { return Some(("report.exchange_environment_overview".into(), serde_json::json!({}), false)); }
+    if has_any(&p, &["ndr", "bounce", "bounced"]) || prompt.contains("5.") {
+        let code: String = prompt.split_whitespace().find(|w| w.chars().filter(|c| *c == '.').count() == 2 && w.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false)).unwrap_or("").trim_matches(|c: char| !c.is_ascii_alphanumeric() && c != '.').to_string();
+        let args = if code.is_empty() { serde_json::json!({}) } else { serde_json::json!({ "code": code }) };
+        return Some(("mailflow.get_ndr_details".into(), args, false));
+    }
+    if has_any(&p, &["trace", "tracking", "delivery status"]) || (p.contains("did") && p.contains("receiv")) {
+        return Some(("mailflow.get_message_trace".into(), email.map(|e| obj(vec![("sender", e)])).unwrap_or(serde_json::json!({})), false));
+    }
+    if has_any(&p, &["permission", "access", "fullaccess", "sendas", "send as"]) {
+        if let Some(e) = email { return Some(("exchange_get_mailbox_permissions".into(), obj(vec![("identity", e)]), false)); }
+    }
+    if has_any(&p, &["statistic", "how big", "item count", "last logon"]) {
+        if let Some(e) = email { return Some(("exchange_get_mailbox_statistics".into(), obj(vec![("identity", e)]), false)); }
+    }
+    if p.contains("dismount") { return Some(("database.dismount".into(), after_word(prompt, "dismount").map(|s| obj(vec![("identity", s)])).unwrap_or(serde_json::json!({})), true)); }
+    if p.contains("mount") && !p.contains("amount") { return Some(("database.mount".into(), after_word(prompt, "mount").map(|s| obj(vec![("identity", s)])).unwrap_or(serde_json::json!({})), true)); }
+    if p.contains("retry") && p.contains("queue") { return Some(("exchange_retry_queue".into(), after_word(prompt, "queue").map(|s| obj(vec![("identity", s)])).unwrap_or(serde_json::json!({})), true)); }
+    if p.contains("suspend") && p.contains("queue") { return Some(("exchange_suspend_queue".into(), after_word(prompt, "queue").map(|s| obj(vec![("identity", s)])).unwrap_or(serde_json::json!({})), true)); }
+    if let Some(e) = email { return Some(("ai.tell_me_everything".into(), obj(vec![("identity", e)]), false)); }
+    None
+}
+
+fn after_word(prompt: &str, word: &str) -> Option<String> {
+    let lower = prompt.to_lowercase();
+    lower.find(word).and_then(|i| {
+        let rest = prompt[i + word.len()..].trim().trim_matches(|c: char| c == '"' || c == '\'' || c == ':' || c == ' ' || c == '.').to_string();
+        if rest.is_empty() { None } else { Some(rest) }
+    })
 }
 
 fn extract_identity(prompt: &str) -> Option<String> {
@@ -440,15 +519,12 @@ fn extract_identity(prompt: &str) -> Option<String> {
 #[tauri::command]
 fn ask_exchange(args: AskArgs) -> Result<serde_json::Value, String> {
     let prompt = args.prompt.trim().to_string();
-    let identity = extract_identity(&prompt).unwrap_or(prompt.clone());
-    if identity.is_empty() {
-        return Err("Enter a mailbox (e.g. user@company.com) in the prompt".to_string());
+    if prompt.is_empty() {
+        return Err("Type a prompt first".to_string());
     }
-    // MCP handshake first (required before tools/call)
     {
         let lock = mcp();
         let mut state = lock.map_err(|e| format!("MCP lock poisoned: {}", e))?;
-        // Ensure child alive (mcp_rpc does this too, but handshake needs it first)
         let alive = match state.child.as_mut() {
             Some(child) => matches!(child.try_wait(), Ok(None)),
             None => false,
@@ -458,30 +534,47 @@ fn ask_exchange(args: AskArgs) -> Result<serde_json::Value, String> {
         }
         ensure_mcp_initialized(&mut state)?;
     }
-    let result = mcp_rpc(
-        "tools/call",
-        serde_json::json!({
-            "name": "ai.tell_me_everything",
-            "arguments": { "identity": identity },
-        }),
-    )?;
-    // tools/call returns { content: [{ type: "text", text: "<json>" }] } —
-    // map it onto the output-card fields the UI expects
-    let text = result
-        .get("content")
-        .and_then(|c| c.get(0))
-        .and_then(|b| b.get("text"))
-        .and_then(|t| t.as_str());
-    let text = match text {
-        Some(t) => t,
-        None => return Ok(result),
+    let (tool, mut rpc_args, write) = if let Some(t) = args.tool {
+        (t, args.args.unwrap_or(serde_json::json!({})), true)
+    } else {
+        match route_query(&prompt) {
+            Some((t, a, w)) => (t, a, w),
+            None => {
+                return Ok(serde_json::json!({
+                    "prompt": prompt,
+                    "tool": "help",
+                    "result": {
+                        "message": "I can run Exchange queries. Try one of these:",
+                        "examples": ["what version of exchange do i have", "show delayed queues", "server health report", "database whitespace and growth", "certificates expiring soon", "explain bounce 5.7.1", "trace messages from bob@contoso.com", "tell me everything about alice@contoso.com", "dismount database DB01"],
+                    },
+                }));
+            }
+        }
     };
-    // Return the full result generically; the UI renders any shape in one card
-    let data: serde_json::Value = match serde_json::from_str(text) {
-        Ok(d) => d,
-        Err(_) => serde_json::Value::String(text.to_string()),
+    if write && !args.confirmed {
+        let required = write_required_args(&tool);
+        let missing: Vec<String> = required
+            .iter()
+            .filter(|k| rpc_args.get(*k).and_then(|v| v.as_str()).map(|s| s.is_empty()).unwrap_or(true))
+            .map(|k| k.to_string())
+            .collect();
+        if !missing.is_empty() {
+            return Ok(serde_json::json!({ "prompt": prompt, "tool": tool, "args": rpc_args, "needsInfo": true, "missing": missing, "result": { "message": format!("To run {} I still need: {}. Add it to your prompt and run again.", tool, missing.join(", ")) } }));
+        }
+        return Ok(serde_json::json!({ "prompt": prompt, "tool": tool, "args": rpc_args, "needsConfirm": true, "result": { "message": format!("Ready to run {}", tool), "parameters": rpc_args } }));
+    }
+    if write {
+        if let Some(map) = rpc_args.as_object_mut() {
+            map.insert("confirm".to_string(), serde_json::Value::Bool(true));
+        }
+    }
+    let result = mcp_rpc("tools/call", serde_json::json!({ "name": tool, "arguments": rpc_args }))?;
+    let text = result.get("content").and_then(|c| c.get(0)).and_then(|b| b.get("text")).and_then(|t| t.as_str());
+    let data: serde_json::Value = match text {
+        Some(t) => serde_json::from_str(t).unwrap_or(serde_json::Value::String(t.to_string())),
+        None => result,
     };
-    Ok(serde_json::json!({ "identity": identity, "result": data }))
+    Ok(serde_json::json!({ "prompt": prompt, "tool": tool, "result": data }))
 }
 
 #[derive(Deserialize)]
