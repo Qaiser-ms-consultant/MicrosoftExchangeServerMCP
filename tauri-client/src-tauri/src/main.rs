@@ -451,7 +451,9 @@ fn route_query(prompt: &str) -> Option<(String, serde_json::Value, bool)> {
     };
     if has_any(&p, &["version", "cumulative", " cu", "build", "patch"]) { return Some(("report.exchange_version_and_cu".into(), serde_json::json!({}), false)); }
     if has_any(&p, &["queue", "delayed", "stuck", "backlog", "mailflow", "mail flow", "pending mail"]) { return Some(("exchange_get_queue".into(), serde_json::json!({}), false)); }
-    if has_any(&p, &["health", "healthy", "unhealthy"]) { return Some(("exchange_get_health_report".into(), serde_json::json!({}), false)); }
+    if p.contains("replication") { return Some(("exchange_test_replication_health".into(), serde_json::json!({}), false)); }
+    if has_any(&p, &["health", "healthy", "unhealthy"]) && has_any(&p, &["full", "report", "detail", "dag"]) { return Some(("exchange_get_health_report".into(), serde_json::json!({}), false)); }
+    if has_any(&p, &["health", "healthy", "unhealthy"]) { return Some(("exchange_test_service_health".into(), serde_json::json!({}), false)); }
     if has_any(&p, &["database", "databases", "db01", "db0"]) && has_any(&p, &["list", "number", "count", "how many", "show", "all"]) { return Some(("database.list".into(), serde_json::json!({}), false)); }
     if p.contains("databases") && !has_any(&p, &["dismount", "mount", "backup", "whitespace", "growth", "repair"]) { return Some(("database.list".into(), serde_json::json!({}), false)); }
     if p.contains("disk") { return Some(("server.get_disk_space".into(), serde_json::json!({}), false)); }
@@ -460,7 +462,7 @@ fn route_query(prompt: &str) -> Option<(String, serde_json::Value, bool)> {
     if p.contains("dag") { return Some(("dag.list".into(), serde_json::json!({}), false)); }
     if has_any(&p, &["cert", "expir"]) { return Some(("exchange_get_exchange_certificate".into(), serde_json::json!({}), false)); }
     if has_any(&p, &["uptime", "reboot", "last boot"]) { return Some(("server.get_uptime".into(), serde_json::json!({}), false)); }
-    if p.contains("service") && has_any(&p, &["status", "running"]) { return Some(("server.get_services_status".into(), serde_json::json!({}), false)); }
+    if p.contains("service") && has_any(&p, &["status", "running"]) { return Some(("exchange_test_service_health".into(), serde_json::json!({}), false)); }
     if p.contains("connector") { return Some(("exchange_list_send_connectors".into(), serde_json::json!({}), false)); }
     if p.contains("transport rule") { return Some(("exchange_get_transport_rules".into(), serde_json::json!({}), false)); }
     if p.contains("server") && p.contains("list") { return Some(("exchange_list_servers".into(), serde_json::json!({}), false)); }

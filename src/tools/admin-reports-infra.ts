@@ -19,7 +19,9 @@ export function registerInfraReports(server: McpServer, ps: PowerShellProvider) 
   });
 
   server.tool("report.exchange_version_and_cu", "Exchange Version & CU Report — server versions and cumulative updates", {}, async () => {
-    const d = await ps.invokeJson(`Get-ExchangeServer | Select-Object Name,AdminDisplayVersion,ExchangeVersion | Sort-Object AdminDisplayVersion | Select-Object -First 20`);
+    // NOTE: Sort-Object is blocked on constrained endpoints — sort client-side
+    const d = await ps.invokeJson(`Get-ExchangeServer | Select-Object Name,AdminDisplayVersion,ExchangeVersion | Select-Object -First 20`);
+    d.sort((a: any, b: any) => String(b.AdminDisplayVersion ?? "").localeCompare(String(a.AdminDisplayVersion ?? "")));
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
 

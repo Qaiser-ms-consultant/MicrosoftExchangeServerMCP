@@ -40,16 +40,14 @@ export function registerSpecMissingTools(server: McpServer, ps: PowerShellProvid
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
   server.tool("server.get_disk_space", "Disk space on volumes hosting DBs/logs with low-space warnings", { server: z.string().optional() }, async ({ server }) => {
-    const base = `Get-WmiObject Win32_LogicalDisk -Filter "DriveType=3" | Select-Object DeviceID,Size,FreeSpace,@{N='FreePercent';E={[math]::Round($_.FreeSpace/$_.Size*100,1)}},@{N='Warning';E={if($_.FreeSpace/$_.Size -lt 0.1) {'LOW'} else {'OK'}}}`;
-    const cmd = server ? `Invoke-Command -ComputerName "${server}" -ScriptBlock { ${base} }` : base;
-    const d = await ps.invokeJson(cmd);
-    return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
+    // NOTE: the Exchange constrained remoting endpoint blocks Get-WmiObject /
+    // Get-CimInstance / Invoke-Command, so OS disk data cannot be fetched
+    // remotely — return guidance instead of a misleading empty result.
+    return { content: [{ type: "text", text: JSON.stringify({ note: "OS disk data is unavailable via the Exchange constrained endpoint (Get-WmiObject/Get-CimInstance/Invoke-Command are blocked).", server: server ?? "(not specified)", runLocally: "Get-WmiObject Win32_LogicalDisk -Filter \"DriveType=3\" | Select-Object DeviceID,@{N='FreeGB';E={[math]::Round($_.FreeSpace/1GB,1)}}", tip: "Database whitespace (AvailableNewMailboxSpace) is available via database.get_whitespace_and_growth" }, null, 2) }] };
   });
   server.tool("server.get_uptime", "Get server uptime", { server: z.string().optional() }, async ({ server }) => {
-    const base = `Get-CimInstance Win32_OperatingSystem | Select-Object CSName,LastBootUpTime,@{N='UptimeDays';E={(Get-Date)-$_.LastBootUpTime}}`;
-    const cmd = server ? `Invoke-Command -ComputerName "${server}" -ScriptBlock { ${base} }` : base;
-    const d = await ps.invokeJson(cmd);
-    return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
+    // NOTE: same constrained-endpoint limitation as server.get_disk_space.
+    return { content: [{ type: "text", text: JSON.stringify({ note: "OS uptime is unavailable via the Exchange constrained endpoint (Get-CimInstance/Invoke-Command are blocked).", server: server ?? "(not specified)", runLocally: "Get-CimInstance Win32_OperatingSystem | Select-Object CSName,LastBootUpTime" }, null, 2) }] };
   });
   server.tool("server.run_healthchecker", "Wrap HealthChecker.ps1 if present (ExchangeAnalyzer)", { server: z.string().optional(), path: z.string().optional() }, async ({ server, path }) => {
     const p = path ?? "C:\\Scripts\\HealthChecker.ps1";

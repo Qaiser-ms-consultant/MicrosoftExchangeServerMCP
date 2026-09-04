@@ -16,7 +16,10 @@ export function registerMonitoringTools(server: McpServer, ps: PowerShellProvide
   server.tool("exchange_get_health_report", "Get health report (Get-HealthReport) — rollup per server/DAG (paged)", {
     server: z.string().optional(), healthSet: z.string().optional(),
   }, async ({ server, healthSet }) => {
-    let cmd = server ? `Get-HealthReport -Identity "${server}"` : "Get-HealthReport";
+    // NOTE: unscoped Get-HealthReport times out on real orgs — default to the
+    // first configured HA server when no identity is given
+    const target = server ?? ps.haServers.map((u) => u.replace(/^https?:\/\//i, "").split("/")[0]).find(Boolean);
+    let cmd = target ? `Get-HealthReport -Identity "${target}"` : "Get-HealthReport";
     if (healthSet) cmd += ` -HealthSet "${healthSet}"`;
     cmd += ` | Select-Object -First 10`;
     const data = await ps.invokeJson(cmd);

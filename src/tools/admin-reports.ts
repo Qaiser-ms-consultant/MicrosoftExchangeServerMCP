@@ -24,7 +24,10 @@ export function registerReportTools(server: McpServer, ps: PowerShellProvider) {
     "Transport queue health report — queues by server with MessageCount, Status, NextHop, plus tracking log summary last hour",
     { server: z.string().optional() },
     async ({ server }) => {
-      const q = await ps.invokeJson(server ? `Get-Queue -Server "${server}" | Select-Object Identity,Status,MessageCount,NextHopDomain,DeliveryType | Sort-Object MessageCount -Descending | Select-Object -First 20` : `Get-Queue | Select-Object Identity,Status,MessageCount,NextHopDomain | Sort-Object MessageCount -Descending | Select-Object -First 20`);
+      const qr = await ps.invokeJson(server ? `Get-Queue -Server "${server}" | Select-Object Identity,Status,MessageCount,NextHopDomain,DeliveryType | Select-Object -First 50` : `Get-Queue | Select-Object Identity,Status,MessageCount,NextHopDomain | Select-Object -First 50`);
+      // NOTE: Sort-Object is blocked on constrained endpoints — sort client-side
+      qr.sort((a: any, b: any) => Number(b.MessageCount ?? 0) - Number(a.MessageCount ?? 0));
+      const q = qr.slice(0, 20);
       const tracking = await ps.invokeJson(`Get-MessageTrackingLog -ResultSize 10 -Start (Get-Date).AddHours(-1) | Group-Object EventId | Select-Object Name,Count`).catch(() => []);
       return { content: [{ type: "text", text: JSON.stringify({ queues: q, trackingSummaryLastHour: tracking }, null, 2) }] };
     },
@@ -125,8 +128,13 @@ export function registerReportTools(server: McpServer, ps: PowerShellProvider) {
     async () => {
       const servers = await ps.invokeJson(`Get-ExchangeServer | Select-Object Name,Fqdn,AdminDisplayVersion | Select-Object -First 5`).catch(() => []);
       const dbs = await ps.invokeJson(`Get-MailboxDatabase | Select-Object Name,Mounted,DatabaseSize | Select-Object -First 5`).catch(() => []);
-      const certs = await ps.invokeJson(`Get-ExchangeCertificate | Where-Object { $_.NotAfter -lt (Get-Date).AddDays(60) } | Select-Object Subject,NotAfter | Select-Object -First 5`).catch(() => []);
-      const queues = await ps.invokeJson(`Get-Queue | Select-Object Identity,MessageCount,Status | Sort-Object MessageCount -Descending | Select-Object -First 5`).catch(() => []);
+      // NOTE: Where-Object/Sort-Object blocked on constrained endpoints — filter client-side
+      const allCerts = await ps.invokeJson(`Get-ExchangeCertificate | Select-Object Subject,NotAfter | Select-Object -First 20`).catch(() => []);
+      const cutoff60 = Date.now() + 60 * 86400 * 1000;
+      const certs = allCerts.filter((c: any) => { const t = Date.parse(String(c.NotAfter ?? "")); return !isNaN(t) && t < cutoff60; }).slice(0, 5);
+      const allQueues = await ps.invokeJson(`Get-Queue | Select-Object Identity,MessageCount,Status | Select-Object -First 20`).catch(() => []);
+      allQueues.sort((a: any, b: any) => Number(b.MessageCount ?? 0) - Number(a.MessageCount ?? 0));
+      const queues = allQueues.slice(0, 5);
       return { content: [{ type: "text", text: JSON.stringify({ servers, databases: dbs, expiringCertsNext60Days: certs, topQueues: queues, generatedAt: new Date().toISOString() }, null, 2) }] };
     },
   );

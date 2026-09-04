@@ -17,8 +17,14 @@ describe("routeQuery", () => {
   it("routes queue prompts", () => {
     expect(routeQuery("show delayed queues")).toEqual({ tool: "exchange_get_queue", args: {}, write: false });
   });
-  it("routes health prompts", () => {
-    expect(routeQuery("is the server healthy")).toEqual({ tool: "exchange_get_health_report", args: {}, write: false });
+  it("routes health prompts to the fast service check", () => {
+    expect(routeQuery("is the server healthy")).toEqual({ tool: "exchange_test_service_health", args: {}, write: false });
+  });
+  it("routes full health report prompts", () => {
+    expect(routeQuery("full health report")).toEqual({ tool: "exchange_get_health_report", args: {}, write: false });
+  });
+  it("routes replication health prompts", () => {
+    expect(routeQuery("test replication health")).toEqual({ tool: "exchange_test_replication_health", args: {}, write: false });
   });
   it("routes database list prompts", () => {
     expect(routeQuery("list databases")).toEqual({ tool: "database.list", args: {}, write: false });
@@ -63,7 +69,7 @@ describe("routeQuery", () => {
     expect(routeQuery("server uptime")).toEqual({ tool: "server.get_uptime", args: {}, write: false });
   });
   it("routes service status prompts", () => {
-    expect(routeQuery("are exchange services running")).toEqual({ tool: "server.get_services_status", args: {}, write: false });
+    expect(routeQuery("are exchange services running")).toEqual({ tool: "exchange_test_service_health", args: {}, write: false });
   });
   it("routes connector prompts", () => {
     expect(routeQuery("list send connectors")).toEqual({ tool: "exchange_list_send_connectors", args: {}, write: false });

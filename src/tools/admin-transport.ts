@@ -35,8 +35,10 @@ export function registerTransportAdminTools(server: McpServer, ps: PowerShellPro
     let cmd = "Get-Queue";
     if (server) cmd += ` -Server "${server}"`;
     if (filter) cmd += ` -Filter {${filter}}`;
-    const data = await ps.invokeJson(cmd);
-    return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    // NOTE: Sort-Object is blocked on constrained endpoints — sort client-side
+    const data = await ps.invokeJson(`${cmd} | Select-Object Identity,Status,MessageCount,NextHopDomain,DeliveryType | Select-Object -First 50`);
+    data.sort((a: any, b: any) => Number(b.MessageCount ?? 0) - Number(a.MessageCount ?? 0));
+    return { content: [{ type: "text", text: JSON.stringify(data.slice(0, 20), null, 2) }] };
   });
 
   server.tool("exchange_get_queue_digest", "Get queue digest across DAG (Get-QueueDigest) — DAG-wide, may timeout if no DAG; falls back to Get-Queue", { dag: z.string().optional() }, async ({ dag }) => {

@@ -123,7 +123,7 @@ export class PowerShellProvider {
       return result;
     } catch (err) {
       const msg = (err as Error)?.message ?? String(err);
-      this.recordTrace({ command, at: new Date(started).toISOString(), ms: Date.now() - started, ok: false, error: msg.slice(0, 300) });
+      this.recordTrace({ command, at: new Date(started).toISOString(), ms: Date.now() - started, ok: false, error: PowerShellProvider.redactSecrets(msg).slice(0, 300) });
       throw err;
     }
   }
@@ -167,47 +167,75 @@ export class PowerShellProvider {
     return /Get-(ServerHealth|HealthReport|ServerComponentState|MonitoringItemIdentity|QueueDigest)|report\.generate_health_summary/i.test(command);
   }
 
+  /** Strip secrets from any error text before it leaves this module. */
+  private static redactSecrets(s: string): string {
+    return s
+      .replace(/ConvertTo-SecureString\s+'[^']*'/g, "ConvertTo-SecureString '***'")
+      .replace(/EXCH_PS_PASS['"]?\s*:\s*'[^']*'/g, "EXCH_PS_PASS: '***'");
+  }
+
   private async invokeViaWinRMForUrl<T>(command: string, url: string): Promise<T> {
     const { execFile } = await import("node:child_process");
     const { promisify } = await import("node:util");
     const execFileAsync = promisify(execFile);
     const user = this.config.auth.basic!.username.includes("@") ? this.config.auth.basic!.username : `${this.config.auth.basic!.domain ?? ""}\\${this.config.auth.basic!.username}`;
-    const pass = this.config.auth.basic!.password.replace(/'/g, "''");
+    // Password travels via child env ($env:EXCH_PS_PASS), NEVER embedded in the
+    // script text — execFile echoes the full command inside error messages.
+    const pass = this.config.auth.basic!.password;
     const isHeavy = this.isHeavyHealthCommand(command);
     const timeout = isHeavy ? 60000 : 30000;
     // Escape command for embedding: ensure no stray ' terminates string — command is inside ScriptBlock { }, single quotes safe
     const psCommand = `
 $ErrorActionPreference = 'SilentlyContinue'
 $WarningPreference = 'SilentlyContinue'
-$sec = ConvertTo-SecureString '${pass}' -AsPlainText -Force
+$sec = ConvertTo-SecureString $env:EXCH_PS_PASS -AsPlainText -Force
 $cred = New-Object System.Management.Automation.PSCredential('${user.replace(/'/g, "''")}', $sec)
 $opt = New-PSSessionOption -SkipCACheck -SkipCNCheck -SkipRevocationCheck -OperationTimeout 60000
 $uri = '${url.replace(/'/g, "''")}'
 try {
   $sess = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri $uri -Credential $cred -Authentication Basic -AllowRedirection -SessionOption $opt -ErrorAction Stop
-  $result = Invoke-Command -Session $sess -ScriptBlock { ${command} }
+  $result = Invoke-Command -Session $sess -ScriptBlock { ${command} } -ErrorAction SilentlyContinue -ErrorVariable rerr
+  if ($rerr.Count -gt 0 -and (-not $result)) { Write-Output ("MCP_REMOTE_ERROR:" + [string]$rerr[0]); exit 1 }
   # Exchange returns objects with nested properties — serialize locally (remote ConvertTo-Json not available in constrained endpoint)
   $json = $result | ConvertTo-Json -Depth 5 -Compress -ErrorAction SilentlyContinue 2>$null
   if (-not $json) { $json = "[]" }
   Write-Output $json
   Remove-PSSession $sess -ErrorAction SilentlyContinue
 } catch {
-  Write-Error $_.Exception.Message
+  $em = $_.Exception.Message
+  if (-not $em) { $em = [string]$_ }
+  Write-Output ("MCP_REMOTE_ERROR:" + $em)
   exit 1
 }
 `;
+    const REMOTE_MARKER = "MCP_REMOTE_ERROR:";
+    function remoteErrorText(stdOut: string): string {
+      const i = stdOut.indexOf(REMOTE_MARKER);
+      if (i < 0) return "";
+      return stdOut.slice(i + REMOTE_MARKER.length).trim().split("\n")[0].trim();
+    }
     try {
-      const { stdout, stderr } = await execFileAsync("powershell", ["-NoProfile", "-Command", psCommand], { timeout, maxBuffer: 10 * 1024 * 1024 });
-      if (stderr && stderr.includes("error") && !stdout.trim()) throw new Error(stderr);
+      const { stdout, stderr } = await execFileAsync("powershell", ["-NoProfile", "-Command", psCommand], { timeout, maxBuffer: 10 * 1024 * 1024, env: { ...process.env, EXCH_PS_PASS: pass } });
+      const remoteErr = remoteErrorText(stdout ?? "");
+      if (remoteErr) throw new Error(remoteErr);
+      if (stderr && /error/i.test(stderr) && !stdout.trim()) throw new Error(stderr.trim());
       const out = stdout.trim();
       if (!out) return [] as unknown as T;
       // stdout is JSON from ConvertTo-Json
       return out as unknown as T;
     } catch (err: any) {
-      const msg = err.stdout ?? err.stderr ?? err.message ?? String(err);
-      if (msg.includes("401") || msg.toLowerCase().includes("auth")) throw new ExchangeError({ message: `WinRM auth failed at ${url}: ${msg.slice(0, 600)}`, code: "AUTH_FAILED", provider: "powershell", cause: err });
-      if (msg.includes("404") || msg.toLowerCase().includes("not found")) throw new ExchangeError({ message: `WinRM endpoint not found (404) at ${url}: ${msg.slice(0, 600)}`, code: "NOT_FOUND", provider: "powershell", cause: err });
-      throw new ExchangeError({ message: `WinRM invoke failed at ${url}: ${msg.slice(0, 800)}`, code: "SERVER_ERROR", provider: "powershell", cause: err });
+      // Classify ONLY on remote/stderr text — never on the echoed script
+      // (execFile embeds the full command in err.message).
+      const remote = remoteErrorText(err.stdout ?? "");
+      const streamText = [remote, err.stderr].map((s) => (s === undefined || s === null ? "" : String(s)).trim()).filter(Boolean).join("\n");
+      if (err.killed) throw new ExchangeError({ message: `WinRM command timed out after ${timeout}ms at ${url}`, code: "SERVER_ERROR", provider: "powershell", cause: err });
+      if (streamText) {
+        const clean = PowerShellProvider.redactSecrets(streamText);
+        if (streamText.includes("401") || /auth/i.test(streamText)) throw new ExchangeError({ message: `WinRM auth failed at ${url}: ${clean.slice(0, 600)}`, code: "AUTH_FAILED", provider: "powershell", cause: err });
+        if (streamText.includes("404") || /not found/i.test(streamText)) throw new ExchangeError({ message: `WinRM endpoint not found (404) at ${url}: ${clean.slice(0, 600)}`, code: "NOT_FOUND", provider: "powershell", cause: err });
+        throw new ExchangeError({ message: `WinRM invoke failed at ${url}: ${clean.slice(0, 800)}`, code: "SERVER_ERROR", provider: "powershell", cause: err });
+      }
+      throw new ExchangeError({ message: `WinRM process failed at ${url} (exit ${err.code ?? "unknown"})`, code: "SERVER_ERROR", provider: "powershell", cause: err });
     }
   }
 
@@ -283,6 +311,49 @@ function escapePsSingle(s: string): string {
   return s.replace(/'/g, "''");
 }
 
+const PS_NOISE_KEYS = new Set(["PSComputerName", "PSShowComputerName", "RunspaceId"]);
+
+// Flatten Exchange's nested .NET shapes into display-friendly scalars:
+// Version {Major,Minor,Build,Revision} -> "15.2.1748.10", enum {value,Value}
+// -> "Ready", queue Identity {Type,Server} -> "DEVEX02\Submission",
+// AD object {Rdn:"CN=X",...} -> "X", address {Address:"a@b"} -> "a@b",
+// /Date(ms)/ -> ISO string. Applied recursively; arrays preserved.
+function simplifyValue(v: any): any {
+  if (v === null || v === undefined) return v;
+  if (typeof v === "string") {
+    const m = v.match(/^\/Date\((\d+)\)\/$/);
+    if (m) return new Date(parseInt(m[1], 10)).toISOString();
+    return v;
+  }
+  if (Array.isArray(v)) return v.map(simplifyValue);
+  if (typeof v === "object") {
+    const o = v as Record<string, any>;
+    if (typeof o.Major === "number" && typeof o.Minor === "number" && typeof o.Build === "number" && typeof o.Revision === "number") {
+      return `${o.Major}.${o.Minor}.${o.Build}.${o.Revision}`;
+    }
+    if (typeof o.Value === "string" && typeof o.value === "number" && Object.keys(o).length === 2) {
+      return o.Value;
+    }
+    if (typeof o.Type === "string" && typeof o.Server === "string") {
+      return `${o.Server}\\${o.Type}`;
+    }
+    if (typeof o.Rdn === "string" && typeof o.DomainId === "string") {
+      const cn = o.Rdn.match(/^CN=([^,]+)/);
+      if (cn) return cn[1];
+    }
+    if (typeof o.Address === "string" && o.Address.includes("@")) {
+      return o.Address;
+    }
+    const out: Record<string, any> = {};
+    for (const [k, val] of Object.entries(o)) {
+      if (PS_NOISE_KEYS.has(k)) continue;
+      out[k] = simplifyValue(val);
+    }
+    return out;
+  }
+  return v;
+}
+
 function normalizePsJson(data: any): any[] {
   if (!data) return [];
   if (typeof data === "string") {
@@ -290,17 +361,20 @@ function normalizePsJson(data: any): any[] {
     if (!trimmed) return [];
     try {
       const parsed = JSON.parse(trimmed);
-      return Array.isArray(parsed) ? parsed : [parsed];
+      const arr = Array.isArray(parsed) ? parsed : [parsed];
+      return arr.map(simplifyValue);
     } catch {
       // Sometimes PS returns multiple JSON objects concatenated
       try {
         const fixed = `[${trimmed.replace(/}\s*{/g, "},{")}]`;
         const parsed = JSON.parse(fixed);
-        return Array.isArray(parsed) ? parsed : [parsed];
+        const arr = Array.isArray(parsed) ? parsed : [parsed];
+        return arr.map(simplifyValue);
       } catch {
         return [];
       }
     }
   }
-  return Array.isArray(data) ? data : [data];
+  const arr = Array.isArray(data) ? data : [data];
+  return arr.map(simplifyValue);
 }
