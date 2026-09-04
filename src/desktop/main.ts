@@ -5,6 +5,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { spawn, ChildProcess } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { routeQuery } from "./queryRouter.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -192,26 +193,54 @@ ipcMain.handle("mcp:start", async () => {
 ipcMain.handle("mcp:stop", async () => { if (mcpProc) { mcpProc.kill(); mcpProc=null; } mcpInitialized = false; return { ok:true }; });
 
 ipcMain.handle("mcp:isRunning", async () => !!mcpProc);
-ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string }) => {
+const WRITE_REQUIRED_ARGS: Record<string, string[]> = {
+  "database.mount": ["identity"],
+  "database.dismount": ["identity"],
+  "exchange_retry_queue": ["identity"],
+  "exchange_suspend_queue": ["identity"],
+  "server.restart_service": ["name"],
+  "mailbox.new_move_request": ["identity", "targetDatabase"],
+  "mailbox.set_quota": ["identity"],
+  "database.new_repair_request": ["database"],
+  "mailbox.add_permission": ["identity", "user"],
+};
+
+ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?: boolean; tool?: string; args?: any }) => {
   console.log("exchange:ask invoked", payload);
   const prompt = payload.prompt ?? "";
-  // ai.tell_me_everything needs a mailbox identity — pull an email out of the
-  // free-text prompt, falling back to the raw prompt (Exchange resolves names too)
-  const emailMatch = prompt.match(/[\w.+-]+@[\w-]+\.[\w.]+/);
-  const identity = emailMatch ? emailMatch[0] : prompt.trim();
-  if(!identity) throw new Error("Enter a mailbox (e.g. user@company.com) in the prompt");
+  if(!prompt.trim()) throw new Error("Type a prompt first");
   await ensureMcpInitialized();
-  const result = await mcpRpc("tools/call", {
-    name: "ai.tell_me_everything",
-    arguments: { identity },
-  });
-  // tools/call returns { content: [{ type: "text", text: "<json>" }] } —
-  // return the full result generically; the UI renders any shape in one card
+
+  // Explicit tool+args after in-card Confirm skips re-routing
+  let tool: string; let args: any; let write = false;
+  if(payload.tool){
+    tool = payload.tool; args = payload.args ?? {};
+    write = true;
+  } else {
+    const route = routeQuery(prompt);
+    if("help" in route){
+      return { prompt, tool: "help", result: {
+        message: "I can run Exchange queries. Try one of these:",
+        examples: ["what version of exchange do i have", "show delayed queues", "server health report", "database whitespace and growth", "certificates expiring soon", "explain bounce 5.7.1", "trace messages from bob@contoso.com", "tell me everything about alice@contoso.com", "dismount database DB01"],
+      }};
+    }
+    tool = route.tool; args = route.args; write = route.write;
+  }
+
+  // Safety gate for writes
+  if(write && !payload.confirmed){
+    const missing = (WRITE_REQUIRED_ARGS[tool] ?? []).filter((k) => args[k] === undefined || args[k] === "");
+    if(missing.length) return { prompt, tool, args, needsInfo: true, missing, result: { message: `To run ${tool} I still need: ${missing.join(", ")}. Add it to your prompt and run again.` } };
+    return { prompt, tool, args, needsConfirm: true, result: { message: `Ready to run ${tool}`, parameters: args } };
+  }
+  if(write) args = { ...args, confirm: true };
+
+  const result = await mcpRpc("tools/call", { name: tool, arguments: args });
   const text = (result as any)?.content?.[0]?.text;
-  if(!text) return { identity, result };
+  if(!text) return { prompt, tool, result };
   let data: any;
-  try { data = JSON.parse(text); } catch { return { identity, result: text }; }
-  return { identity, result: data };
+  try { data = JSON.parse(text); } catch { return { prompt, tool, result: text }; }
+  return { prompt, tool, result: data };
 });
 
 
