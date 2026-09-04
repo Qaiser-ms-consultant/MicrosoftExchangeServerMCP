@@ -615,13 +615,45 @@ fn ask_exchange(args: AskArgs) -> Result<serde_json::Value, String> {
             map.insert("confirm".to_string(), serde_json::Value::Bool(true));
         }
     }
-    let result = mcp_rpc("tools/call", serde_json::json!({ "name": tool, "arguments": rpc_args }))?;
-    let text = result.get("content").and_then(|c| c.get(0)).and_then(|b| b.get("text")).and_then(|t| t.as_str());
-    let data: serde_json::Value = match text {
-        Some(t) => serde_json::from_str(t).unwrap_or(serde_json::Value::String(t.to_string())),
-        None => result,
-    };
-    Ok(serde_json::json!({ "prompt": prompt, "tool": tool, "result": data }))
+    // Per-query PowerShell trace: clear, run, then read (take semantics).
+    // Failures are returned (not propagated) so the trace still reaches the card.
+    let _ = mcp_rpc(
+        "tools/call",
+        serde_json::json!({ "name": "exchange_get_ps_trace", "arguments": {} }),
+    );
+    let call = mcp_rpc("tools/call", serde_json::json!({ "name": tool, "arguments": rpc_args }));
+    let ps_trace = read_ps_trace();
+    match call {
+        Ok(v) => {
+            let text = v
+                .get("content")
+                .and_then(|c| c.get(0))
+                .and_then(|b| b.get("text"))
+                .and_then(|t| t.as_str());
+            let data: serde_json::Value = match text {
+                Some(t) => serde_json::from_str(t).unwrap_or(serde_json::Value::String(t.to_string())),
+                None => v,
+            };
+            Ok(serde_json::json!({ "prompt": prompt, "tool": tool, "result": data, "psTrace": ps_trace }))
+        }
+        Err(e) => Ok(serde_json::json!({ "prompt": prompt, "tool": tool, "error": e, "psTrace": ps_trace })),
+    }
+}
+
+fn read_ps_trace() -> serde_json::Value {
+    match mcp_rpc(
+        "tools/call",
+        serde_json::json!({ "name": "exchange_get_ps_trace", "arguments": {} }),
+    ) {
+        Ok(v) => v
+            .get("content")
+            .and_then(|c| c.get(0))
+            .and_then(|b| b.get("text"))
+            .and_then(|t| t.as_str())
+            .and_then(|s| serde_json::from_str(s).ok())
+            .unwrap_or(serde_json::json!([])),
+        Err(_) => serde_json::json!([]),
+    }
 }
 
 #[derive(Deserialize)]

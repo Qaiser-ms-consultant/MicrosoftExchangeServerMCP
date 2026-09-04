@@ -51,7 +51,18 @@ const ALLOWED_CMDLETS = new Set([
   "Get-OrganizationConfig", "Get-AdSite", "Get-ADPermission", "Get-CimInstance", "Get-WmiObject", "Test-ExchangeSearch", "Get-MoveRequestStatistics",
 ]);
 
+export interface PsTraceEntry {
+  command: string;
+  at: string;
+  url?: string;
+  ms?: number;
+  rows?: number;
+  ok: boolean;
+  error?: string;
+}
+
 export class PowerShellProvider {
+  private psTrace: PsTraceEntry[] = [];
   private get endpoint(): string {
     return this.config.exchange.powershellUri;
   }
@@ -79,15 +90,42 @@ export class PowerShellProvider {
     return process.platform === "win32" && !!this.config.auth.basic?.username && !!this.config.auth.basic?.password;
   }
 
+  /** Last PowerShell commands executed (ring buffer, newest last). Powers the desktop PowerShell Trace tab. */
+  getTrace(): PsTraceEntry[] {
+    return [...this.psTrace];
+  }
+
+  /** Snapshot + clear — call before a query, then read after it for per-query trace. */
+  takeTrace(): PsTraceEntry[] {
+    const out = this.getTrace();
+    this.psTrace = [];
+    return out;
+  }
+
+  private recordTrace(entry: PsTraceEntry) {
+    this.psTrace.push(entry);
+    if (this.psTrace.length > 100) this.psTrace.splice(0, this.psTrace.length - 100);
+  }
+
   async invoke<T>(command: string): Promise<T> {
     this.assertAllowed(command);
+    const started = Date.now();
     // HA: try each backend smartly (failover/round_robin) — getHAServers() returns [powershellUri] or servers list
-    return withHA(this.config, (url) => this.invokeForUrl<T>(command, url), {
-      isRetryable: (err: unknown) => {
-        const e = err as ExchangeError;
-        return e?.code === "SERVER_ERROR" || e?.code === "NOT_FOUND" || String((e as any)?.message ?? "").includes("WinRM");
-      },
-    });
+    try {
+      const result = await withHA(this.config, (url) => this.invokeForUrl<T>(command, url), {
+        isRetryable: (err: unknown) => {
+          const e = err as ExchangeError;
+          return e?.code === "SERVER_ERROR" || e?.code === "NOT_FOUND" || String((e as any)?.message ?? "").includes("WinRM");
+        },
+      });
+      const rows = Array.isArray(result) ? result.length : undefined;
+      this.recordTrace({ command, at: new Date(started).toISOString(), ms: Date.now() - started, rows, ok: true });
+      return result;
+    } catch (err) {
+      const msg = (err as Error)?.message ?? String(err);
+      this.recordTrace({ command, at: new Date(started).toISOString(), ms: Date.now() - started, ok: false, error: msg.slice(0, 300) });
+      throw err;
+    }
   }
 
   private async invokeForUrl<T>(command: string, url: string): Promise<T> {

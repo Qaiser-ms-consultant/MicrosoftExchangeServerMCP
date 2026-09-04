@@ -239,12 +239,31 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
   }
   if(write) args = { ...args, confirm: true };
 
-  const result = await mcpRpc("tools/call", { name: tool, arguments: args });
+  // Per-query PowerShell trace: clear, run, then read (take semantics).
+  // Failures are returned (not thrown) so the trace still reaches the card.
+  async function readPsTrace(): Promise<any[]> {
+    try {
+      const t = await mcpRpc("tools/call", { name: "exchange_get_ps_trace", arguments: {} });
+      const txt = (t as any)?.content?.[0]?.text;
+      const parsed = txt ? JSON.parse(txt) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
+  }
+  await readPsTrace();
+  let toolError: string | null = null;
+  let result: any = null;
+  try {
+    result = await mcpRpc("tools/call", { name: tool, arguments: args });
+  } catch (e: any) {
+    toolError = e?.message || String(e);
+  }
+  const psTrace = await readPsTrace();
+  if(toolError) return { prompt, tool, error: toolError, psTrace };
   const text = (result as any)?.content?.[0]?.text;
-  if(!text) return { prompt, tool, result };
+  if(!text) return { prompt, tool, result, psTrace };
   let data: any;
-  try { data = JSON.parse(text); } catch { return { prompt, tool, result: text }; }
-  return { prompt, tool, result: data };
+  try { data = JSON.parse(text); } catch { return { prompt, tool, result: text, psTrace }; }
+  return { prompt, tool, result: data, psTrace };
 });
 
 

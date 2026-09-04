@@ -155,7 +155,7 @@ tailwind.config = {
 </div>
 <div class="p-4 rounded-lg bg-[#111726] border border-[#1d2a42]" id="psCard" style="display:none">
 <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">PowerShell Trace (PS-Remoting)</h3>
-<p class="text-xs text-slate-400">Per-query PowerShell capture isn't wired yet — commands execute inside the MCP server process. The Raw MCP JSON tab holds the complete result for this query.</p>
+<div class="text-xs text-slate-400" id="psTrace">Run a prompt to see the PowerShell commands behind it.</div>
 </div>
 </div>
 <div class="px-4 py-2 bg-[#0c111e] border-t border-[#1b253b] flex items-center justify-between text-[11px] text-slate-500 font-mono flex-shrink-0">
@@ -236,6 +236,7 @@ $$('[data-output-tab]').forEach(function(b){ b.addEventListener('click',function
     const j=document.getElementById('jsonPre');
     if(j) j.textContent=(window.__lastRaw===undefined)?'Run a prompt to see raw MCP JSON here.':((typeof window.__lastRaw==="string")?window.__lastRaw:JSON.stringify(window.__lastRaw,null,2));
   }
+  if(b.getAttribute('data-output-tab')==='ps'){ renderPsTrace(); }
 }); });
 // Tabs — use data-tab / data-view
 $$('[data-tab]').forEach(function(b){ b.addEventListener('click',function(){
@@ -515,6 +516,17 @@ function renderResult(tool, data){
   out.innerHTML=kvTable(data)+rawBlock();
   setRaw(data);
 }
+function renderPsTrace(){
+  const el=document.getElementById("psTrace");
+  if(!el) return;
+  const trace=window.__lastPsTrace||[];
+  if(!trace.length){ el.innerHTML=`<span class="text-slate-500">No PowerShell commands ran for this query (result may have come from cache or another provider).</span>`; return; }
+  el.innerHTML=trace.map((t,i)=>{
+    const ms=(t&&t.ms!==undefined)?` <span class="text-slate-500">(${(t.ms/1000).toFixed(1)}s)</span>`:"";
+    const ok=(t&&t.ok===false)?` <span class="text-red-400">✖ ${esc(t.error||"failed")}</span>`:` <span class="text-emerald-400">✔</span>`;
+    return `<div class="mb-2 p-2 bg-[#0b0f19] rounded border border-[#1a253a]"><div class="text-[11px] text-slate-500 font-mono mb-1">${i+1}.${ms}${ok}</div><pre class="font-mono text-[11px] text-cyan-200 whitespace-pre-wrap break-words">${esc(t.command||"")}</pre></div>`;
+  }).join("");
+}
 safeHandler("runPrompt", async()=>{
   const promptEl=document.getElementById("prompt");
   const statusEl=document.getElementById("execText");
@@ -532,7 +544,14 @@ safeHandler("runPrompt", async()=>{
   const data = (res && res.result !== undefined) ? res.result : res;
   const tool = (res && res.tool) || "";
   window.__lastRaw = data;
-  if(res && res.needsConfirm){
+  window.__lastPsTrace = (res && res.psTrace) || [];
+  renderPsTrace();
+  if(res && res.error){
+    const outE=document.getElementById("outResult");
+    if(outE) outE.innerHTML=`<div class="p-3 rounded border border-red-500/40 bg-red-500/5 text-xs text-red-300">${esc(res.error)}</div>`+rawBlock();
+    setRaw(res.error);
+    if(statusBadge) statusBadge.textContent="Failed";
+  } else if(res && res.needsConfirm){
     window.__pendingWrite = { tool, args: res.args || (data && data.parameters) || {} };
     const out2=document.getElementById("outResult");
     if(out2) out2.innerHTML=`<div class="p-3 rounded border border-amber-500/40 bg-amber-500/5 text-xs"><p class="text-amber-300 font-semibold mb-1">Confirm action: ${esc(tool)}</p>${kvTable(data.parameters||{})}<div class="flex gap-2 mt-3"><button id="confirmWrite" class="px-3 py-1.5 rounded-md bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs">Confirm</button><button id="cancelWrite" class="px-3 py-1.5 rounded-md bg-[#141d30] border border-[#22304d] text-xs text-slate-300">Cancel</button></div></div>`;
@@ -556,6 +575,8 @@ document.getElementById("outResult")?.addEventListener("click", async (e)=>{
     const res2 = await window.exchangeDesktop.askExchange({prompt: pEl?pEl.value:"", confirmed: true, tool: pw.tool, args: pw.args});
     const data2 = (res2 && res2.result !== undefined) ? res2.result : res2;
     window.__lastRaw = data2;
+    window.__lastPsTrace = (res2 && res2.psTrace) || [];
+    renderPsTrace();
     renderResult((res2 && res2.tool)||pw.tool, data2);
     const s=document.getElementById("outStatus"); if(s) s.textContent="Completed";
     window.__pendingWrite=null;

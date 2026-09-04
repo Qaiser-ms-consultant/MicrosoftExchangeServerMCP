@@ -25,6 +25,7 @@ import { registerAIAdvancedTools } from "./tools/ai-advanced.js";
 import { registerAISuiteTools } from "./tools/ai-suite.js";
 import { registerAICleanupAdvisor } from "./tools/ai-cleanup-advisor.js";
 import { registerTellMeEverything } from "./tools/ai-tellmeeverything.js";
+import { registerPsTrace } from "./tools/ps-trace.js";
 import { registerOrganizationTools } from "./tools/admin-organization.js";
 import { registerDiagnosticsExtended } from "./tools/admin-diagnostics-extended.js";
 import { registerResources } from "./resources/folder-resource.js";
@@ -62,6 +63,7 @@ async function main() {
   registerAISuiteTools(server, client.ps);
   registerAICleanupAdvisor(server, client.ps);
   registerTellMeEverything(server, client.ps);
+  registerPsTrace(server, client.ps);
   registerOrganizationTools(server, client.ps);
   registerDiagnosticsExtended(server, client.ps);
   registerDiagnosticTools(server, config, client.auth);
