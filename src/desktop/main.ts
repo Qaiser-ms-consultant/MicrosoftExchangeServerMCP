@@ -18,13 +18,13 @@ function getUserDataPath() {
 }
 
 function ensureConfig(): string {
+  // Desktop settings file — model/provider keys ONLY. The MCP server uses its
+  // own tool config (./config.yaml + env) for Exchange auth, so we seed an
+  // empty JSON object here and never copy the Exchange template into it.
   const dir = getUserDataPath();
   mkdirSync(dir, { recursive: true });
   const p = resolve(dir, "config.yaml");
-  if (!existsSync(p)) {
-    const example = resolve(process.cwd(), "config.example.yaml");
-    if (existsSync(example)) writeFileSync(p, readFileSync(example, "utf-8"));
-  }
+  if (!existsSync(p)) writeFileSync(p, "{}", "utf-8");
   return p;
 }
 
@@ -54,12 +54,15 @@ function createWindow() {
   }
 }
 
-// Auto‑start MCP when the app is ready
+// Auto‑start MCP when the app is ready.
+// NOTE: no --config flag on purpose — the MCP server resolves its own tool
+// config (./config.yaml + env) which holds the Exchange connection + auth.
+// The desktop config file carries model/provider settings only.
 function startMcpInternal(){
   if (mcpProc) { try { mcpProc.kill(); } catch {} }
   const configPath = ensureConfig();
   const serverPath = resolve(process.cwd(), "dist/server.js");
-  mcpProc = spawn("node", [serverPath, `--config=${configPath}`], { stdio: ["pipe","pipe","pipe"] });
+  mcpProc = spawn("node", [serverPath], { stdio: ["pipe","pipe","pipe"] });
   mcpProc.stderr?.on("data", (d) => win?.webContents.send("mcp:log", d.toString()));
   mcpProc.stdout?.on("data", (d) => win?.webContents.send("mcp:log", d.toString()));
   attachRpcListener();
@@ -182,7 +185,8 @@ ipcMain.handle("mcp:start", async () => {
   if (mcpProc) { try { mcpProc.kill(); } catch {} }
   const configPath = ensureConfig();
   const serverPath = resolve(process.cwd(), "dist/server.js");
-  mcpProc = spawn("node", [serverPath, `--config=${configPath}`], { stdio: ["pipe","pipe","pipe"] });
+  // No --config: MCP uses its own tool config for Exchange auth (see above)
+  mcpProc = spawn("node", [serverPath], { stdio: ["pipe","pipe","pipe"] });
   mcpProc.stderr?.on("data", (d) => win?.webContents.send("mcp:log", d.toString()));
   mcpProc.stdout?.on("data", (d) => win?.webContents.send("mcp:log", d.toString()));
   // Attach JSON‑RPC listener after spawning

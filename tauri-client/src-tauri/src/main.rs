@@ -31,23 +31,13 @@ fn user_config_dir() -> PathBuf {
 }
 
 fn ensure_config() -> PathBuf {
+    // Desktop settings file — model/provider keys ONLY. Seeded empty; the
+    // MCP server uses its own tool config for Exchange auth.
     let dir = user_config_dir();
     let _ = fs::create_dir_all(&dir);
     let p = dir.join("config.yaml");
     if !p.exists() {
-        // Try repo example first, then cwd example
-        for candidate in [
-            PathBuf::from("config.example.yaml"),
-            PathBuf::from("../config.example.yaml"),
-            PathBuf::from("../../config.example.yaml"),
-        ] {
-            if candidate.exists() {
-                if let Ok(text) = fs::read_to_string(&candidate) {
-                    let _ = fs::write(&p, text);
-                    break;
-                }
-            }
-        }
+        let _ = fs::write(&p, "{}");
     }
     p
 }
@@ -93,9 +83,10 @@ fn spawn_mcp_locked(state: &mut McpState) -> Result<u32, String> {
     state.stdin = None;
     state.reader = None;
 
+    // Desktop settings path (model/provider keys only — used for config_path
+    // reporting, NOT passed to the MCP child).
     let config_path = ensure_config();
-    let config_str = config_path.to_string_lossy().to_string();
-    state.config_path = config_str.clone();
+    state.config_path = config_path.to_string_lossy().to_string();
 
     // dist/server.js is built by `npm run build` from the repo root.
     // When running via `cargo tauri dev`, cwd is tauri-client/src-tauri,
@@ -112,9 +103,10 @@ fn spawn_mcp_locked(state: &mut McpState) -> Result<u32, String> {
         .cloned()
         .unwrap_or_else(|| PathBuf::from("../../dist/server.js"));
 
+    // No --config on purpose: the MCP server resolves its own tool config
+    // (./config.yaml + env) which holds the Exchange connection + auth.
     let mut child = Command::new("node")
         .arg(&server_path)
-        .arg(format!("--config={}", config_str))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
