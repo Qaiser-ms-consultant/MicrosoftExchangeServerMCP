@@ -206,21 +206,12 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string }) => {
     arguments: { identity },
   });
   // tools/call returns { content: [{ type: "text", text: "<json>" }] } —
-  // map it onto the output-card fields the UI expects
+  // return the full result generically; the UI renders any shape in one card
   const text = (result as any)?.content?.[0]?.text;
-  if(!text) return result;
+  if(!text) return { identity, result };
   let data: any;
-  try { data = JSON.parse(text); } catch { return { health: text }; }
-  return {
-    name: data.displayName ?? data.mailbox ?? identity,
-    email: data.mailbox ?? identity,
-    db: data.details?.database ?? "",
-    server: data.details?.server ?? "",
-    size: data.details?.totalItemSize ?? "",
-    items: data.details?.itemCount ?? "",
-    health: data.executiveSummary?.health ?? "",
-    raw: data,
-  };
+  try { data = JSON.parse(text); } catch { return { identity, result: text }; }
+  return { identity, result: data };
 });
 
 

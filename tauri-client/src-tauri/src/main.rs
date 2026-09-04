@@ -476,31 +476,12 @@ fn ask_exchange(args: AskArgs) -> Result<serde_json::Value, String> {
         Some(t) => t,
         None => return Ok(result),
     };
+    // Return the full result generically; the UI renders any shape in one card
     let data: serde_json::Value = match serde_json::from_str(text) {
         Ok(d) => d,
-        Err(_) => return Ok(serde_json::json!({ "health": text })),
+        Err(_) => serde_json::Value::String(text.to_string()),
     };
-    let get = |v: &serde_json::Value, k: &str| {
-        v.get(k)
-            .and_then(|x| x.as_str())
-            .unwrap_or("")
-            .to_string()
-    };
-    let details = data.get("details").cloned().unwrap_or(serde_json::Value::Null);
-    let summary = data
-        .get("executiveSummary")
-        .cloned()
-        .unwrap_or(serde_json::Value::Null);
-    Ok(serde_json::json!({
-        "name": data.get("displayName").and_then(|v| v.as_str()).unwrap_or_else(|| data.get("mailbox").and_then(|v| v.as_str()).unwrap_or(&identity)),
-        "email": data.get("mailbox").and_then(|v| v.as_str()).unwrap_or(&identity),
-        "db": get(&details, "database"),
-        "server": get(&details, "server"),
-        "size": get(&details, "totalItemSize"),
-        "items": get(&details, "itemCount"),
-        "health": get(&summary, "health"),
-        "raw": data,
-    }))
+    Ok(serde_json::json!({ "identity": identity, "result": data }))
 }
 
 #[derive(Deserialize)]
