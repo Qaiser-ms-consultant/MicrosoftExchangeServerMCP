@@ -422,6 +422,30 @@ fn has_any(hay: &str, needles: &[&str]) -> bool {
     needles.iter().any(|n| hay.contains(n))
 }
 
+fn extract_ndr_code(prompt: &str) -> Option<String> {
+    for tok in prompt.split_whitespace() {
+        let t = tok.trim_matches(|c: char| !c.is_ascii_alphanumeric() && c != '.');
+        let dots = t.chars().filter(|c| *c == '.').count();
+        if dots == 2 && t.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+            return Some(t.to_string());
+        }
+    }
+    None
+}
+
+fn extract_quoted(prompt: &str) -> Option<String> {
+    let bytes = prompt.as_bytes();
+    let mut start: Option<usize> = None;
+    let mut quote = 0u8;
+    for (i, b) in bytes.iter().enumerate() {
+        if *b == b'"' || *b == b'\'' {
+            if start.is_none() { start = Some(i + 1); quote = *b; }
+            else if *b == quote { return Some(prompt[start.unwrap()..i].to_string()); }
+        }
+    }
+    None
+}
+
 // Returns (tool, args, write) or None for help. Mirrors queryRouter.ts rule order.
 fn route_query(prompt: &str) -> Option<(String, serde_json::Value, bool)> {
     let p = prompt.to_lowercase();
@@ -449,24 +473,53 @@ fn route_query(prompt: &str) -> Option<(String, serde_json::Value, bool)> {
     if p.contains("server") && p.contains("list") { return Some(("exchange_list_servers".into(), serde_json::json!({}), false)); }
     if p.contains("topology") { return Some(("report.exchange_topology".into(), serde_json::json!({}), false)); }
     if has_any(&p, &["overview", "environment"]) { return Some(("report.exchange_environment_overview".into(), serde_json::json!({}), false)); }
-    if has_any(&p, &["ndr", "bounce", "bounced"]) || prompt.contains("5.") {
-        let code: String = prompt.split_whitespace().find(|w| w.chars().filter(|c| *c == '.').count() == 2 && w.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false)).unwrap_or("").trim_matches(|c: char| !c.is_ascii_alphanumeric() && c != '.').to_string();
-        let args = if code.is_empty() { serde_json::json!({}) } else { serde_json::json!({ "code": code }) };
+    if has_any(&p, &["ndr", "bounce", "bounced"]) || extract_ndr_code(prompt).is_some() {
+        let args = match extract_ndr_code(prompt) {
+            Some(code) => serde_json::json!({ "code": code }),
+            None => serde_json::json!({}),
+        };
         return Some(("mailflow.get_ndr_details".into(), args, false));
     }
     if has_any(&p, &["trace", "tracking", "delivery status"]) || (p.contains("did") && p.contains("receiv")) {
-        return Some(("mailflow.get_message_trace".into(), email.map(|e| obj(vec![("sender", e)])).unwrap_or(serde_json::json!({})), false));
+        let mut trace_args = serde_json::json!({});
+        if let Some(e) = email.clone() { trace_args["sender"] = serde_json::Value::String(e); }
+        if let Some(s) = extract_quoted(prompt).filter(|s| !s.is_empty()) { trace_args["subject"] = serde_json::Value::String(s); }
+        return Some(("mailflow.get_message_trace".into(), trace_args, false));
     }
     if has_any(&p, &["permission", "access", "fullaccess", "sendas", "send as"]) {
-        if let Some(e) = email { return Some(("exchange_get_mailbox_permissions".into(), obj(vec![("identity", e)]), false)); }
+        if let Some(e) = email.clone() { return Some(("exchange_get_mailbox_permissions".into(), obj(vec![("identity", e)]), false)); }
     }
     if has_any(&p, &["statistic", "how big", "item count", "last logon"]) {
-        if let Some(e) = email { return Some(("exchange_get_mailbox_statistics".into(), obj(vec![("identity", e)]), false)); }
+        if let Some(e) = email.clone() { return Some(("exchange_get_mailbox_statistics".into(), obj(vec![("identity", e)]), false)); }
     }
     if p.contains("dismount") { return Some(("database.dismount".into(), after_word(prompt, "dismount").map(|s| obj(vec![("identity", s)])).unwrap_or(serde_json::json!({})), true)); }
     if p.contains("mount") && !p.contains("amount") { return Some(("database.mount".into(), after_word(prompt, "mount").map(|s| obj(vec![("identity", s)])).unwrap_or(serde_json::json!({})), true)); }
     if p.contains("retry") && p.contains("queue") { return Some(("exchange_retry_queue".into(), after_word(prompt, "queue").map(|s| obj(vec![("identity", s)])).unwrap_or(serde_json::json!({})), true)); }
     if p.contains("suspend") && p.contains("queue") { return Some(("exchange_suspend_queue".into(), after_word(prompt, "queue").map(|s| obj(vec![("identity", s)])).unwrap_or(serde_json::json!({})), true)); }
+    if p.contains("restart") && p.contains("service") {
+        let name = prompt.split_whitespace().skip_while(|w| !w.eq_ignore_ascii_case("service")).nth(1).map(|s| s.trim_matches(|c: char| !c.is_ascii_alphanumeric() && c != '*' && c != '-').to_string()).filter(|s| !s.is_empty());
+        let mut m = serde_json::Map::new();
+        if let Some(n) = name { m.insert("name".to_string(), serde_json::Value::String(n)); }
+        m.insert("confirm".to_string(), serde_json::Value::Bool(true));
+        return Some(("server.restart_service".into(), serde_json::Value::Object(m), true));
+    }
+    if p.contains("move") && has_any(&p, &["mailbox", "request"]) {
+        return Some(("mailbox.new_move_request".into(), email.clone().map(|e| obj(vec![("identity", e)])).unwrap_or(serde_json::json!({})), true));
+    }
+    if p.contains("quota") && has_any(&p, &["set", "change", "increase", "raise"]) {
+        return Some(("mailbox.set_quota".into(), email.clone().map(|e| obj(vec![("identity", e)])).unwrap_or(serde_json::json!({})), true));
+    }
+    if p.contains("repair") && has_any(&p, &["database", "mailbox"]) {
+        return Some(("database.new_repair_request".into(), serde_json::json!({}), true));
+    }
+    if has_any(&p, &["grant", "give", "add"]) && has_any(&p, &["permission", "access"]) {
+        if let Some(e) = email.clone() {
+            let mut m = serde_json::Map::new();
+            m.insert("identity".to_string(), serde_json::Value::String(e));
+            m.insert("accessRights".to_string(), serde_json::Value::String(if p.contains("sendas") || p.contains("send as") { "SendAs".to_string() } else { "FullAccess".to_string() }));
+            return Some(("mailbox.add_permission".into(), serde_json::Value::Object(m), true));
+        }
+    }
     if let Some(e) = email { return Some(("ai.tell_me_everything".into(), obj(vec![("identity", e)]), false)); }
     None
 }
