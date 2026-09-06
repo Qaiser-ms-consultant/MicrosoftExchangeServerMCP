@@ -2,6 +2,11 @@ node_modules/
 dist/
 docs/
 .opencode/
+target/
+*.msi
+*.dmg
+*.AppImage
+*.deb
 .env
 *.log
 logs/
