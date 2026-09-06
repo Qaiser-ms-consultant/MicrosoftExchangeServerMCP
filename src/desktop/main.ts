@@ -6,6 +6,7 @@ import { homedir } from "node:os";
 import { spawn, ChildProcess } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { routeQuery } from "./queryRouter.js";
+import { loadConfig } from "../config.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -91,6 +92,23 @@ ipcMain.handle("config:save", async (_e, content: string) => {
   return { ok: true, path: p };
 });
 ipcMain.handle("config:path", async () => ensureConfig());
+// IPC: backend Exchange identity — resolved with the same loader the MCP
+// server uses (./config.yaml + env), so labels always match the live backend.
+// Returns endpoints only, never credentials.
+ipcMain.handle("backend:info", async () => {
+  try {
+    const cfg = loadConfig();
+    const ep = (cfg.exchange.endpoint || "").replace(/\/$/, "");
+    return {
+      endpoint: cfg.exchange.endpoint,
+      powershellUri: cfg.exchange.powershellUri,
+      ewsUrl: `${ep}${cfg.exchange.ewsPath}`,
+      insecure: !!cfg.exchange.insecure,
+    };
+  } catch {
+    return { endpoint: "", powershellUri: "", ewsUrl: "", insecure: false };
+  }
+});
 
 // IPC: model providers — 14 (12 + OpenCode + Ollama Cloud), file-based ${API_KEY}
 const PROVIDERS = ["OpenAI","Anthropic","Google","Azure OpenAI","AWS Bedrock","Ollama","Ollama Cloud","Mistral","Cohere","Groq","Together","OpenRouter","Custom","OpenCode"];

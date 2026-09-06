@@ -106,6 +106,11 @@
   ::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:9999px}::-webkit-scrollbar-thumb:hover{background:var(--border-light)}
   html, body { background-color: var(--bg-base) !important; color: var(--text-primary); }
   html:not(.dark) main[class*="bg-gradient-to-b"] { background: var(--bg-base) !important; background-image: none !important; }
+  /* Short viewports: let the whole page scroll so no panel is ever unreachable */
+  @media (max-height: 719px) {
+    html body { overflow-y: auto !important; }
+    main[data-purpose="split-pane-workflow"] { flex: none !important; height: auto !important; overflow: visible !important; }
+  }
 </style>
 </head>
 <body class="h-full antialiased font-sans select-none overflow-hidden flex flex-col">
@@ -137,33 +142,33 @@
 </div>
 </nav>
 
-<main class="flex-1 p-5 overflow-hidden grid grid-cols-12 gap-5 bg-gradient-to-b from-[#090d16] to-[#0d1322]" data-purpose="split-pane-workflow">
+<main class="flex-1 min-h-0 p-5 overflow-hidden grid grid-cols-12 auto-rows-fr gap-5 bg-gradient-to-b from-[#090d16] to-[#0d1322]" data-purpose="split-pane-workflow">
 <!-- LEFT: Prompt Console -->
-<section class="col-span-12 lg:col-span-5 flex flex-col gap-4 h-full overflow-hidden" data-view="home">
-<div class="flex-1 bg-[#121829]/95 backdrop-blur-md border border-[#1f2d48] rounded-xl flex flex-col shadow-xl shadow-black/40 overflow-hidden">
+<section class="col-span-12 lg:col-span-5 flex flex-col gap-4 h-full min-h-0 overflow-y-auto" data-view="home">
+<div class="flex-1 min-h-min bg-[#121829]/95 backdrop-blur-md border border-[#1f2d48] rounded-xl flex flex-col shadow-xl shadow-black/40 overflow-hidden">
 <div class="px-4 py-3 bg-[#151c30]/70 border-b border-[#1f2d48] flex items-center justify-between">
 <div class="flex items-center gap-2"><span class="text-xs font-bold uppercase tracking-wider text-slate-400">Prompt Console</span></div>
 </div>
 <div class="p-4 flex-1 flex flex-col gap-3">
 <div class="flex items-center justify-between"><label class="text-xs font-medium text-slate-300">Instruction / Task Request</label><span class="text-[10px] text-slate-500 font-mono" id="currentMailboxLabel">admin@contoso.com</span></div>
-<div class="relative flex-1 group">
-<textarea class="w-full h-full p-3.5 bg-[#0b0f19] text-slate-100 rounded-lg border border-[#22304d] text-sm font-mono focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition resize-none leading-relaxed placeholder-slate-600" id="prompt" placeholder="Give a command to your Exchange Agent..." rows="6">Tell me everything about admin@contoso.com</textarea>
+<div class="relative flex-1 min-h-[90px] group">
+<textarea class="w-full h-full p-3 bg-[#0b0f19] text-slate-100 rounded-lg border border-[#22304d] text-sm font-mono focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition resize-none leading-relaxed placeholder-slate-600" id="prompt" placeholder="Give a command to your Exchange Agent..." rows="4">Tell me everything about admin@contoso.com</textarea>
 <div class="absolute bottom-2.5 right-3 text-[10px] font-mono text-slate-500 bg-[#0b0f19]/80 px-1.5 py-0.5 rounded border border-[#1b253b]" id="tokenCount">48 tokens</div>
 </div>
 <div class="flex flex-col gap-2 text-xs">
-<div class="bg-[#0b0f19] border border-[#1d2943] rounded-lg p-2.5 flex items-center justify-between">
+<div class="bg-[#0b0f19] border border-[#1d2943] rounded-lg p-2 flex items-center justify-between">
 <span class="text-slate-400 text-[11px]">Model Target:</span>
 <select id="provider" class="bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200 focus:border-blue-500 outline-none cursor-pointer" style="background: #0b0f19; color: #e2e8f0;">
 <option>OpenAI</option><option>Anthropic</option><option>Google</option><option>Azure OpenAI</option><option>AWS Bedrock</option><option>Ollama</option><option>Ollama Cloud</option><option>Mistral</option><option>Cohere</option><option>Groq</option><option>Together</option><option>OpenRouter</option><option>Custom</option><option>OpenCode</option>
 </select>
 </div>
-<div class="bg-[#0b0f19] border border-[#1d2943] rounded-lg p-2.5 flex flex-col gap-2">
+<div class="bg-[#0b0f19] border border-[#1d2943] rounded-lg p-2 flex flex-col gap-2">
 <div class="flex items-center justify-between"><span class="text-[11px] text-slate-400">API Key</span><span class="text-[10px] text-slate-500">file-based ${API_KEY}</span></div>
 <input id="apiKey" type="password" placeholder="Stored file-based, never shown" class="w-full p-2 bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200 placeholder-slate-600 focus:border-blue-500 outline-none" />
 <input id="baseUrl" placeholder="https://api.openai.com/v1 (custom/Ollama)" class="w-full p-2 bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200 placeholder-slate-600 focus:border-blue-500 outline-none" />
 </div>
 <button class="w-full px-3 py-1.5 rounded-md bg-[#1a2336] hover:bg-[#1e2d4a] border border-[#23314e] text-xs text-slate-300" id="testModel">Test connection</button>
-<div class="bg-[#0b0f19] border border-[#1d2943] rounded-lg p-2.5 flex items-center justify-between">
+<div class="bg-[#0b0f19] border border-[#1d2943] rounded-lg p-2 flex items-center justify-between">
 <span class="text-slate-400 text-[11px]">Model:</span>
 <select id="model" class="bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200 focus:border-blue-500 outline-none cursor-pointer" style="background: #0b0f19; color: #e2e8f0;"><option>Select provider first</option></select>
 </div>
@@ -193,8 +198,8 @@
 </section>
 
 <!-- RIGHT: Output & Analysis -->
-<section class="col-span-12 lg:col-span-7 flex flex-col h-full overflow-hidden" data-view="home">
-<div class="flex-1 bg-[#121829]/95 backdrop-blur-md border border-[#1f2d48] rounded-xl flex flex-col shadow-xl shadow-black/40 overflow-hidden">
+<section class="col-span-12 lg:col-span-7 flex flex-col h-full min-h-0 overflow-hidden" data-view="home">
+<div class="flex-1 min-h-0 bg-[#121829]/95 backdrop-blur-md border border-[#1f2d48] rounded-xl flex flex-col shadow-xl shadow-black/40 overflow-hidden">
 <div class="px-4 py-3 bg-[#151c30]/70 border-b border-[#1f2d48] flex items-center justify-between flex-shrink-0">
 <div class="flex items-center gap-3">
 <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Output & Analysis</span>
@@ -217,7 +222,7 @@
 </div>
 <span class="text-[11px] font-mono text-slate-500" id="hostPill">Host: mail.contoso.com</span>
 </div>
-<div class="flex-1 p-5 overflow-y-auto space-y-4 bg-[#0a0e17]" id="outputScroll" data-purpose="output-scroll-container">
+<div class="flex-1 min-h-0 p-5 overflow-y-auto space-y-4 bg-[#0a0e17]" id="outputScroll" data-purpose="output-scroll-container">
 <div class="p-4 rounded-lg bg-[#111726] border border-[#1d2a42]" id="resultCard">
 <div class="flex items-center justify-between mb-2">
 <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Agent Output</h3>
@@ -242,7 +247,7 @@
 </section>
 
 <!-- LOGS/HEALTH/CONFIG (hidden by default, shown via tabs) -->
-<section class="col-span-12 lg:col-span-12 hidden" data-view="health">
+<section class="col-span-12 lg:col-span-12 hidden min-h-0 overflow-y-auto" data-view="health">
 <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4" id="healthCards">
 <!-- Desktop App Connection to MCP Server -->
 <div class="bg-[#121829] border border-[#1f2d48] rounded-xl p-4 flex flex-col" data-health-card>
@@ -383,6 +388,7 @@ window.addEventListener('error', function(e){ console.error(e.error||e.message);
           runDoctor: function(opts){ return invoke('run_doctor', opts || {}); },
           askExchange: function(payload){ return invoke('ask_exchange', payload || {}); },
           isMcpRunning: function(){ return invoke('is_mcp_running'); },
+          getBackendInfo: function(){ return invoke('get_backend_info'); },
           onLog: null
         };
       }
@@ -406,6 +412,8 @@ if(!isDesktop){
 })();
   // Repopulate saved model config (provider, key, model) from file
   restoreModelConfig();
+  // Show the live backend Exchange server from the MCP config
+  refreshBackendLabels();
 
 }
 // Output tabs — Summary / Raw MCP JSON / PowerShell Trace
@@ -837,6 +845,7 @@ async function updateDesktopMcpStatus(){
     const cfgEl=document.getElementById("desktopMcpConfig");
     if(pidEl) pidEl.textContent="—";
     if(cfgEl) cfgEl.textContent="—";
+    refreshBackendLabels();
   }catch(e){ console.error('updateDesktopMcpStatus failed', e); }
 }
 
@@ -861,7 +870,24 @@ async function updateMcpServerStatus(){
     const cfgEl=document.getElementById("mcpConfigPath");
     if(pidEl) pidEl.textContent="—";
     if(cfgEl) cfgEl.textContent="—";
+    refreshBackendLabels();
   }catch(e){ console.error('updateMcpServerStatus failed', e); }
+}
+
+// Backend labels — show the live Exchange backend from the MCP config
+// (./config.yaml + env) instead of baked-in placeholders.
+async function refreshBackendLabels(){
+  try{
+    if(!isDesktop || !window.exchangeDesktop.getBackendInfo) return;
+    const info = await window.exchangeDesktop.getBackendInfo();
+    if(!info) return;
+    const hostOf=(u)=>{ try{ return new URL(u).hostname; }catch(e){ return ""; } };
+    const setText=(id,t)=>{ const el=document.getElementById(id); if(el && t) el.textContent=t; };
+    const h = hostOf(info.endpoint||"") || hostOf(info.powershellUri||"");
+    if(h){ setText("serverPill", h); setText("hostPill", "Host: "+h); }
+    setText("psEndpoint", info.powershellUri);
+    setText("ewsEndpoint", info.ewsUrl);
+  }catch(e){ console.error('refreshBackendLabels failed', e); }
 }
 
 </script>

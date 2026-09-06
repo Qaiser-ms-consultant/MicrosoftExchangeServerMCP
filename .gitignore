@@ -3,6 +3,7 @@ dist/
 docs/
 .opencode/
 target/
+.playwright-mcp/
 *.msi
 *.dmg
 *.AppImage

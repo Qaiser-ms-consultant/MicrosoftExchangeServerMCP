@@ -377,6 +377,32 @@ fn stop_mcp() -> serde_json::Value {
 }
 
 #[tauri::command]
+fn get_backend_info() -> serde_json::Value {
+    // Mirror src/config.ts resolution (env wins; contoso defaults match the TS loader).
+    // Endpoints only — never credentials.
+    let endpoint =
+        std::env::var("EXCHANGE_ENDPOINT").unwrap_or_else(|_| "https://mail.contoso.com".to_string());
+    let powershell_uri = std::env::var("EXCHANGE_POWERSHELL_URL")
+        .or_else(|_| std::env::var("EXCHANGE_SERVER"))
+        .map(|s| {
+            let base = s.trim_end_matches('/').to_string();
+            if base.to_lowercase().starts_with("http") || base.contains("/PowerShell") {
+                base
+            } else {
+                format!("https://{}/PowerShell", base)
+            }
+        })
+        .unwrap_or_else(|_| format!("{}/PowerShell", endpoint.trim_end_matches('/')));
+    let base = endpoint.trim_end_matches('/');
+    serde_json::json!({
+        "endpoint": endpoint,
+        "powershellUri": powershell_uri,
+        "ewsUrl": format!("{}/EWS/Exchange.asmx", base),
+        "insecure": std::env::var("EXCHANGE_INSECURE").map(|v| v == "true" || v == "1").unwrap_or(false),
+    })
+}
+
+#[tauri::command]
 fn is_mcp_running() -> bool {
     if let Ok(mut state) = mcp().lock() {
         if let Some(child) = state.child.as_mut() {
@@ -726,6 +752,7 @@ fn main() {
             start_mcp,
             stop_mcp,
             is_mcp_running,
+            get_backend_info,
             ask_exchange,
             run_doctor,
         ])

@@ -11,4 +11,5 @@ contextBridge.exposeInMainWorld("exchangeDesktop", {
   runDoctor: (opts: { endpoint?: string; insecure?: boolean }) => ipcRenderer.invoke("doctor:run", opts),
   askExchange: (payload: { prompt: string }) => ipcRenderer.invoke("exchange:ask", payload),
   isMcpRunning: () => ipcRenderer.invoke("mcp:isRunning"),
+  getBackendInfo: () => ipcRenderer.invoke("backend:info"),
 });

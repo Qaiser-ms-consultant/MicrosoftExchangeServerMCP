@@ -82,10 +82,15 @@ for (const needle of ['id="psConnStatus"', 'id="ewsConnStatus"', 'id="ewsEndpoin
   if (healthSection.includes(needle) !== expected) fail(`unexpected Health card state for ${needle}`);
 }
 if (!html.includes('id="themeToggle"')) fail('missing theme toggle');
+if (!html.includes("refreshBackendLabels")) fail("backend labels must refresh from MCP config (refreshBackendLabels missing)");
+if (!html.includes('id="serverPill">mail.contoso.com')) fail("server pill default must be the generic placeholder (live value comes from backend:info)");
 if (html.indexOf('id="themeToggle"') > html.indexOf('id="serverPill"')) fail("theme toggle must sit left of the server status pill");
 const headerHtml = html.match(/<header[\s\S]*?<\/header>/)?.[0] || "";
 if (!headerHtml.includes('id="themeToggle"') || !headerHtml.includes('id="serverPill"')) fail("header must contain both theme toggle and server status");
 if (!html.includes('html:not(.dark) [class*="bg-[#111726]"]')) fail("missing light override for output cards");
+if (!html.includes('h-full min-h-0 overflow-y-auto" data-view="home"')) fail("home prompt column must be scrollable (Run/Clear clipped otherwise)");
+if (!html.includes('auto-rows-fr')) fail("main grid must use auto-rows-fr so rows stay viewport-bound (unbounded rows clip Run/Clear)");
+if (!html.includes('max-height: 719px')) fail("missing short-viewport fallback (page must scroll when window is short)");
 console.log("Health layout and light surfaces OK");
 
 // Tauri command registration check
