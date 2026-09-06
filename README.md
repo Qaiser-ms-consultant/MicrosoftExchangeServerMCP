@@ -16,6 +16,7 @@ Exchange administrators can use AI assistants such as OpenCode, Claude Code, Cur
 - [Features](#features)
 - [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
+- [Run with Docker](#run-with-docker)
 - [Desktop App](#desktop-app)
 - [Configuration](#configuration)
 - [Connect to Clients](#connect-to-clients)
@@ -51,6 +52,8 @@ Exchange administrators can use AI assistants such as OpenCode, Claude Code, Cur
   - PowerShell Remoting: `https://<host>/PowerShell` — must use the fully qualified domain name. Verify with `Get-PowerShellVirtualDirectory` and `Test-WSMan <host>`.
 - Windows is recommended for PowerShell-based tools, which use PowerShell Remoting with support for self-signed certificates. On Linux or macOS, PowerShell tools require a custom wrapper.
 - An account with appropriate RBAC roles, such as Organization Management or Recipient Management. To check required roles for a cmdlet, run `Get-ManagementRole -Cmdlet Get-Queue`.
+- For the desktop app: the same items above, plus Node.js 20 or later with project dependencies installed (`npm install`). No separate Electron install is needed — Electron ships as a project dependency. A model-provider API key is optional (only needed to fetch live model lists; the built-in AI reports work without one).
+- For Docker: Docker Engine 24+ (or Docker Desktop) with Compose v2. Note the container runs on Linux, so the PowerShell-tool limitation above applies — EWS/REST tools work fully inside the container.
 
 ---
 
@@ -98,6 +101,55 @@ opencode mcp list        # Should show connected
 claude mcp list          # Should show connected
 ```
 
+## Run with Docker
+
+The repo ships a multi-stage `Dockerfile` (Node 20 Alpine) and a `docker-compose.yml`. The container runs the server with HTTP transport on port 3000, so multiple clients can share one server (stdio mode is per-client and does not apply in Docker).
+
+```bash
+# 1. Configure (same file as local runs)
+cp config.example.yaml config.yaml   # then edit endpoint + auth
+# or run the wizard on the host (needs Node): npx exchange-mcp init
+
+# 2. (Optional) environment overrides — compose reads these from .env or the shell
+cat > .env <<'EOF'
+EXCHANGE_ENDPOINT=https://mail.contoso.com
+AUTH_METHOD=basic
+EXCHANGE_PASSWORD=yourPassword
+EXCHANGE_INSECURE=false
+EOF
+
+# 3. Build and start
+docker compose up --build -d
+curl http://localhost:3000/health     # {"status":"ok",...}
+
+# 4. Point any MCP client at the shared endpoint (see Connect to Clients):
+#    { "mcpServers": { "exchange": { "type": "http", "url": "http://localhost:3000/sse" } } }
+
+# Logs / stop
+docker compose logs -f exchange-mcp
+docker compose down
+```
+
+Plain `docker run` equivalent (no compose):
+
+```bash
+docker build -t exchange-mcp .
+docker run -d --name exchange-mcp -p 3000:3000 \
+  -v ./config.yaml:/app/config.yaml:ro \
+  -e EXCHANGE_ENDPOINT=https://mail.contoso.com \
+  -e EXCHANGE_PASSWORD=yourPassword \
+  exchange-mcp
+```
+
+Notes:
+
+- The image bakes `config.example.yaml` in as a fallback `config.yaml`; compose mounts your `./config.yaml` over it read-only, so always edit (or mount) the repo file with real credentials.
+- Environment variables override `config.yaml` values — prefer passing secrets via env rather than baking them into an image.
+- The container is Linux-based: EWS/REST tools work fully, but PowerShell-Remoting tools need a Windows host or a custom wrapper (same limitation as running natively on Linux/macOS).
+- `restart: unless-stopped` is set in compose, so the server comes back up after host reboots.
+
+---
+
 ## Desktop App — Exchange Agentic Admin
 
 A standalone Electron desktop app — **Exchange Agentic Admin, AI Powered Exchange Operations Intelligence Platform** — for administrators who prefer a graphical interface over CLI.
@@ -119,14 +171,15 @@ npm run desktop:build      # uses electron-builder, outputs dist/installer
 # No publish by default (--publish=never)
 ```
 
+**Prerequisites:** Node.js 20+, `npm install`, and the same Exchange reachability/credentials as the server (the app spawns its MCP backend from the repo's `./config.yaml` plus environment variables). Windows is recommended for full PowerShell-tool functionality.
+
 **Features:**
 
-- **Admin tab** — edit Exchange endpoint, username, password environment variable, insecure toggle, save to `config.yaml`, test PowerShell + EWS connectivity
-- **Model Providers (12)** — OpenAI, Anthropic, Google, Azure OpenAI, AWS Bedrock, Ollama, Mistral, Cohere, Groq, Together, OpenRouter and Custom. Select provider to fetch models via `GET /v1/models`, enter file-based API key, test connection
-- **Prompt and Output** — Monaco editor with templates, human-friendly rendering for `ai.tell_me_everything` (Health 74/100 gauge with status icons) and tables for `report.*`
-- **Logs tab** — real-time streaming from `src/server.ts` and PowerShell transcript via preloaded IPC
-- **Triple connectivity** — Model (`POST /v1/models`), MCP Server (`tools=200`), and Exchange via MCP (`exchange_test_connection` for both PowerShell and EWS) in one view
-- **Tool Explorer** — searchable list of 200 tools grouped as in Tools Reference
+- **Home (Agent)** — prompt console with a human-friendly result card plus Raw MCP JSON and PowerShell Trace views; write actions ask for confirmation before executing
+- **Health tab** — four status cards (Desktop App → MCP Server, MCP Server, PowerShell/WinRM, EWS) with start/restart/stop controls and connectivity checks
+- **Helping Prompts tab** — pre-built prompt recipes that insert into the console
+- **Model Providers (14)** — OpenAI, Anthropic, Google, Azure OpenAI, AWS Bedrock, Ollama, Ollama Cloud, Mistral, Cohere, Groq, Together, OpenRouter, Custom and OpenCode. Select a provider to fetch live models, enter a file-based API key, test the connection
+- **Light/dark theme** — toggle in the header; model settings persist to `~/.config/exchange-desktop/config.yaml` (Windows: `%USERPROFILE%\.config\exchange-desktop\config.yaml`), separate from the MCP `config.yaml`
 
 ---
 

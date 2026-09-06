@@ -65,6 +65,29 @@ for (const needle of ['id="outResult"', "renderResult", "needsConfirm", "humaniz
 }
 console.log("friendly-card pieces OK");
 
+for (const needle of [
+  "--bg-base",
+  'html:not(.dark) [class*="bg-[#0b0f19]"]',
+  'html:not(.dark) [class*="text-slate-200"]',
+]) {
+  if (!html.includes(needle)) fail(`missing light-theme override: ${needle}`);
+}
+console.log("light-theme overrides OK");
+
+const healthSection = html.match(/<section[^>]*data-view="health"[\s\S]*?<\/section>/)?.[0] || "";
+if (!healthSection.includes('id="healthCards"')) fail("Health cards grid missing");
+if ((healthSection.match(/data-health-card/g) || []).length !== 4) fail("Health tab must contain exactly four cards");
+for (const needle of ['id="psConnStatus"', 'id="ewsConnStatus"', 'id="ewsEndpoint"', 'id="quickPrompts"']) {
+  const expected = needle !== 'id="quickPrompts"';
+  if (healthSection.includes(needle) !== expected) fail(`unexpected Health card state for ${needle}`);
+}
+if (!html.includes('id="themeToggle"')) fail('missing theme toggle');
+if (html.indexOf('id="themeToggle"') > html.indexOf('id="serverPill"')) fail("theme toggle must sit left of the server status pill");
+const headerHtml = html.match(/<header[\s\S]*?<\/header>/)?.[0] || "";
+if (!headerHtml.includes('id="themeToggle"') || !headerHtml.includes('id="serverPill"')) fail("header must contain both theme toggle and server status");
+if (!html.includes('html:not(.dark) [class*="bg-[#111726]"]')) fail("missing light override for output cards");
+console.log("Health layout and light surfaces OK");
+
 // Tauri command registration check
 if (!rs.includes("invoke_handler") || !rs.includes("ask_exchange")) {
   fail("invoke_handler registration missing");
