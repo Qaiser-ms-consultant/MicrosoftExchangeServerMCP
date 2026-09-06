@@ -119,7 +119,7 @@ export function registerAISuiteTools(server: McpServer, ps: PowerShellProvider) 
         cmd = `Get-OrganizationConfig | Select-Object Name,ActivityBasedAuthenticationTimeoutInterval,DefaultPublicFolderAgeLimit | Select-Object -First 1`;
         hint = "Organization config — using organization.get_config standalone";
       } else if (q.includes("test") && q.includes("search")) {
-        cmd = `Test-ExchangeSearch -Identity "devlabadmin@devlab2025.local" | Select-Object ResultFound,SearchTime | Select-Object -First 1`;
+        cmd = `Test-ExchangeSearch -Identity "admin@contoso.com" | Select-Object ResultFound,SearchTime | Select-Object -First 1`;
         hint = "Content index health — using diagnostics.test_exchange_search";
       } else if (q.includes("move request") || q.includes("migration") && q.includes("eta")) {
         cmd = `Get-MoveRequestStatistics | Select-Object Identity,Status,PercentComplete,BytesTransferred | Select-Object -First 5`;

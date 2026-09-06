@@ -9,13 +9,13 @@ export function registerTellMeEverything(server: McpServer, ps: PowerShellProvid
     "ai.tell_me_everything",
     "Tell Me Everything About This Mailbox — Analyze user@company.com — Executive Summary Mailbox Health 74/100 + Findings (Quota Risk, Security, Cleanup, Connectivity, Migration) + Recommended Actions",
     {
-      identity: z.string().describe("Mailbox identity, e.g. user@company.com or devlabadmin@devlab2025.local"),
+      identity: z.string().describe("Mailbox identity, e.g. user@company.com or admin@contoso.com"),
       days: z.number().optional().describe("Growth window, default 30"),
     },
     async ({ identity, days }) => {
       const d = days ?? 30;
       const id = identity.replace(/'/g, "''");
-      const domain = (identity.split("@")[1] ?? "devlab2025.local").replace(/'/g, "''");
+      const domain = (identity.split("@")[1] ?? "contoso.com").replace(/'/g, "''");
 
       // Parallel fetch all relevant data
       const [mbx, stats, quotaInfo, oof, perms, fwd, rules, cas, health, cert] = await Promise.all([

@@ -51,7 +51,7 @@ export function registerMailboxFeatureTools(server: McpServer, ps: PowerShellPro
   server.tool(
     "exchange_get_mailbox_folder_permission",
     "Get mailbox folder permissions — Get-MailboxFolderPermission (e.g. Calendar sharing)",
-    { identity: z.string().describe("MailboxFolderId, e.g. devlabadmin@devlab2025.local:\\Calendar") },
+    { identity: z.string().describe("MailboxFolderId, e.g. admin@contoso.com:\\Calendar") },
     async ({ identity }) => {
       const data = await ps.invokeJson(`Get-MailboxFolderPermission -Identity "${identity}" | Select-Object FolderName,User,AccessRights`);
       return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };

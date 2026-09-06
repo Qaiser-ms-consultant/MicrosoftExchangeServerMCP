@@ -133,7 +133,7 @@ export function registerMailboxRecoveryTools(server: McpServer, ps: PowerShellPr
   server.tool(
     "exchange_get_mailbox_import_request",
     "Get import request status (Get-MailboxImportRequest)",
-    { identity: z.string().optional().describe("Mailbox or request identity, e.g. devlabadmin@devlab2025.local or devlabadmin\\Import1"), mailbox: z.string().optional() },
+    { identity: z.string().optional().describe("Mailbox or request identity, e.g. admin@contoso.com or admin\\Import1"), mailbox: z.string().optional() },
     async ({ identity, mailbox }) => {
       let cmd: string;
       if (identity) cmd = `Get-MailboxImportRequest -Identity "${identity}" | Select-Object Identity,Mailbox,Status,PercentComplete,FilePath`;
@@ -147,7 +147,7 @@ export function registerMailboxRecoveryTools(server: McpServer, ps: PowerShellPr
   server.tool(
     "exchange_get_mailbox_import_request_statistics",
     "Get import request statistics (Get-MailboxImportRequestStatistics) — detailed progress",
-    { identity: z.string().describe("Import request identity, e.g. devlabadmin\\Import1") },
+    { identity: z.string().describe("Import request identity, e.g. admin\\Import1") },
     async ({ identity }) => {
       const d = await ps.invokeJson(`Get-MailboxImportRequestStatistics -Identity "${identity}" | Select-Object Identity,Status,PercentComplete,BytesTransferred,EstimatedTransferSize`);
       return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };

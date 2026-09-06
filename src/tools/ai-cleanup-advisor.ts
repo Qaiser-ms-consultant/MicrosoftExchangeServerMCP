@@ -8,7 +8,7 @@ export function registerAICleanupAdvisor(server: McpServer, ps: PowerShellProvid
   server.tool(
     "ai.mailbox_cleanup_advisor",
     "AI Mailbox Cleanup Advisor — analyzes metadata/statistics and recommends: Mailbox Optimization, 8.2GB recoverable/deleted, 4.1GB old content retention-eligible, Archive underutilized, 95% quota, 2.4GB growth 30d",
-    { identity: z.string().describe("Mailbox identity, e.g. devlabadmin@devlab2025.local"), days: z.number().optional().describe("Growth window, default 30") },
+    { identity: z.string().describe("Mailbox identity, e.g. admin@contoso.com"), days: z.number().optional().describe("Growth window, default 30") },
     async ({ identity, days }) => {
       const d = days ?? 30;
       const id = identity.replace(/'/g, "''");

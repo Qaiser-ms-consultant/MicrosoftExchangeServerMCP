@@ -6,7 +6,7 @@ export function registerIndividualMailboxReports(server: McpServer, ps: PowerShe
   server.tool(
     "report.mailbox_detail",
     "Individual Mailbox Report — comprehensive per-mailbox (identity) — Get-Mailbox + Statistics + Permissions + OOF + Hold + Quota",
-    { identity: z.string().describe("Mailbox identity, e.g. devlabadmin@devlab2025.local") },
+    { identity: z.string().describe("Mailbox identity, e.g. admin@contoso.com") },
     async ({ identity }) => {
       const id = identity.replace(/'/g, "''");
       const [mbx, stats, oof, hold, perms] = await Promise.all([
@@ -127,7 +127,7 @@ export function registerIndividualMailboxReports(server: McpServer, ps: PowerShe
     "report.mailbox_activity",
     "Mailbox Activity — useful per-mailbox statistics: Messages received, Messages sent, Internal, External, Average daily, Peak sending/receiving day, Last activity, Last logon (via MessageTrackingLog + Statistics, 30-day window) — legacy alias for mailflow profile",
     {
-      identity: z.string().describe("Mailbox SMTP address, e.g. devlabadmin@devlab2025.local"),
+      identity: z.string().describe("Mailbox SMTP address, e.g. admin@contoso.com"),
       days: z.number().optional().describe("Window in days, default 30"),
     },
     async ({ identity, days }) => {
@@ -140,7 +140,7 @@ export function registerIndividualMailboxReports(server: McpServer, ps: PowerShe
       ]);
       const sentCount = typeof sent === "number" ? sent : Number((sent as any)?.Count ?? sent) || 0;
       const recvCount = typeof recv === "number" ? recv : Number((recv as any)?.Count ?? recv) || 0;
-      const internal = await ps.invokeJson(`Get-MessageTrackingLog -ResultSize 200 -Start (Get-Date).AddDays(-${d}) -Sender '${addr}' | Where-Object { $_.Recipients -like "*@devlab2025.local*" } | Measure-Object | Select-Object -ExpandProperty Count`).catch(() => 0);
+      const internal = await ps.invokeJson(`Get-MessageTrackingLog -ResultSize 200 -Start (Get-Date).AddDays(-${d}) -Sender '${addr}' | Where-Object { $_.Recipients -like "*@contoso.com*" } | Measure-Object | Select-Object -ExpandProperty Count`).catch(() => 0);
       const internalCount = typeof internal === "number" ? internal : 0;
       const externalSent = Math.max(0, sentCount - (internalCount as number));
       const avgDaily = d ? (sentCount + recvCount) / d : 0;
@@ -185,7 +185,7 @@ export function registerIndividualMailboxReports(server: McpServer, ps: PowerShe
     async ({ identity, days }) => {
       const d = days ?? 30;
       const addr = identity.replace(/'/g, "''");
-      const domain = (identity.split("@")[1] ?? "devlab2025.local").replace(/'/g, "''");
+      const domain = (identity.split("@")[1] ?? "contoso.com").replace(/'/g, "''");
       const [sentLogs, recvLogs, stats] = await Promise.all([
         ps.invokeJson(`Get-MessageTrackingLog -ResultSize 500 -Start (Get-Date).AddDays(-${d}) -Sender '${addr}' -EventId SEND | Select-Object Timestamp,Recipients,TotalBytes,MessageSubject | Select-Object -First 200`).catch(() => []),
         ps.invokeJson(`Get-MessageTrackingLog -ResultSize 500 -Start (Get-Date).AddDays(-${d}) -Recipients '${addr}' -EventId DELIVER | Select-Object Timestamp,Sender,TotalBytes | Select-Object -First 200`).catch(() => []),

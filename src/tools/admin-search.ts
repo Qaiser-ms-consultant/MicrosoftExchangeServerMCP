@@ -8,7 +8,7 @@ export function registerSearchTools(server: McpServer, ps: PowerShellProvider) {
     "exchange_search_mailbox",
     "Search mailbox messages via Search-Mailbox (PowerShell, on-prem, no EWS). EstimateResultOnly by default; set -DeleteContent/$false to avoid deletion. Requires Mailbox Search role.",
     {
-      identity: z.string().describe("Mailbox identity (e.g. devlabadmin@devlab2025.local)"),
+      identity: z.string().describe("Mailbox identity (e.g. admin@contoso.com)"),
       searchQuery: z.string().describe("Search query (e.g. subject:test, from:alice, kind:email)"),
       estimateOnly: z.boolean().optional().describe("If true (default), only estimate result count, don't copy/delete"),
       targetMailbox: z.string().optional().describe("For Search-Mailbox copy target"),

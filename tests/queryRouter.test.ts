@@ -3,7 +3,7 @@ import { extractIdentity, routeQuery } from "../src/desktop/queryRouter.js";
 
 describe("extractIdentity", () => {
   it("pulls an email out of free text", () => {
-    expect(extractIdentity("Tell me everything about devlabadmin@devlab2025.local")).toBe("devlabadmin@devlab2025.local");
+    expect(extractIdentity("Tell me everything about admin@contoso.com")).toBe("admin@contoso.com");
   });
   it("returns null when no email present", () => {
     expect(extractIdentity("what version of exchange")).toBeNull();

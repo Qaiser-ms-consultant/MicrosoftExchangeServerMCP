@@ -105,7 +105,7 @@ $nics = Get-CimInstance Win32_NetworkAdapterConfiguration | Where-Object { $_.IP
     const deps = await Promise.all([
       ps.invokeJson(`Get-ExchangeServer | Select-Object -First 1 | Select-Object Name | ForEach-Object { Test-ServiceHealth | Select-Object Server,Role,RequiredServicesRunning | Select-Object -First 5 }`).catch(() => []),
       ps.invokeJson(`Get-ExchangeCertificate | Where-Object { $_.NotAfter -lt (Get-Date).AddDays(30) } | Select-Object Subject,NotAfter,Services | Select-Object -First 5`).catch(() => []),
-      ps.invokeJson(`Resolve-DnsName -Name ${server ?? "devex02.devlab2025.local"} -ErrorAction SilentlyContinue | Select-Object Name,IPAddress | Select-Object -First 5`).catch(() => []),
+      ps.invokeJson(`Resolve-DnsName -Name ${server ?? "mail.contoso.com"} -ErrorAction SilentlyContinue | Select-Object Name,IPAddress | Select-Object -First 5`).catch(() => []),
     ]);
     return { content: [{ type: "text", text: JSON.stringify({ serviceHealth: deps[0], expiringCerts: deps[1], dns: deps[2] }, null, 2) }] };
   });

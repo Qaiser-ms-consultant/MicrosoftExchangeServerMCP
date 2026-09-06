@@ -6,7 +6,7 @@ export function registerDiagnosticsExtended(server: McpServer, ps: PowerShellPro
   server.tool(
     "diagnostics.test_exchange_search",
     "Test Exchange Search content index (Test-ExchangeSearch) — validates search is healthy for mailbox/database",
-    { mailbox: z.string().optional().describe("Mailbox identity, e.g. devlabadmin@devlab2025.local"), database: z.string().optional() },
+    { mailbox: z.string().optional().describe("Mailbox identity, e.g. admin@contoso.com"), database: z.string().optional() },
     async ({ mailbox, database }) => {
       let cmd = "Test-ExchangeSearch";
       if (mailbox) cmd += ` -MailboxDatabase "${database ?? ""}"`;
