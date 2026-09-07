@@ -15,6 +15,20 @@
       window.YAML = m.default || m;
     } catch (e) { console.warn('YAML lib unavailable, using JSON fallback'); }
   })();
+  // Tokenizer (gpt-tokenizer, pure JS, per-encoding ESM builds). Guarded like
+  // YAML above: offline/no-CDN falls back to a ~4-chars-per-token estimate.
+  window.__tokLibs = {};
+  window.__tokReady = (async () => {
+    try {
+      const [o200k, cl100k] = await Promise.all([
+        import('https://cdn.jsdelivr.net/npm/gpt-tokenizer@2/encoding/o200k_base/+esm'),
+        import('https://cdn.jsdelivr.net/npm/gpt-tokenizer@2/encoding/cl100k_base/+esm'),
+      ]);
+      if (o200k && typeof o200k.encode === 'function') window.__tokLibs.o200k = o200k;
+      if (cl100k && typeof cl100k.encode === 'function') window.__tokLibs.cl100k = cl100k;
+      if (typeof updatePromptTokens === 'function') updatePromptTokens();
+    } catch (e) { console.warn('tokenizer lib unavailable, using estimates'); }
+  })();
 </script>
   <script>
     tailwind.config = {
@@ -219,15 +233,23 @@
 <div class="px-4 py-2 bg-[#0d121f] border-b border-[#1b253b] flex items-center justify-between text-xs flex-shrink-0">
 <div class="flex items-center gap-4">
 <div class="flex items-center gap-2 bg-[#141b2e] p-1 rounded-lg border border-[#222f4b]" role="tablist">
-<button class="px-3.5 py-1.5 rounded-md text-xs font-medium bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm flex items-center gap-1.5" data-output-tab="summary" role="tab">Executive Summary</button>
-<button class="px-3.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-[#1b253c] flex items-center gap-1.5" data-output-tab="json" role="tab">Raw MCP JSON</button>
-<button class="px-3.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-[#1b253c] flex items-center gap-1.5" data-output-tab="ps" role="tab">PowerShell Trace</button>
+<button class="px-3.5 py-1.5 rounded-md text-xs font-medium bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm flex items-center gap-1.5" data-output-tab="ai" role="tab" aria-selected="true">✦ AI</button>
+<button class="px-3.5 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-[#1b253c] flex items-center gap-1.5" data-output-tab="mcp" role="tab" aria-selected="false">MCP</button>
+<button class="px-3.5 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-[#1b253c] flex items-center gap-1.5" data-output-tab="json" role="tab" aria-selected="false">Raw JSON</button>
+<button class="px-3.5 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-[#1b253c] flex items-center gap-1.5" data-output-tab="ps" role="tab" aria-selected="false">PowerShell Trace</button>
 </div>
 </div>
 <span class="text-[11px] font-mono text-slate-500" id="hostPill">Host: mail.contoso.com</span>
 </div>
 <div class="flex-1 min-h-0 p-5 overflow-y-auto space-y-4 bg-[#0a0e17]" id="outputScroll" data-purpose="output-scroll-container">
-<div class="p-4 rounded-lg bg-[#111726] border border-[#1d2a42]" id="resultCard">
+<div class="p-4 rounded-lg bg-[#111726] border border-[#1d2a42]" id="aiCard">
+<div class="flex items-center justify-between mb-2">
+<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">✦ AI Answer</h3>
+<span class="text-[10px] font-mono text-slate-500" id="aiUsage">No model run yet</span>
+</div>
+<div class="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed" id="aiResult">Run a prompt to see the human-friendly answer here. Save a model provider, key, and model to enable AI narration.</div>
+</div>
+<div class="p-4 rounded-lg bg-[#111726] border border-[#1d2a42]" id="resultCard" style="display:none">
 <div class="flex items-center justify-between mb-2">
 <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Agent Output</h3>
 <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-slate-500/10 text-slate-300 border border-slate-500/30" id="outStatus">Idle</span>
@@ -245,7 +267,7 @@
 </div>
 <div class="px-4 py-2 bg-[#0c111e] border-t border-[#1b253b] flex items-center justify-between text-[11px] text-slate-500 font-mono flex-shrink-0">
 <div class="flex items-center gap-3"><span>PowerShell Module: Microsoft.Exchange.Management.v15</span><span>•</span><span>Protocol: Kerberos WinRM</span></div>
-<div class="text-slate-400" id="tokenCount">JSON Tokens: 1,842 in / 420 out</div>
+<div class="text-slate-400" id="tokenFooter" title="Tokens of the last operation for the selected model">JSON Tokens: 1,842 in / 420 out</div>
 </div>
 </div>
 </section>
@@ -405,20 +427,25 @@ if(!isDesktop){
   updateMcpServerStatus();
 
 }
-// Output tabs — Summary / Raw MCP JSON / PowerShell Trace
-$$('[data-output-tab]').forEach(function(b){ b.addEventListener('click',function(){
-  $$('[data-output-tab]').forEach(function(x){ x.classList.remove('text-blue-400','font-medium','border-b-2','border-blue-500'); if(!x.classList.contains('text-slate-400')) x.classList.add('text-slate-400'); });
-  b.classList.remove('text-slate-400'); b.classList.add('text-blue-400','font-medium','border-b-2','border-blue-500');
-  ['resultCard','jsonCard','psCard'].forEach(function(id){ const el=document.getElementById(id); if(el) el.style.display='none'; });
-  const map={summary:'resultCard',json:'jsonCard',ps:'psCard'};
-  const show=document.getElementById(map[b.getAttribute('data-output-tab')]);
-  if(show) show.style.display='';
-  if(b.getAttribute('data-output-tab')==='json'){
+// Output tabs — AI / MCP / Raw JSON / PowerShell Trace
+var OUT_TABS={ai:'aiCard',mcp:'resultCard',json:'jsonCard',ps:'psCard'};
+var OUT_ACTIVE=['bg-gradient-to-r','from-blue-600','to-indigo-600','text-white','shadow-sm'];
+var OUT_IDLE=['text-slate-400','hover:text-slate-200','hover:bg-[#1b253c]'];
+function switchOutputTab(name){
+  $$('[data-output-tab]').forEach(function(x){
+    const on=x.getAttribute('data-output-tab')===name;
+    x.setAttribute('aria-selected', on?'true':'false');
+    OUT_ACTIVE.forEach(function(c){ x.classList.toggle(c, on); });
+    OUT_IDLE.forEach(function(c){ x.classList.toggle(c, !on); });
+  });
+  Object.keys(OUT_TABS).forEach(function(k){ const el=document.getElementById(OUT_TABS[k]); if(el) el.style.display=(k===name)?'':'none'; });
+  if(name==='json'){
     const j=document.getElementById('jsonPre');
     if(j) j.textContent=(window.__lastRaw===undefined)?'Run a prompt to see raw MCP JSON here.':((typeof window.__lastRaw==="string")?window.__lastRaw:JSON.stringify(window.__lastRaw,null,2));
   }
-  if(b.getAttribute('data-output-tab')==='ps'){ renderPsTrace(); }
-}); });
+  if(name==='ps'){ renderPsTrace(); }
+}
+$$('[data-output-tab]').forEach(function(b){ b.addEventListener('click',function(){ switchOutputTab(b.getAttribute('data-output-tab')); }); });
 // Tabs — use data-tab / data-view
 $$('[data-tab]').forEach(function(b){ b.addEventListener('click',function(){
   $$('[data-tab]').forEach(function(x){ x.setAttribute('aria-selected','false'); x.classList.remove('bg-gradient-to-r','from-blue-600','to-indigo-600','text-white'); x.classList.add('text-slate-400'); });
@@ -490,7 +517,24 @@ function parseYaml(text){
       if(window.YAML.load) return window.YAML.load(text) || {};
     }
   }catch(e){ console.error('YAML parse failed', e); }
-  try{ return JSON.parse(text); }catch(e){ return {}; }
+  try{ return JSON.parse(text); }catch(e){}
+  return parseSimpleYaml(text);
+}
+// CDN-independent fallback: flat "key: value" subset (this file is flat).
+// Never depends on load order or network — guarantees restore works.
+function parseSimpleYaml(text){
+  const obj={};
+  try{
+    String(text||"").split(/\r?\n/).forEach((line)=>{
+      if(/^\s*(#|$)/.test(line)) return;
+      const m=line.match(/^\s*([A-Za-z0-9_.-]+)\s*:\s*(.*)$/);
+      if(!m) return;
+      let v=(m[2]||"").trim();
+      if(v.length>=2 && ((v[0]==="'"&&v[v.length-1]==="'")||(v[0]==='"'&&v[v.length-1]==='"'))) v=v.slice(1,-1);
+      obj[m[1]]=v;
+    });
+  }catch(e){}
+  return obj;
 }
 function dumpYaml(obj){
   try{
@@ -503,7 +547,13 @@ function dumpYaml(obj){
 }
 // Restore saved model config into the form (called once on startup)
 async function yamlReady(){
-  try{ await Promise.race([window.__yamlReady || Promise.resolve(), new Promise((r)=>setTimeout(r, 3000))]); }catch(e){}
+  // The classic inline script runs BEFORE deferred module scripts, so
+  // window.__yamlReady may not exist yet — poll for its registration.
+  try{
+    const t0 = Date.now();
+    while(!window.__yamlReady && Date.now()-t0 < 3000){ await new Promise((r)=>setTimeout(r, 50)); }
+    await Promise.race([window.__yamlReady || Promise.resolve(), new Promise((r)=>setTimeout(r, 3000))]);
+  }catch(e){}
 }
 async function restoreModelConfig(){
   if(!isDesktop) return;
@@ -583,7 +633,7 @@ async function testAndPopulateModels(){
   const r=await window.exchangeDesktop.testProvider({provider, apiKey, baseUrl:(document.getElementById("baseUrl")).value});
   if(r?.ok && r?.models?.length){
     populateModelsForProvider(provider, r.models, false);
-    showStatus("modelOut", `✅ Connected! Fetched ${r.models.length} live models.`);
+    showStatus("modelOut", `✅ Connected! Fetched ${r.models.length} live models.` + (aiProviderOn(provider) ? " • AI answers ON" : ""));
     return true;
   }
   showStatus("modelOut", `❌ ${r?.error || "Failed to fetch models"} - showing fallback`);
@@ -600,7 +650,7 @@ safeHandler("saveModel", async()=>{
     if(data.apiKey) cfgObj.apiKey = data.apiKey;
     cfgObj.baseUrl = data.baseUrl;
     await window.exchangeDesktop.saveConfig(dumpYaml(cfgObj));
-    showStatus("modelOut", "Saved model config to file");
+    showStatus("modelOut", "Saved model config to file" + (aiProviderOn(data.provider) ? " • AI answers ON" : ""));
 
 });
 safeHandler("runDoctor", async()=>{
@@ -740,12 +790,64 @@ function pagerBar(){
   const btn = (id, label, dis)=>`<button id="${id}" ${dis?"disabled":""} class="px-3 py-1.5 rounded-md text-xs border border-[#22304d] ${dis?"text-slate-600 bg-[#141d30] cursor-not-allowed":"text-slate-300 bg-[#141d30] hover:bg-[#1b2740]"}">${label}</button>`;
   return `<div class="flex items-center justify-between mt-3 px-1">${btn("pgPrev","« Prev",page<=0)}<span class="text-[11px] font-mono text-slate-500">Showing ${lo}–${hi} of ${total} • Page ${page+1}/${pages}</span>${btn("pgNext","Next »",page>=pages-1)}</div>`;
 }
+function tokEncoding(){
+  const model = ((document.getElementById("model") || {}).value || "").toLowerCase();
+  const provider = ((document.getElementById("provider") || {}).value || "");
+  if (/gpt-3\.5|gpt-4($|[^o])/.test(model)) return "cl100k";
+  if (/^(OpenAI|Azure OpenAI|Groq|Together|OpenRouter|OpenCode)$/.test(provider)) return "o200k";
+  return null;
+}
+function countTokens(text){
+  const s = (typeof text === "string") ? text : JSON.stringify(text == null ? "" : text);
+  if(!s) return { count: 0, exact: true, encoding: tokEncoding() || "estimate" };
+  const enc = tokEncoding();
+  const lib = enc && window.__tokLibs && window.__tokLibs[enc];
+  if(lib){ try{ return { count: lib.encode(s).length, exact: true, encoding: enc }; }catch(e){} }
+  return { count: Math.ceil(s.length / 4), exact: false, encoding: "estimate" };
+}
+function fmtTok(n){ return Number(n || 0).toLocaleString("en-US"); }
+function updatePromptTokens(){
+  const el = document.getElementById("tokenCount");
+  const p = document.getElementById("prompt");
+  if(!el || !p) return;
+  const t = countTokens(p.value);
+  el.textContent = (t.exact ? "" : "~") + fmtTok(t.count) + " tokens";
+  el.title = t.exact ? ("Measured with " + t.encoding + " for the selected model") : "Estimated (~4 chars/token) — exact counting needs an OpenAI-family provider";
+}
+function updateOpTokens(promptText, argsObj, dataObj){
+  const el = document.getElementById("tokenFooter");
+  if(!el) return;
+  const i = countTokens((promptText || "") + "\n" + JSON.stringify(argsObj || {}));
+  const o = countTokens((typeof dataObj === "string") ? dataObj : JSON.stringify(dataObj == null ? "" : dataObj));
+  const pre = (i.exact && o.exact) ? "" : "~";
+  el.textContent = "JSON Tokens: " + pre + fmtTok(i.count) + " in / " + pre + fmtTok(o.count) + " out";
+  el.title = (i.exact && o.exact) ? ("Measured with " + i.encoding + " for the selected model") : "Estimated (~4 chars/token) — exact counting needs an OpenAI-family provider";
+}
+function renderAiAnswer(text, usage){
+  const body=document.getElementById("aiResult");
+  const meta=document.getElementById("aiUsage");
+  if(!body || !text) return;
+  body.className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed";
+  body.textContent=text;
+  if(meta) meta.textContent=(usage && usage.input!=null)?`${fmtTok(usage.input)} in / ${fmtTok(usage.output)} out actual`:"Answered without usage data";
+}
+// Keep in sync with AI_COMPATIBLE_PROVIDERS in src/desktop/modelClient.ts
+function aiProviderOn(provider){ return ["OpenAI","Groq","Together","OpenRouter","Mistral","Ollama","Ollama Cloud","Custom","OpenCode"].includes(provider); }
+function renderAiNote(text){
+  const body=document.getElementById("aiResult");
+  const meta=document.getElementById("aiUsage");
+  if(!body || !text) return;
+  body.className="text-xs text-amber-300 whitespace-pre-wrap leading-relaxed";
+  body.textContent=text;
+  if(meta) meta.textContent="notice";
+}
 function renderResult(tool, data, keepPage){
   const out=document.getElementById("outResult");
   if(!out) return;
   if(!keepPage){ window.__page = 0; window.__lastResult = { tool, data }; }
   out.innerHTML=kvTable(pagedView(data))+pagerBar()+rawBlock();
   setRaw(data);
+  if(tool!=="info") updateOpTokens(window.__lastPromptText||"", window.__lastArgs||{}, data);
 }
 function pgNav(d){
   const total = window.__pagingTotal || 0, ps = PAGE_SIZE;
@@ -777,10 +879,12 @@ safeHandler("runPrompt", async()=>{
   if(out) out.textContent="Running…";
   if(statusBadge) statusBadge.textContent="Running…";
   const start=Date.now();
+  window.__lastPromptText = promptEl.value;
   const res = await window.exchangeDesktop.askExchange({prompt: promptEl.value});
   const elapsed = ((Date.now()-start)/1000).toFixed(2);
   const data = (res && res.result !== undefined) ? res.result : res;
   const tool = (res && res.tool) || "";
+  window.__lastArgs = (res && res.args) || {};
   window.__lastRaw = data;
   window.__lastPsTrace = (res && res.psTrace) || [];
   renderPsTrace();
@@ -799,6 +903,8 @@ safeHandler("runPrompt", async()=>{
     if(statusBadge) statusBadge.textContent="Needs info";
   } else {
     renderResult(tool, data);
+    if(res && res.aiAnswer){ renderAiAnswer(res.aiAnswer, res.aiUsage); switchOutputTab('ai'); }
+    else { if(res && res.aiNote) renderAiNote(res.aiNote); switchOutputTab('mcp'); }
     if(statusBadge) statusBadge.textContent="Completed";
   }
   if(healthEl) healthEl.textContent="Done";
@@ -812,12 +918,16 @@ document.getElementById("outResult")?.addEventListener("click", async (e)=>{
     const pw = window.__pendingWrite;
     if(!pw) return;
     const pEl=document.getElementById("prompt");
+    window.__lastPromptText = pEl?pEl.value:"";
     const res2 = await window.exchangeDesktop.askExchange({prompt: pEl?pEl.value:"", confirmed: true, tool: pw.tool, args: pw.args});
     const data2 = (res2 && res2.result !== undefined) ? res2.result : res2;
+    window.__lastArgs = (res2 && res2.args) || pw.args || {};
     window.__lastRaw = data2;
     window.__lastPsTrace = (res2 && res2.psTrace) || [];
     renderPsTrace();
     renderResult((res2 && res2.tool)||pw.tool, data2);
+    if(res2 && res2.aiAnswer){ renderAiAnswer(res2.aiAnswer, res2.aiUsage); switchOutputTab('ai'); }
+    else { if(res2 && res2.aiNote) renderAiNote(res2.aiNote); switchOutputTab('mcp'); }
     const s=document.getElementById("outStatus"); if(s) s.textContent="Completed";
     window.__pendingWrite=null;
     return;
@@ -983,6 +1093,10 @@ async function initRealMailboxSamples(){
   }catch(e){ console.error('initRealMailboxSamples failed', e); }
 }
 initRealMailboxSamples();
+document.getElementById("prompt")?.addEventListener("input", updatePromptTokens);
+document.getElementById("provider")?.addEventListener("change", updatePromptTokens);
+document.getElementById("model")?.addEventListener("change", updatePromptTokens);
+updatePromptTokens();
 
 </script>
 </body>

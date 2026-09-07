@@ -6,7 +6,10 @@ import { homedir } from "node:os";
 import { spawn, ChildProcess } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { routeQuery } from "./queryRouter.js";
+import type { RouteResult } from "./queryRouter.js";
 import { loadConfig } from "../config.js";
+import { parse as parseYaml } from "yaml";
+import { buildSummaryMessages, buildToolPickerMessages, chatComplete, isAiProvider, parseToolSelection } from "./modelClient.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -227,10 +230,41 @@ const WRITE_REQUIRED_ARGS: Record<string, string[]> = {
   "mailbox.add_permission": ["identity", "user"],
 };
 
+// Model settings live in the desktop config file (provider/apiKey/baseUrl/model).
+function readModelConfig(): { provider: string; apiKey: string; baseUrl?: string; model: string } | null {
+  try {
+    const raw = readFileSync(ensureConfig(), "utf-8").trim();
+    if (!raw || raw === "{}") return null;
+    const cfg = raw.startsWith("{") ? JSON.parse(raw) : parseYaml(raw);
+    if (cfg?.provider && cfg?.apiKey && cfg?.model) {
+      return { provider: cfg.provider, apiKey: cfg.apiKey, baseUrl: cfg.baseUrl, model: cfg.model };
+    }
+  } catch {}
+  return null;
+}
+
+// AI fallback: let the configured model pick an MCP tool for prompts the
+// keyword router cannot classify. Returns null to keep today's help card.
+async function tryAiRoute(prompt: string, modelCfg: { provider: string; apiKey: string; baseUrl?: string; model: string }): Promise<{ tool: string; args: any; write: boolean } | null> {
+  try {
+    await ensureMcpInitialized();
+    const list = await mcpRpc("tools/list", {});
+    const names: string[] = (((list as any)?.tools ?? []) as any[]).map((t: any) => String(t?.name ?? "")).filter((n) => n);
+    if (!names.length) return null;
+    const picked = parseToolSelection((await chatComplete(modelCfg, buildToolPickerMessages(prompt, names))).text, names);
+    if (!picked) return null;
+    return { tool: picked.tool, args: picked.args, write: picked.tool in WRITE_REQUIRED_ARGS };
+  } catch (e) { console.error("AI routing failed, falling back to help", e); return null; }
+}
+
 ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?: boolean; tool?: string; args?: any }) => {
   console.log("exchange:ask invoked", payload);
   const prompt = payload.prompt ?? "";
   if(!prompt.trim()) throw new Error("Type a prompt first");
+  // AI mode: a configured OpenAI-compatible model interprets unknown prompts
+  // and narrates results. Without it, pure keyword routing runs as before.
+  const modelCfg = readModelConfig();
+  const aiMode = !!modelCfg && isAiProvider(modelCfg.provider);
   await ensureMcpInitialized();
 
   // Explicit tool+args after in-card Confirm skips re-routing
@@ -240,13 +274,17 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
     write = true;
   } else {
     const route = routeQuery(prompt);
-    if("help" in route){
-      return { prompt, tool: "help", result: {
-        message: "I can run Exchange queries. Try one of these:",
-        examples: ["what version of exchange do i have", "show delayed queues", "server health report", "database whitespace and growth", "certificates expiring soon", "explain bounce 5.7.1", "trace messages from admin@contoso.com", "tell me everything about admin@contoso.com", "dismount database DB01", "what tools do you offer"],
-      }};
-    }
-    tool = route.tool; args = route.args; write = route.write;
+    // AI fallback: model interprets prompts the keyword router cannot classify.
+    let aiRouted: { tool: string; args: any; write: boolean } | null = null;
+    if ("help" in route && aiMode && modelCfg) aiRouted = await tryAiRoute(prompt, modelCfg);
+    if ("help" in route && !aiRouted) return { prompt, tool: "help", result: {
+      message: "I can run Exchange queries. Try one of these:",
+      examples: ["what version of exchange do i have", "show delayed queues", "server health report", "database whitespace and growth", "certificates expiring soon", "explain bounce 5.7.1", "trace messages from admin@contoso.com", "tell me everything about admin@contoso.com", "dismount database DB01", "what tools do you offer"],
+      ...(modelCfg && !isAiProvider(modelCfg.provider) ? { note: "Tip: AI answers need an OpenAI-compatible provider (OpenAI, Groq, Together, OpenRouter, Mistral, Ollama, Custom)." } : {}),
+    },
+    ...((aiMode && modelCfg) ? { aiNote: "Model could not interpret this request — keyword help below." } : {}) };
+    if (aiRouted) { tool = aiRouted.tool; args = aiRouted.args; write = aiRouted.write; }
+    else { const r = route as RouteResult; tool = r.tool; args = r.args; write = r.write; }
   }
 
   // Safety gate for writes
@@ -295,10 +333,19 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
   const psTrace = await readPsTrace();
   if(toolError) return { prompt, tool, error: toolError, psTrace };
   const text = (result as any)?.content?.[0]?.text;
-  if(!text) return { prompt, tool, result, psTrace };
+  if(!text) return { prompt, tool, args, result, psTrace };
   let data: any;
-  try { data = JSON.parse(text); } catch { return { prompt, tool, result: text, psTrace }; }
-  return { prompt, tool, result: data, psTrace };
+  try { data = JSON.parse(text); } catch { return { prompt, tool, args, result: text, psTrace }; }
+  // AI narration: model answers from the executed result. Never fails the ask,
+  // but a failed attempt is reported (aiNote) so the UI never looks AI-less.
+  let aiAnswer: string | undefined; let aiUsage: { input: number; output: number } | undefined; let aiNote: string | undefined;
+  if (aiMode && modelCfg && tool !== "tools" && tool !== "help") {
+    try {
+      const summary = await chatComplete(modelCfg, buildSummaryMessages(prompt, tool, JSON.stringify(data)));
+      aiAnswer = summary.text; aiUsage = summary.usage;
+    } catch (e: any) { console.error("AI answer failed, returning tool result only", e); aiNote = `AI unavailable (${e?.message || e}) — showing MCP result.`; }
+  }
+  return { prompt, tool, args, result: data, psTrace, ...(aiAnswer ? { aiAnswer, aiUsage } : aiNote ? { aiNote } : {}) };
 });
 
 

@@ -180,6 +180,7 @@ npm run desktop:build      # uses electron-builder, outputs dist/installer
 - **Helping Prompts tab** — pre-built prompt recipes that insert into the console
 - **Model Providers (14)** — OpenAI, Anthropic, Google, Azure OpenAI, AWS Bedrock, Ollama, Ollama Cloud, Mistral, Cohere, Groq, Together, OpenRouter, Custom and OpenCode. Select a provider to fetch live models, enter a file-based API key, test the connection
 - **Light/dark theme** — toggle in the header; model settings persist to `~/.config/exchange-desktop/config.yaml` (Windows: `%USERPROFILE%\.config\exchange-desktop\config.yaml`), separate from the MCP `config.yaml`
+- **AI answers (Electron)** — with a model provider, API key, and model saved, prompts are interpreted and results narrated by the model (✦ AI Answer card with actual token usage); MCP tools stay the execution layer. Works with OpenAI-compatible providers (OpenAI, Groq, Together, OpenRouter, Mistral, Ollama, Custom, OpenCode); Ollama endpoints that reject the compatible path automatically retry the native `/api/chat` protocol. Without a model it falls back to keyword routing. The model panel confirms "AI answers ON" after save/test; if a model call fails you get an amber notice with the reason instead of silent keyword results
 
 ---
 

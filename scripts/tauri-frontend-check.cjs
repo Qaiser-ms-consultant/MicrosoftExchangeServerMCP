@@ -123,6 +123,20 @@ console.log("capability catalog path OK");
 if (!html.includes("js-yaml@4.1.0/+esm") || !html.includes("__yamlReady")) fail("YAML must load via guarded dynamic import (static UMD import throws a JS Error banner)");
 if (html.includes("import YAML from 'https://cdn.jsdelivr.net/npm/js-yaml")) fail("stale static YAML import still present");
 console.log("yaml import OK");
+if (!html.includes("parseSimpleYaml")) fail("config restore needs a CDN-independent YAML fallback (parseSimpleYaml)");
+console.log("config restore fallback OK");
+if ((html.match(/id="tokenCount"/g) || []).length !== 1) fail("tokenCount id must be unique (prompt chip only)");
+for (const needle of ['id="tokenFooter"', "updateOpTokens", "updatePromptTokens", "gpt-tokenizer", "__tokLibs"]) {
+  if (!html.includes(needle)) fail(`missing token counter piece: ${needle}`);
+}
+console.log("token counters OK");
+if (!html.includes("renderAiAnswer") || !html.includes("res.aiAnswer")) fail("AI answer card wiring missing (renderAiAnswer)");
+const desktopMain = fs.readFileSync(path.join(__dirname, "..", "src", "desktop", "main.ts"), "utf8");
+if (!desktopMain.includes("chatComplete") || !desktopMain.includes("tryAiRoute") || !desktopMain.includes("aiAnswer")) fail("Electron must route unknown prompts and narrate via the configured model");
+console.log("AI answers path OK");
+if (!html.includes("renderAiNote") || !html.includes("res.aiNote") || !html.includes("AI answers ON")) fail("AI visibility wiring missing (renderAiNote/aiNote/ON indicator)");
+if (!desktopMain.includes("aiNote")) fail("Electron must surface AI failures visibly (aiNote)");
+console.log("AI visibility OK");
 console.log("Health layout and light surfaces OK");
 
 // Tauri command registration check

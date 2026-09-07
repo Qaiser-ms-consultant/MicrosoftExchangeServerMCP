@@ -756,7 +756,7 @@ fn ask_exchange(args: AskArgs) -> Result<serde_json::Value, String> {
                 Some(t) => serde_json::from_str(t).unwrap_or(serde_json::Value::String(t.to_string())),
                 None => v,
             };
-            Ok(serde_json::json!({ "prompt": prompt, "tool": tool, "result": data, "psTrace": ps_trace }))
+            Ok(serde_json::json!({ "prompt": prompt, "tool": tool, "args": rpc_args, "result": data, "psTrace": ps_trace }))
         }
         Err(e) => Ok(serde_json::json!({ "prompt": prompt, "tool": tool, "error": e, "psTrace": ps_trace })),
     }
