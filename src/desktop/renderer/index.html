@@ -174,10 +174,10 @@
 <div class="flex items-center gap-2"><span class="text-xs font-bold uppercase tracking-wider text-slate-400">Prompt Console</span></div>
 </div>
 <div class="p-4 flex-1 flex flex-col gap-3">
-<div class="flex items-center justify-between"><label class="text-xs font-medium text-slate-300">Instruction / Task Request</label><span class="text-[10px] text-slate-500 font-mono" id="currentMailboxLabel">admin@contoso.com</span></div>
+<div class="flex items-center justify-between"><label class="text-xs font-medium text-slate-300">System Prompt</label></div>
 <div class="relative flex-1 min-h-[90px] group">
-<textarea class="w-full h-full p-3 bg-[#0b0f19] text-slate-100 rounded-lg border border-[#22304d] text-sm font-mono focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition resize-none leading-relaxed placeholder-slate-600" id="prompt" placeholder="e.g. Anomaly detection • Mailbox statistics admin@contoso.com • Root cause of delayed queues" rows="4">Tell me everything about admin@contoso.com</textarea>
-<div class="absolute bottom-2.5 right-3 text-[10px] font-mono text-slate-500 bg-[#0b0f19]/80 px-1.5 py-0.5 rounded border border-[#1b253b]" id="tokenCount">48 tokens</div>
+<textarea class="w-full h-full p-3 bg-[#0b0f19] text-slate-100 rounded-lg border border-[#22304d] text-sm font-mono focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition resize-none leading-relaxed placeholder-slate-600" id="systemPrompt" placeholder="Define how the AI should behave when answering Exchange queries. E.g. You are an Exchange Server admin assistant..." rows="4"></textarea>
+<input type="hidden" id="prompt" value="" />
 </div>
 <div class="flex flex-col gap-2 text-xs">
 <div class="bg-[#0b0f19] border border-[#1d2943] rounded-lg p-2 flex items-center justify-between">
@@ -201,10 +201,6 @@
 <div id="modelOut" class="text-[11px] font-mono text-slate-400 bg-[#0b0f19] border border-[#1d2943] rounded p-2 max-h-20 overflow-auto">Not tested</div>
 </div>
 <div class="pt-2 flex items-center justify-between border-t border-[#1b263e]">
-<div class="flex items-center gap-2">
-<button class="px-5 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-medium text-xs flex items-center gap-2 shadow-lg shadow-blue-500/20" id="runPrompt"><svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg> Run Agent <kbd class="text-[9px] bg-blue-800/60 border border-blue-400/30 px-1 rounded font-mono">⌘↵</kbd></button>
-<button class="px-3.5 py-2 rounded-lg bg-[#141c2e] hover:bg-[#1c273e] text-slate-300 border border-[#23314e] text-xs" id="clearPrompt">Clear</button>
-</div>
 <span class="text-[11px] text-slate-500">Uses your selected MCP host</span>
 </div>
 </div>
@@ -215,6 +211,7 @@
 </div>
 </section>
 
+<!-- AI Chat Tab -->
 <!-- RIGHT: Output & Analysis -->
 <section class="col-span-12 lg:col-span-7 flex flex-col h-full min-h-0 overflow-hidden" data-view="home">
 <div class="flex-1 min-h-0 bg-[#121829]/95 backdrop-blur-md border border-[#1f2d48] rounded-xl flex flex-col shadow-xl shadow-black/40 overflow-hidden">
@@ -233,7 +230,7 @@
 <div class="px-4 py-2 bg-[#0d121f] border-b border-[#1b253b] flex items-center justify-between text-xs flex-shrink-0">
 <div class="flex items-center gap-4">
 <div class="flex items-center gap-2 bg-[#141b2e] p-1 rounded-lg border border-[#222f4b]" role="tablist">
-<button class="px-3.5 py-1.5 rounded-md text-xs font-medium bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm flex items-center gap-1.5" data-output-tab="ai" role="tab" aria-selected="true">✦ AI</button>
+<button class="px-3.5 py-1.5 rounded-md text-xs font-medium bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm flex items-center gap-1.5" data-output-tab="ai" role="tab" aria-selected="true">✦ AI Chat</button>
 <button class="px-3.5 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-[#1b253c] flex items-center gap-1.5" data-output-tab="mcp" role="tab" aria-selected="false">MCP</button>
 <button class="px-3.5 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-[#1b253c] flex items-center gap-1.5" data-output-tab="json" role="tab" aria-selected="false">Raw JSON</button>
 <button class="px-3.5 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-[#1b253c] flex items-center gap-1.5" data-output-tab="ps" role="tab" aria-selected="false">PowerShell Trace</button>
@@ -242,12 +239,57 @@
 <span class="text-[11px] font-mono text-slate-500" id="hostPill">Host: mail.contoso.com</span>
 </div>
 <div class="flex-1 min-h-0 p-5 overflow-y-auto space-y-4 bg-[#0a0e17]" id="outputScroll" data-purpose="output-scroll-container">
-<div class="p-4 rounded-lg bg-[#111726] border border-[#1d2a42]" id="aiCard">
-<div class="flex items-center justify-between mb-2">
-<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">✦ AI Answer</h3>
-<span class="text-[10px] font-mono text-slate-500" id="aiUsage">No model run yet</span>
+<div class="flex-1 flex flex-col h-full min-h-0" id="aiChatCard">
+<div class="flex-1 min-h-0 bg-[#121829]/95 flex flex-col rounded-xl border border-[#1f2d48] overflow-hidden">
+<div class="flex items-center justify-between px-4 py-2 bg-[#0d121f] border-b border-[#1b253b]">
+<div class="flex items-center gap-3">
+<span class="text-xs font-bold uppercase tracking-wider text-slate-400">Output</span>
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" id="aiExecBadge"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> <span id="aiExecText">Idle</span></span>
 </div>
-<div class="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed" id="aiResult">Run a prompt to see the human-friendly answer here. Save a model provider, key, and model to enable AI narration.</div>
+<div class="flex items-center gap-2 text-[11px] text-slate-500">
+<span id="aiTokenCount"></span>
+</div>
+</div>
+<div class="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 bg-[#0a0e17]" id="aiChatOutput">
+<div id="aiResultEmpty" class="flex flex-col items-center justify-center h-full text-center">
+<div class="max-w-lg">
+<div class="mb-6"><svg class="w-16 h-16 mx-auto text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg></div>
+<h3 class="text-lg font-medium text-slate-300 mb-2">How can I help with Exchange today?</h3>
+<p class="text-sm text-slate-500 mb-6">Ask me about your Exchange environment, mail flow, server health, databases, and more.</p>
+<div class="grid grid-cols-2 gap-2 text-left">
+<button class="ai-starter-prompt px-3 py-2 rounded-lg bg-[#111726] border border-[#1f2d48] text-xs text-slate-300 hover:bg-[#1a2536] hover:border-[#2b3a58] text-left transition">How healthy is my Exchange environment?</button>
+<button class="ai-starter-prompt px-3 py-2 rounded-lg bg-[#111726] border border-[#1f2d48] text-xs text-slate-300 hover:bg-[#1a2536] hover:border-[#2b3a58] text-left transition">Show me databases approaching capacity</button>
+<button class="ai-starter-prompt px-3 py-2 rounded-lg bg-[#111726] border border-[#1f2d48] text-xs text-slate-300 hover:bg-[#1a2536] hover:border-[#2b3a58] text-left transition">Which mailboxes are over 40 GB?</button>
+<button class="ai-starter-prompt px-3 py-2 rounded-lg bg-[#111726] border border-[#1f2d48] text-xs text-slate-300 hover:bg-[#1a2536] hover:border-[#2b3a58] text-left transition">Why is mail flow delayed?</button>
+<button class="ai-starter-prompt px-3 py-2 rounded-lg bg-[#111726] border border-[#1f2d48] text-xs text-slate-300 hover:bg-[#1a2536] hover:border-[#2b3a58] text-left transition">Analyze today's NDRs</button>
+<button class="ai-starter-prompt px-3 py-2 rounded-lg bg-[#111726] border border-[#1f2d48] text-xs text-slate-300 hover:bg-[#1a2536] hover:border-[#2b3a58] text-left transition">Check certificate expiry</button>
+</div>
+</div>
+</div>
+<div id="aiResultContent" class="hidden">
+<div class="p-4 rounded-lg bg-[#111726] border border-[#1d2a42]">
+<div class="flex items-center justify-between mb-2">
+<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">✦ AI Response</h3>
+<span class="text-[10px] font-mono text-slate-500" id="aiUsage">—</span>
+</div>
+<div class="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed" id="aiResultOutput">Run a prompt to see the AI response here.</div>
+</div>
+</div>
+</div>
+<div class="p-4 bg-[#0c111e] border-t border-[#1b253b] flex-shrink-0">
+<div class="flex items-end gap-3">
+<div class="flex-1 relative">
+<textarea id="aiChatInput" rows="1" placeholder="Ask anything about Exchange..." class="w-full p-3 bg-[#0b0f19] text-slate-100 rounded-xl border border-[#22304d] text-sm resize-none outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 placeholder-slate-600 leading-relaxed"></textarea>
+</div>
+<button id="aiRunAgent" class="px-4 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-medium text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg> Run Agent</button>
+<button id="aiClearChat" class="px-3 py-2 rounded-lg bg-[#141c2e] hover:bg-[#1c273e] text-slate-300 border border-[#23314e] text-xs">Clear</button>
+</div>
+<div class="flex items-center justify-between mt-2 text-[10px] text-slate-500">
+<span>Press Enter to send, Shift+Enter for new line</span>
+</div>
+</div>
+</div>
+</div>
 </div>
 <div class="p-4 rounded-lg bg-[#111726] border border-[#1d2a42]" id="resultCard" style="display:none">
 <div class="flex items-center justify-between mb-2">
@@ -428,7 +470,7 @@ if(!isDesktop){
 
 }
 // Output tabs — AI / MCP / Raw JSON / PowerShell Trace
-var OUT_TABS={ai:'aiCard',mcp:'resultCard',json:'jsonCard',ps:'psCard'};
+var OUT_TABS={ai:'aiChatCard',mcp:'resultCard',json:'jsonCard',ps:'psCard'};
 var OUT_ACTIVE=['bg-gradient-to-r','from-blue-600','to-indigo-600','text-white','shadow-sm'];
 var OUT_IDLE=['text-slate-400','hover:text-slate-200','hover:bg-[#1b253c]'];
 function switchOutputTab(name){
@@ -585,7 +627,8 @@ async function restoreModelConfig(){
     }
     if(cfg.apiKey){ const k=document.getElementById("apiKey"); if(k) k.value=cfg.apiKey; }
     if(cfg.baseUrl){ const b=document.getElementById("baseUrl"); if(b) b.value=cfg.baseUrl; }
-    if(cfg.provider||cfg.model||cfg.apiKey||cfg.baseUrl){
+    if(cfg.systemPrompt){ const sp=document.getElementById("systemPrompt"); if(sp) sp.value=cfg.systemPrompt; }
+    if(cfg.provider||cfg.model||cfg.apiKey||cfg.baseUrl||cfg.systemPrompt){
       showStatus("modelOut", "Restored saved model config from file");
       // Auto-test the restored connection and refresh the live model list
       if(cfg.apiKey){
@@ -641,14 +684,15 @@ async function testAndPopulateModels(){
 }
 safeHandler("testModel", testAndPopulateModels);
 safeHandler("saveModel", async()=>{
-  const data={ provider:(document.getElementById("provider")).value, model:(document.getElementById("model")).value, apiKey:(document.getElementById("apiKey")).value, baseUrl:(document.getElementById("baseUrl")).value };
-    // Save provider/model/apiKey into the config file (YAML) – use existing saveConfig helper
+  const data={ provider:(document.getElementById("provider")).value, model:(document.getElementById("model")).value, apiKey:(document.getElementById("apiKey")).value, baseUrl:(document.getElementById("baseUrl")).value, systemPrompt:(document.getElementById("systemPrompt")).value };
+    // Save provider/model/apiKey/systemPrompt into the config file (YAML) – use existing saveConfig helper
     const cfgObj = parseYaml(await window.exchangeDesktop.loadConfig());
     cfgObj.provider = data.provider;
     cfgObj.model = data.model;
     // Blank key field means "keep the saved key" — never wipe it with ""
     if(data.apiKey) cfgObj.apiKey = data.apiKey;
     cfgObj.baseUrl = data.baseUrl;
+    cfgObj.systemPrompt = data.systemPrompt;
     await window.exchangeDesktop.saveConfig(dumpYaml(cfgObj));
     showStatus("modelOut", "Saved model config to file" + (aiProviderOn(data.provider) ? " • AI answers ON" : ""));
 
@@ -681,7 +725,66 @@ if(isDesktop && window.exchangeDesktop.onLog){
 document.getElementById("clearLogs")?.addEventListener('click', ()=>{ const el=document.getElementById("logView"); if(el) el.textContent=""; });
 document.getElementById("exportLogs")?.addEventListener('click', ()=>{ const el=document.getElementById("logView"); if(el) navigator.clipboard.writeText(el.textContent||""); });
 document.getElementById("clearPrompt")?.addEventListener('click', ()=>{ const el=document.getElementById("prompt"); if(el) el.value=""; });
-document.querySelectorAll("[data-quick]").forEach(b=> b.addEventListener('click', ()=>{ const p=document.getElementById("prompt"); if(p){ p.value=(b).getAttribute("data-quick")||""; p.focus(); } const home=document.querySelector('[data-tab="home"]'); if(home) home.click(); }));
+document.getElementById("aiClearChat")?.addEventListener('click', () => { aiClearChat(); });
+document.getElementById("aiRunAgent")?.addEventListener('click', async () => {
+  const promptEl = document.getElementById("aiChatInput");
+  const statusEl = document.getElementById("aiExecText");
+  const statusBadge = document.getElementById("aiExecBadge");
+  if (!promptEl || !statusEl) return;
+  const promptValue = promptEl.value.trim();
+  if (!promptValue) return;
+  statusEl.textContent = "Running…";
+  if (statusBadge) statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse"></span> <span id="aiExecText">Running…</span>';
+  const emptyState = document.getElementById("aiResultEmpty");
+  const resultContent = document.getElementById("aiResultContent");
+  const aiResultOutput = document.getElementById("aiResultOutput");
+  const aiUsage = document.getElementById("aiUsage");
+  if (emptyState) emptyState.classList.add("hidden");
+  if (resultContent) resultContent.classList.remove("hidden");
+  if (aiResultOutput) aiResultOutput.textContent = "Processing...";
+  const start = Date.now();
+  window.__lastPromptText = promptValue;
+  const res = await window.exchangeDesktop.askExchange({ prompt: promptValue });
+  const elapsed = ((Date.now() - start) / 1000).toFixed(2);
+  const data = (res && res.result !== undefined) ? res.result : res;
+  const tool = (res && res.tool) || "";
+  window.__lastArgs = (res && res.args) || {};
+  window.__lastRaw = data;
+  window.__lastPsTrace = (res && res.psTrace) || [];
+  renderPsTrace();
+  if (res && res.error) {
+    if (aiResultOutput) aiResultOutput.innerHTML = `<div class="p-3 rounded border border-red-500/40 bg-red-500/5 text-xs text-red-300">${esc(res.error)}</div>`;
+    if (statusBadge) statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-red-400"></span> <span id="aiExecText">Failed</span>';
+  } else if (res && res.needsConfirm) {
+    window.__pendingWrite = { tool, args: res.args || (data && data.parameters) || {} };
+    if (aiResultOutput) aiResultOutput.innerHTML = `<div class="p-3 rounded border border-amber-500/40 bg-amber-500/5 text-xs"><p class="text-amber-300 font-semibold mb-1">Confirm action: ${esc(tool)}</p>${kvTable(data.parameters || {})}<div class="flex gap-2 mt-3"><button id="confirmWrite" class="px-3 py-1.5 rounded-md bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs">Confirm</button><button id="cancelWrite" class="px-3 py-1.5 rounded-md bg-[#141d30] border border-[#22304d] text-xs text-slate-300">Cancel</button></div></div>`;
+    if (statusBadge) statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-yellow-400"></span> <span id="aiExecText">Needs confirm</span>';
+    setTimeout(() => {
+      document.getElementById("confirmWrite")?.addEventListener("click", async () => {
+        const res2 = await window.exchangeDesktop.askExchange({ prompt: promptValue, confirmed: true, tool, args: res.args });
+        const aiAns = res2?.aiAnswer || res2?.result?.message || (typeof res2?.result === "object" ? JSON.stringify(res2.result, null, 2) : String(res2?.result || ""));
+        if (aiResultOutput) aiResultOutput.textContent = aiAns || "Action completed";
+        if (aiUsage) aiUsage.textContent = res2?.aiUsage ? `${fmtTok(res2.aiUsage.input)} in / ${fmtTok(res2.aiUsage.output)} out` : "Completed";
+        if (statusBadge) statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> <span id="aiExecText">Completed</span>';
+      });
+      document.getElementById("cancelWrite")?.addEventListener("click", () => {
+        if (aiResultOutput) aiResultOutput.textContent = "Action cancelled.";
+        if (statusBadge) statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> <span id="aiExecText">Cancelled</span>';
+      });
+    }, 0);
+  } else if (res && res.needsInfo) {
+    if (aiResultOutput) aiResultOutput.textContent = (data && data.message) || "More info needed";
+    if (statusBadge) statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-yellow-400"></span> <span id="aiExecText">Needs info</span>';
+  } else {
+    const aiAns = res && res.aiAnswer ? res.aiAnswer : (res && res.aiNote ? res.aiNote : (typeof data === "object" ? JSON.stringify(data, null, 2) : String(data || "")));
+    if (aiResultOutput) aiResultOutput.textContent = aiAns;
+    if (aiUsage) aiUsage.textContent = res?.aiUsage ? `${fmtTok(res.aiUsage.input)} in / ${fmtTok(res.aiUsage.output)} out` : "Completed";
+    renderResult(tool, data);
+    if (statusBadge) statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> <span id="aiExecText">Completed</span>';
+  }
+  if (statusEl) statusEl.textContent = `Done in ${elapsed}s`;
+});
+document.querySelectorAll("[data-quick]").forEach(b=> b.addEventListener('click', ()=>{ const p=document.getElementById("aiChatInput"); if(p){ p.value=(b).getAttribute("data-quick")||""; p.focus(); } const home=document.querySelector('[data-tab="home"]'); if(home) home.click(); }));
 // Gather generic output text for copy/export
 function getOutputText(){
   const el=document.getElementById("outResult");
@@ -1098,6 +1201,349 @@ document.getElementById("provider")?.addEventListener("change", updatePromptToke
 document.getElementById("model")?.addEventListener("change", updatePromptTokens);
 updatePromptTokens();
 
+// ===== AI Chat Implementation =====
+window.__aiConversations = JSON.parse(localStorage.getItem('aiConversations') || '[]');
+window.__aiCurrentConversationId = localStorage.getItem('aiCurrentConversationId') || null;
+window.__aiGenerating = false;
+window.__aiAbortController = null;
+
+function aiSaveConversations() {
+  localStorage.setItem('aiConversations', JSON.stringify(window.__aiConversations));
+  localStorage.setItem('aiCurrentConversationId', window.__aiCurrentConversationId || '');
+}
+
+function aiGetCurrentConversation() {
+  if (!window.__aiCurrentConversationId) return null;
+  return window.__aiConversations.find(c => c.id === window.__aiCurrentConversationId);
+}
+
+function aiCreateNewConversation() {
+  const conv = {
+    id: Date.now().toString(),
+    title: 'New Conversation',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    messages: []
+  };
+  window.__aiConversations.unshift(conv);
+  window.__aiCurrentConversationId = conv.id;
+  aiSaveConversations();
+  aiRenderConversationList();
+  aiClearChat();
+  return conv;
+}
+
+function aiDeleteConversation(id) {
+  window.__aiConversations = window.__aiConversations.filter(c => c.id !== id);
+  if (window.__aiCurrentConversationId === id) {
+    if (window.__aiConversations.length > 0) {
+      window.__aiCurrentConversationId = window.__aiConversations[0].id;
+    } else {
+      window.__aiCurrentConversationId = null;
+    }
+  }
+  aiSaveConversations();
+  aiRenderConversationList();
+}
+
+function aiGenerateTitle(firstMessage) {
+  const words = firstMessage.trim().split(/\s+/).slice(0, 4);
+  return words.join(' ').replace(/[.?]$/, '') + (firstMessage.length > 40 ? '...' : '');
+}
+
+function aiEscapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+function aiRenderMarkdown(text) {
+  if (!text) return '';
+  let html = aiEscapeHtml(text);
+  html = html.replace(/```powershell([\s\S]*?)```/g, '<pre class="my-2 p-3 bg-[#0b0f19] rounded-lg border border-[#1a253a] text-cyan-200 font-mono text-xs overflow-x-auto"><code>$1</code></pre>');
+  html = html.replace(/```(\w+)?([\s\S]*?)```/g, '<pre class="my-2 p-3 bg-[#0b0f19] rounded-lg border border-[#1a253a] text-slate-300 font-mono text-xs overflow-x-auto"><code>$2</code></pre>');
+  html = html.replace(/`([^`]+)`/g, '<code class="px-1 py-0.5 bg-[#1a253a] rounded text-cyan-300 text-xs font-mono">$1</code>');
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong class="font-semibold text-white">$1</strong>');
+  html = html.replace(/\*([^*]+)\*/g, '<em class="italic">$1</em>');
+  html = html.replace(/^### (.+)$/gm, '<h3 class="text-sm font-semibold text-slate-200 mt-3 mb-1">$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2 class="text-base font-semibold text-slate-100 mt-4 mb-2">$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1 class="text-lg font-bold text-white mt-4 mb-2">$1</h1>');
+  html = html.replace(/^\- (.+)$/gm, '<li class="ml-4 text-slate-300 list-disc">$1</li>');
+  html = html.replace(/^(\d+)\. (.+)$/gm, '<li class="ml-4 text-slate-300 list-decimal">$2</li>');
+  html = html.replace(/\n/g, '<br>');
+  return html;
+}
+
+function aiRenderConversationList() {
+  const container = document.getElementById('aiConversationList');
+  if (!container) return;
+  if (window.__aiConversations.length === 0) {
+    container.innerHTML = '<div class="p-2 text-xs text-slate-500 text-center">No conversations yet</div>';
+    return;
+  }
+  const now = new Date();
+  const today = now.toDateString();
+  const yesterday = new Date(now - 86400000).toDateString();
+  const groups = { today: [], yesterday: [], week: [], older: [] };
+  window.__aiConversations.forEach(conv => {
+    const d = new Date(conv.updatedAt);
+    const ds = d.toDateString();
+    if (ds === today) groups.today.push(conv);
+    else if (ds === yesterday) groups.yesterday.push(conv);
+    else if (now - d < 7 * 86400000) groups.week.push(conv);
+    else groups.older.push(conv);
+  });
+  let html = '';
+  const renderGroup = (label, convs) => {
+    if (!convs.length) return '';
+    let g = `<div class="px-3 py-1 text-[10px] font-semibold text-slate-500 uppercase mt-2">${label}</div>`;
+    convs.forEach(c => {
+      const active = c.id === window.__aiCurrentConversationId ? 'bg-[#1a2536] border-[#2b3a58]' : '';
+      g += `<div class="ai-conversation-item mx-2 my-1 px-3 py-2 rounded-lg border border-transparent cursor-pointer hover:bg-[#151d2e] transition ${active}" data-id="${c.id}">
+        <div class="text-xs text-slate-300 truncate">${aiEscapeHtml(c.title)}</div>
+        <div class="text-[10px] text-slate-500">${new Date(c.updatedAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
+      </div>`;
+    });
+    return g;
+  };
+  html += renderGroup('Today', groups.today);
+  html += renderGroup('Yesterday', groups.yesterday);
+  html += renderGroup('Previous 7 Days', groups.week);
+  html += renderGroup('Older', groups.older);
+  container.innerHTML = html;
+  container.querySelectorAll('.ai-conversation-item').forEach(el => {
+    el.addEventListener('click', () => {
+      window.__aiCurrentConversationId = el.dataset.id;
+      aiSaveConversations();
+      aiRenderConversationList();
+      aiLoadConversation(el.dataset.id);
+    });
+  });
+}
+
+function aiClearChat() {
+  const container = document.getElementById('aiMessagesContainer');
+  const emptyState = document.getElementById('aiEmptyState');
+  const title = document.getElementById('aiConversationTitle');
+  if (container) container.innerHTML = '';
+  if (emptyState) emptyState.classList.remove('hidden');
+  if (title) title.textContent = 'New Conversation';
+  const resultContent = document.getElementById("aiResultContent");
+  const resultEmpty = document.getElementById("aiResultEmpty");
+  const aiResultOutput = document.getElementById("aiResultOutput");
+  const aiUsage = document.getElementById("aiUsage");
+  const statusBadge = document.getElementById("aiExecBadge");
+  if (resultContent) resultContent.classList.add("hidden");
+  if (resultEmpty) resultEmpty.classList.remove("hidden");
+  if (aiResultOutput) aiResultOutput.textContent = "";
+  if (aiUsage) aiUsage.textContent = "—";
+  if (statusBadge) statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> <span id="aiExecText">Idle</span>';
+}
+
+function aiLoadConversation(id) {
+  const conv = window.__aiConversations.find(c => c.id === id);
+  if (!conv) { aiClearChat(); return; }
+  const container = document.getElementById('aiMessagesContainer');
+  const emptyState = document.getElementById('aiEmptyState');
+  const title = document.getElementById('aiConversationTitle');
+  if (container) container.innerHTML = '';
+  if (emptyState) emptyState.classList.add('hidden');
+  if (title) title.textContent = conv.title;
+  conv.messages.forEach(msg => aiRenderMessage(msg));
+  aiScrollToBottom();
+}
+
+function aiRenderMessage(msg) {
+  const container = document.getElementById('aiMessagesContainer');
+  const emptyState = document.getElementById('aiEmptyState');
+  if (!container) return;
+  if (emptyState) emptyState.classList.add('hidden');
+  const isUser = msg.role === 'user';
+  const bubble = `<div class="flex ${isUser ? 'justify-end' : 'justify-start'}">
+    <div class="max-w-[85%] ${isUser ? 'bg-blue-600 text-white' : 'bg-[#1a253a] border border-[#25354d] text-slate-200'} rounded-2xl px-4 py-3">
+      <div class="text-[10px] font-medium ${isUser ? 'text-blue-200' : 'text-violet-400'} mb-1">${isUser ? 'You' : '✦ AI'}</div>
+      <div class="text-sm whitespace-pre-wrap leading-relaxed">${aiRenderMarkdown(msg.content)}</div>
+      ${msg.toolActivity ? `<div class="mt-2 pt-2 border-t border-[#2a3854] text-xs text-slate-400">${msg.toolActivity}</div>` : ''}
+      ${msg.error ? `<div class="mt-2 text-xs text-red-400">Error: ${aiEscapeHtml(msg.error)}</div>` : ''}
+    </div>
+  </div>`;
+  container.insertAdjacentHTML('beforeend', bubble);
+  aiScrollToBottom();
+}
+
+function aiScrollToBottom() {
+  const scrollEl = document.getElementById('aiChatMessages');
+  if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+}
+
+function aiSetInputEnabled(enabled) {
+  const input = document.getElementById('aiChatInput');
+  const sendBtn = document.getElementById('aiChatSend');
+  const stopBtn = document.getElementById('aiStopGenerate');
+  if (input) input.disabled = !enabled;
+  if (sendBtn) sendBtn.disabled = !enabled;
+  if (stopBtn) stopBtn.classList.toggle('hidden', enabled);
+}
+
+async function aiSendMessage(text) {
+  if (!text.trim() || window.__aiGenerating) return;
+  let conv = aiGetCurrentConversation();
+  if (!conv) {
+    conv = aiCreateNewConversation();
+  }
+  conv.messages.push({ role: 'user', content: text.trim() });
+  conv.updatedAt = new Date().toISOString();
+  if (conv.title === 'New Conversation') {
+    conv.title = aiGenerateTitle(text);
+    const title = document.getElementById('aiConversationTitle');
+    if (title) title.textContent = conv.title;
+  }
+  aiSaveConversations();
+  aiRenderConversationList();
+  aiRenderMessage({ role: 'user', content: text.trim() });
+  const input = document.getElementById('aiChatInput');
+  if (input) input.value = '';
+  window.__aiGenerating = true;
+  aiSetInputEnabled(false);
+  const thinkingMsg = { role: 'assistant', content: '', toolActivity: '<div class="thinking-animation"><span class="text-slate-400">Thinking...</span></div>' };
+  conv.messages.push(thinkingMsg);
+  aiRenderMessage(thinkingMsg);
+  try {
+    window.__aiAbortController = new AbortController();
+    const systemPrompt = (document.getElementById('systemPrompt') || {}).value || '';
+    const res = await window.exchangeDesktop.askExchange({ prompt: text.trim(), systemPrompt });
+    window.__aiAbortController = null;
+    conv.messages.pop();
+    if (res.error) {
+      conv.messages.push({ role: 'assistant', content: '', error: res.error });
+      aiRenderMessage({ role: 'assistant', content: '', error: res.error });
+    } else if (res.needsConfirm) {
+      const confirmHtml = `<div class="mt-2 p-2 rounded border border-amber-500/40 bg-amber-500/5">
+        <div class="text-amber-300 text-xs font-semibold mb-1">⚠️ Action requires confirmation</div>
+        <div class="text-slate-300 text-xs mb-2">Ready to run: <code class="text-cyan-300">${aiEscapeHtml(res.tool)}</code></div>
+        <div class="flex gap-2">
+          <button class="ai-confirm-btn px-3 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-500">Confirm</button>
+          <button class="ai-cancel-btn px-3 py-1 rounded bg-[#1a2336] text-slate-300 text-xs hover:bg-[#1e2d4a] border border-[#23314e]">Cancel</button>
+        </div>
+      </div>`;
+      conv.messages.push({ role: 'assistant', content: res.result?.message || 'Confirmation required', toolActivity: confirmHtml });
+      aiRenderMessage({ role: 'assistant', content: res.result?.message || 'Confirmation required', toolActivity: confirmHtml });
+      setTimeout(() => {
+        document.querySelector('.ai-confirm-btn')?.addEventListener('click', async () => {
+          const confirmRes = await window.exchangeDesktop.askExchange({ prompt: text.trim(), confirmed: true, tool: res.tool, args: res.args });
+          conv.messages.push({ role: 'assistant', content: confirmRes.aiAnswer || confirmRes.result?.message || 'Action completed' });
+          aiRenderMessage({ role: 'assistant', content: confirmRes.aiAnswer || confirmRes.result?.message || 'Action completed' });
+          aiSaveConversations();
+        });
+        document.querySelector('.ai-cancel-btn')?.addEventListener('click', () => {
+          conv.messages.push({ role: 'assistant', content: 'Action cancelled.' });
+          aiRenderMessage({ role: 'assistant', content: 'Action cancelled.' });
+          aiSaveConversations();
+        });
+      }, 0);
+    } else {
+      const aiContent = res.aiAnswer || res.result?.message || (typeof res.result === 'object' ? JSON.stringify(res.result, null, 2) : String(res.result || ''));
+      const toolActivity = res.psTrace?.length ? `<div class="text-[11px] text-slate-400 mt-1">
+        <span class="text-emerald-400">✓</span> Tool executed${res.psTrace.length > 1 ? ' (' + res.psTrace.length + ' steps)' : ''}
+        ${res.result?.tool ? ' · ' + aiEscapeHtml(res.result.tool) : ''}
+      </div>` : '';
+      conv.messages.push({ role: 'assistant', content: aiContent, toolActivity });
+      aiRenderMessage({ role: 'assistant', content: aiContent, toolActivity });
+    }
+    conv.updatedAt = new Date().toISOString();
+    aiSaveConversations();
+  } catch (err) {
+    conv.messages.pop();
+    const errorMsg = err?.message || 'An error occurred';
+    conv.messages.push({ role: 'assistant', content: '', error: errorMsg });
+    aiRenderMessage({ role: 'assistant', content: '', error: errorMsg });
+    conv.updatedAt = new Date().toISOString();
+    aiSaveConversations();
+  } finally {
+    window.__aiGenerating = false;
+    aiSetInputEnabled(true);
+  }
+}
+
+function aiStopGeneration() {
+  if (window.__aiAbortController) {
+    window.__aiAbortController.abort();
+    window.__aiAbortController = null;
+  }
+  window.__aiGenerating = false;
+  aiSetInputEnabled(true);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    aiRenderConversationList();
+    if (window.__aiCurrentConversationId) {
+      aiLoadConversation(window.__aiCurrentConversationId);
+    }
+    updateAiMcpStatus();
+    populateAiModelSelect();
+  }, 500);
+});
+
+async function updateAiMcpStatus() {
+  try {
+    const isRunning = await window.exchangeDesktop?.isMcpRunning?.();
+    const statusEl = document.getElementById('aiMcpStatus');
+    const textEl = document.getElementById('aiMcpStatusText');
+    if (isRunning) {
+      if (statusEl) statusEl.className = 'w-2 h-2 rounded-full bg-emerald-400';
+      if (textEl) textEl.textContent = 'MCP Connected';
+    } else {
+      if (statusEl) statusEl.className = 'w-2 h-2 rounded-full bg-red-400';
+      if (textEl) textEl.textContent = 'MCP Disconnected';
+    }
+  } catch {}
+}
+
+function populateAiModelSelect() {
+  const select = document.getElementById('aiModelSelect');
+  if (!select) return;
+  const provider = (document.getElementById('provider') || {}).value || '';
+  const model = (document.getElementById('model') || {}).value || '';
+  select.innerHTML = '<option value="">Default Model</option>';
+  if (model && provider) {
+    const opt = document.createElement('option');
+    opt.value = model;
+    opt.textContent = `${provider} - ${model}`;
+    select.appendChild(opt);
+  }
+}
+
+document.getElementById('aiNewChat')?.addEventListener('click', () => {
+  aiCreateNewConversation();
+});
+
+document.getElementById('aiChatInput')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    const input = e.target;
+    aiSendMessage(input.value);
+  }
+});
+
+document.getElementById('aiChatInput')?.addEventListener('input', (e) => {
+  const el = e.target;
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 150) + 'px';
+});
+
+document.getElementById('aiStopGenerate')?.addEventListener('click', aiStopGeneration);
+
+document.querySelectorAll('.ai-starter-prompt').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const prompt = btn.textContent.trim();
+    const input = document.getElementById('aiChatInput');
+    if (input) input.value = prompt;
+    aiSendMessage(prompt);
+  });
+});
+
+document.getElementById('model')?.addEventListener('change', populateAiModelSelect);
+document.getElementById('provider')?.addEventListener('change', populateAiModelSelect);
+setInterval(updateAiMcpStatus, 10000);
 </script>
 </body>
 </html>

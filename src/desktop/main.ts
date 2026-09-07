@@ -230,14 +230,14 @@ const WRITE_REQUIRED_ARGS: Record<string, string[]> = {
   "mailbox.add_permission": ["identity", "user"],
 };
 
-// Model settings live in the desktop config file (provider/apiKey/baseUrl/model).
-function readModelConfig(): { provider: string; apiKey: string; baseUrl?: string; model: string } | null {
+// Model settings live in the desktop config file (provider/apiKey/baseUrl/model/systemPrompt).
+function readModelConfig(): { provider: string; apiKey: string; baseUrl?: string; model: string; systemPrompt?: string } | null {
   try {
     const raw = readFileSync(ensureConfig(), "utf-8").trim();
     if (!raw || raw === "{}") return null;
     const cfg = raw.startsWith("{") ? JSON.parse(raw) : parseYaml(raw);
     if (cfg?.provider && cfg?.apiKey && cfg?.model) {
-      return { provider: cfg.provider, apiKey: cfg.apiKey, baseUrl: cfg.baseUrl, model: cfg.model };
+      return { provider: cfg.provider, apiKey: cfg.apiKey, baseUrl: cfg.baseUrl, model: cfg.model, systemPrompt: cfg.systemPrompt };
     }
   } catch {}
   return null;
@@ -245,13 +245,13 @@ function readModelConfig(): { provider: string; apiKey: string; baseUrl?: string
 
 // AI fallback: let the configured model pick an MCP tool for prompts the
 // keyword router cannot classify. Returns null to keep today's help card.
-async function tryAiRoute(prompt: string, modelCfg: { provider: string; apiKey: string; baseUrl?: string; model: string }): Promise<{ tool: string; args: any; write: boolean } | null> {
+async function tryAiRoute(prompt: string, modelCfg: { provider: string; apiKey: string; baseUrl?: string; model: string; systemPrompt?: string }): Promise<{ tool: string; args: any; write: boolean } | null> {
   try {
     await ensureMcpInitialized();
     const list = await mcpRpc("tools/list", {});
     const names: string[] = (((list as any)?.tools ?? []) as any[]).map((t: any) => String(t?.name ?? "")).filter((n) => n);
     if (!names.length) return null;
-    const picked = parseToolSelection((await chatComplete(modelCfg, buildToolPickerMessages(prompt, names))).text, names);
+    const picked = parseToolSelection((await chatComplete(modelCfg, buildToolPickerMessages(prompt, names, modelCfg.systemPrompt))).text, names);
     if (!picked) return null;
     return { tool: picked.tool, args: picked.args, write: picked.tool in WRITE_REQUIRED_ARGS };
   } catch (e) { console.error("AI routing failed, falling back to help", e); return null; }
@@ -341,7 +341,7 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
   let aiAnswer: string | undefined; let aiUsage: { input: number; output: number } | undefined; let aiNote: string | undefined;
   if (aiMode && modelCfg && tool !== "tools" && tool !== "help") {
     try {
-      const summary = await chatComplete(modelCfg, buildSummaryMessages(prompt, tool, JSON.stringify(data)));
+      const summary = await chatComplete(modelCfg, buildSummaryMessages(prompt, tool, JSON.stringify(data), modelCfg.systemPrompt));
       aiAnswer = summary.text; aiUsage = summary.usage;
     } catch (e: any) { console.error("AI answer failed, returning tool result only", e); aiNote = `AI unavailable (${e?.message || e}) — showing MCP result.`; }
   }

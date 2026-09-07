@@ -7,6 +7,7 @@ export interface ModelConfig {
   apiKey: string;
   baseUrl?: string;
   model: string;
+  systemPrompt?: string;
 }
 
 export interface ChatMessage {
@@ -178,19 +179,17 @@ export async function chatComplete(
 
 // --- Tool-picker (model interprets unknown prompts into MCP tool calls) ---
 
-export function buildToolPickerMessages(prompt: string, toolNames: string[]): ChatMessage[] {
+export function buildToolPickerMessages(prompt: string, toolNames: string[], customSystemPrompt?: string): ChatMessage[] {
+  const systemContent = customSystemPrompt || [
+    "You route an Exchange admin request to exactly one MCP tool.",
+    "Reply with ONLY a JSON object, no markdown fences, no prose:",
+    '{"tool": "<exact tool name from the list>", "args": {}}',
+    "Use {} for args unless the request names values (identity, mailbox, server, domain, code, subject).",
+    "Available tools:",
+    ...toolNames.map((n) => `- ${n}`),
+  ].join("\n");
   return [
-    {
-      role: "system",
-      content: [
-        "You route an Exchange admin request to exactly one MCP tool.",
-        "Reply with ONLY a JSON object, no markdown fences, no prose:",
-        '{"tool": "<exact tool name from the list>", "args": {}}',
-        "Use {} for args unless the request names values (identity, mailbox, server, domain, code, subject).",
-        "Available tools:",
-        ...toolNames.map((n) => `- ${n}`),
-      ].join("\n"),
-    },
+    { role: "system", content: systemContent },
     { role: "user", content: prompt },
   ];
 }
@@ -215,21 +214,19 @@ export function parseToolSelection(
 
 export const SUMMARY_JSON_BUDGET = 12000;
 
-export function buildSummaryMessages(prompt: string, tool: string, resultJson: string): ChatMessage[] {
+export function buildSummaryMessages(prompt: string, tool: string, resultJson: string, customSystemPrompt?: string): ChatMessage[] {
   const clipped = resultJson.length > SUMMARY_JSON_BUDGET
     ? resultJson.slice(0, SUMMARY_JSON_BUDGET) + '\n...[truncated]'
     : resultJson;
+  const systemContent = customSystemPrompt || [
+    "You are an Exchange Server admin assistant. Answer the user's request",
+    "using ONLY the tool result below. Be concise and token-efficient:",
+    "short executive summary first, then key facts as tight bullets.",
+    "Never invent mailboxes, servers, numbers, or states not in the data.",
+    "If the data is empty, say nothing was found.",
+  ].join(" ");
   return [
-    {
-      role: "system",
-      content: [
-        "You are an Exchange Server admin assistant. Answer the user's request",
-        "using ONLY the tool result below. Be concise and token-efficient:",
-        "short executive summary first, then key facts as tight bullets.",
-        "Never invent mailboxes, servers, numbers, or states not in the data.",
-        "If the data is empty, say nothing was found.",
-      ].join(" "),
-    },
+    { role: "system", content: systemContent },
     {
       role: "user",
       content: `Request: ${prompt}\nTool used: ${tool}\nResult JSON:\n${clipped}`,
