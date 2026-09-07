@@ -5,7 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Exchange Agentic Admin — AI Powered Exchange Operations Intelligence Platform</title>
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-  <script type="module">import YAML from 'https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js'; window.YAML = YAML;</script>
+  <script type="module">
+  // js-yaml ships UMD (no ESM default export), so load the jsDelivr ESM
+  // conversion with a dynamic import: failures stay contained (no window
+  // error event, no scary banner) and callers await window.__yamlReady.
+  window.__yamlReady = (async () => {
+    try {
+      const m = await import('https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/+esm');
+      window.YAML = m.default || m;
+    } catch (e) { console.warn('YAML lib unavailable, using JSON fallback'); }
+  })();
+</script>
   <script>
     tailwind.config = {
       darkMode: 'class',
@@ -519,8 +529,12 @@ function dumpYaml(obj){
   return JSON.stringify(obj, null, 2);
 }
 // Restore saved model config into the form (called once on startup)
+async function yamlReady(){
+  try{ await Promise.race([window.__yamlReady || Promise.resolve(), new Promise((r)=>setTimeout(r, 3000))]); }catch(e){}
+}
 async function restoreModelConfig(){
   if(!isDesktop) return;
+  await yamlReady();
   try{
     const p = await window.exchangeDesktop.configPath?.();
     const cfgPathEl = document.getElementById("cfgPath");

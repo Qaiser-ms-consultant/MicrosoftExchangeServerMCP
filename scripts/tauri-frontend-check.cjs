@@ -120,6 +120,9 @@ if (!electronMain.includes('__mcp_tools_list') || !electronMain.includes('mcpRpc
 const tauriMain = fs.readFileSync(mainRsPath, "utf8");
 if (!tauriMain.includes("__mcp_tools_list") || !tauriMain.includes('mcp_rpc("tools/list"')) fail("Tauri must answer capability prompts via tools/list");
 console.log("capability catalog path OK");
+if (!html.includes("js-yaml@4.1.0/+esm") || !html.includes("__yamlReady")) fail("YAML must load via guarded dynamic import (static UMD import throws a JS Error banner)");
+if (html.includes("import YAML from 'https://cdn.jsdelivr.net/npm/js-yaml")) fail("stale static YAML import still present");
+console.log("yaml import OK");
 console.log("Health layout and light surfaces OK");
 
 // Tauri command registration check
