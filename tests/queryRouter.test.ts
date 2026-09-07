@@ -62,8 +62,41 @@ describe("routeQuery", () => {
   it("routes capacity forecast prompts", () => {
     expect(routeQuery("capacity forecast")).toEqual({ tool: "database.get_whitespace_and_growth", args: {}, write: false });
   });
-  it("routes mailbox count prompts", () => {
-    expect(routeQuery("how many mailboxes")).toEqual({ tool: "exchange_list_mailboxes", args: {}, write: false });
+  it("routes how-many prompts to an exact count, not a capped list", () => {
+    expect(routeQuery("how many mailboxes")).toEqual({ tool: "exchange_list_mailboxes", args: { countOnly: true }, write: false });
+  });
+  it("routes number-of prompts to an exact count", () => {
+    expect(routeQuery("number of mailboxes")).toEqual({ tool: "exchange_list_mailboxes", args: { countOnly: true }, write: false });
+  });
+  it("routes bare count prompts to an exact count", () => {
+    expect(routeQuery("mailbox count")).toEqual({ tool: "exchange_list_mailboxes", args: { countOnly: true }, write: false });
+  });
+  it("fetches 1000 mailboxes by default so the card pager covers large orgs", () => {
+    expect(routeQuery("list mailboxes")).toEqual({ tool: "exchange_list_mailboxes", args: { resultSize: 1000 }, write: false });
+  });
+  it("parses an explicit mailbox count from the prompt", () => {
+    expect(routeQuery("show 50 mailboxes")).toEqual({ tool: "exchange_list_mailboxes", args: { resultSize: 50 }, write: false });
+  });
+  it("clamps explicit mailbox counts to the tool maximum", () => {
+    expect(routeQuery("list 2000 mailboxes")).toEqual({ tool: "exchange_list_mailboxes", args: { resultSize: 1000 }, write: false });
+  });
+  it("routes inbox prompts to message listing", () => {
+    expect(routeQuery("show recent inbox mail")).toEqual({ tool: "exchange_list_messages", args: {}, write: false });
+  });
+  it("routes calendar prompts to event listing", () => {
+    expect(routeQuery("list calendar events")).toEqual({ tool: "exchange_list_calendar_events", args: {}, write: false });
+  });
+  it("routes task list prompts", () => {
+    expect(routeQuery("list tasks")).toEqual({ tool: "exchange_list_tasks", args: {}, write: false });
+  });
+  it("routes autodiscover prompts with the extracted domain", () => {
+    expect(routeQuery("autodiscover for contoso.com")).toEqual({ tool: "clientaccess.get_autodiscover_info", args: { domain: "contoso.com" }, write: false });
+  });
+  it("routes soft-deleted mailbox prompts", () => {
+    expect(routeQuery("soft-deleted mailboxes")).toEqual({ tool: "exchange_get_softdeleted_mailbox", args: {}, write: false });
+  });
+  it("routes folder statistics prompts", () => {
+    expect(routeQuery("folder statistics for alice@contoso.com")).toEqual({ tool: "mailbox.get_folder_statistics", args: { identity: "alice@contoso.com" }, write: false });
   });
   it("routes uptime prompts", () => {
     expect(routeQuery("server uptime")).toEqual({ tool: "server.get_uptime", args: {}, write: false });
@@ -132,6 +165,48 @@ describe("routeQuery", () => {
   });
   it("routes anomaly detection prompts", () => {
     expect(routeQuery("anomaly detection")).toEqual({ tool: "ai.anomaly_detection", args: {}, write: false });
+  });
+  it("routes executive summary prompts to the AI health summary", () => {
+    expect(routeQuery("executive summary")).toEqual({ tool: "ai.exchange_executive_summary", args: {}, write: false });
+  });
+  it("routes capacity exhaustion prompts to the AI forecast, not the whitespace report", () => {
+    expect(routeQuery("predict database capacity exhaustion")).toEqual({ tool: "ai.capacity_forecast", args: {}, write: false });
+  });
+  it("keeps the capacity forecast phrase on the whitespace report", () => {
+    expect(routeQuery("capacity forecast")).toEqual({ tool: "database.get_whitespace_and_growth", args: {}, write: false });
+  });
+  it("routes per-mailbox cleanup advisor prompts", () => {
+    expect(routeQuery("cleanup advisor for alice@contoso.com")).toEqual({ tool: "ai.mailbox_cleanup_advisor", args: { identity: "alice@contoso.com" }, write: false });
+  });
+  it("routes NDR bounce statistics prompts to NDR intelligence", () => {
+    expect(routeQuery("NDR bounce statistics")).toEqual({ tool: "ai.ndr_intelligence", args: {}, write: false });
+  });
+  it("routes litigation hold report prompts", () => {
+    expect(routeQuery("litigation hold report")).toEqual({ tool: "report.generate_hold_report", args: {}, write: false });
+  });
+  it("routes organization config prompts", () => {
+    expect(routeQuery("organization config")).toEqual({ tool: "organization.get_config", args: {}, write: false });
+  });
+  it("routes what-if failover prompts with the full prompt as change context", () => {
+    expect(routeQuery("what if DB01 fails over?")).toEqual({ tool: "ai.change_impact_report", args: { change: "what if DB01 fails over?" }, write: false });
+  });
+  it("routes capability questions to the live tool catalog", () => {
+    expect(routeQuery("what tools do you offer")).toEqual({ tool: "__mcp_tools_list", args: {}, write: false });
+  });
+  it("routes list-tools phrasing to the live tool catalog", () => {
+    expect(routeQuery("list your tools")).toEqual({ tool: "__mcp_tools_list", args: {}, write: false });
+  });
+  it("routes what-can-you-do phrasing to the live tool catalog", () => {
+    expect(routeQuery("what can you do")).toEqual({ tool: "__mcp_tools_list", args: {}, write: false });
+  });
+  it("keeps concrete intents away from the capability route", () => {
+    expect(routeQuery("transport queue report")).toEqual({ tool: "report.generate_transport_queue_report", args: {}, write: false });
+  });
+  it("keeps mailbox detail prompts away from the capability route", () => {
+    expect(routeQuery("mailbox detail for alice@contoso.com")).toEqual({ tool: "report.mailbox_detail", args: { identity: "alice@contoso.com" }, write: false });
+  });
+  it("routes first-mailbox sampling prompts to a small live fetch", () => {
+    expect(routeQuery("first mailbox")).toEqual({ tool: "exchange_list_mailboxes", args: { resultSize: 5 }, write: false });
   });
   it("routes cleanup recommendation prompts", () => {
     expect(routeQuery("cleanup recommendations")).toEqual({ tool: "ai.cleanup_recommendation", args: {}, write: false });
@@ -231,8 +306,14 @@ describe("routeQuery", () => {
   it("routes dynamic distribution groups prompts", () => {
     expect(routeQuery("dynamic distribution groups")).toEqual({ tool: "exchange_list_dynamic_distribution_groups", args: {}, write: false });
   });
-  it("routes distribution group prompts", () => {
-    expect(routeQuery("list distribution groups")).toEqual({ tool: "exchange_list_distribution_groups", args: {}, write: false });
+  it("routes distribution group prompts with a full fetch for the pager", () => {
+    expect(routeQuery("list distribution groups")).toEqual({ tool: "exchange_list_distribution_groups", args: { resultSize: 1000 }, write: false });
+  });
+  it("routes distribution group count prompts to an exact count", () => {
+    expect(routeQuery("how many distribution groups")).toEqual({ tool: "exchange_list_distribution_groups", args: { countOnly: true }, write: false });
+  });
+  it("parses an explicit distribution group count from the prompt", () => {
+    expect(routeQuery("show 30 distribution groups")).toEqual({ tool: "exchange_list_distribution_groups", args: { resultSize: 30 }, write: false });
   });
   it("routes role group prompts", () => {
     expect(routeQuery("role groups")).toEqual({ tool: "exchange_get_role_groups", args: {}, write: false });

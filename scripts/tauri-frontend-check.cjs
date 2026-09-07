@@ -91,6 +91,35 @@ if (!html.includes('html:not(.dark) [class*="bg-[#111726]"]')) fail("missing lig
 if (!html.includes('h-full min-h-0 overflow-y-auto" data-view="home"')) fail("home prompt column must be scrollable (Run/Clear clipped otherwise)");
 if (!html.includes('auto-rows-fr')) fail("main grid must use auto-rows-fr so rows stay viewport-bound (unbounded rows clip Run/Clear)");
 if (!html.includes('max-height: 719px')) fail("missing short-viewport fallback (page must scroll when window is short)");
+if (!html.includes('pgPrev') || !html.includes('__pagingTotal') || !html.includes('PAGE_SIZE = 20')) fail("missing output-card pager (20-per-page Prev/Next)");
+for (const needle of ['🤖 AI Suite', '📑 Reports', 'data-quick="Executive summary"', 'data-quick="Predict database capacity exhaustion"', 'data-quick="Litigation hold report"']) {
+  if (!html.includes(needle)) fail(`missing Helping Prompts piece: ${needle}`);
+}
+console.log("helping-prompts cards OK");
+const cardOrder = ['🤖 AI Suite', '📑 Reports', '📊 Mailbox Intelligence', '💚 Health', '✉️ Mail Flow', '📬 Mailbox Operations', '🗄️ Databases', '🔒 Security', '🖥️ Environment'];
+const cardPos = cardOrder.map((t) => html.indexOf(t));
+if (cardPos.some((p) => p < 0)) fail("a Helping Prompts card is missing from the usability order");
+for (let i = 1; i < cardPos.length; i++) {
+  if (cardPos[i] <= cardPos[i - 1]) fail(`Helping Prompts cards out of order before ${cardOrder[i]}`);
+}
+if (!html.includes('data-quick="Connectivity test"')) fail("missing Mailbox Operations prompts");
+console.log("prompts order (AI first) OK");
+if (!html.includes('id="overallHealth"') || !html.includes("updateOverallHealth")) fail("Health tab needs an overall status pill (overallHealth/updateOverallHealth)");
+console.log("overall health pill OK");
+// mcp:stop must null the handle even if kill() throws, or icons stay green
+const mainTs = fs.readFileSync(path.join(__dirname, "..", "src", "desktop", "main.ts"), "utf8");
+if (!mainTs.includes("mcpProc?.kill")) fail("mcp:stop must guard kill() so the handle is always cleared");
+console.log("stop-clears-handle OK");
+if (!html.includes('id="quickPromptButtons"') || !html.includes('initQuickPrompts')) fail("Home quick picks must render 10 fresh prompts every launch (quickPromptButtons/initQuickPrompts missing)");
+console.log("quick-picks rotation OK");
+if (!html.includes("initRealMailboxSamples") || !html.includes("first mailbox")) fail("prompts must sample a live backend mailbox (initRealMailboxSamples missing)");
+console.log("live-mailbox sampling OK");
+if (!html.includes('data-quick="what tools do you offer"')) fail("missing capability prompt button (what tools do you offer)");
+const electronMain = fs.readFileSync(path.join(__dirname, "..", "src", "desktop", "main.ts"), "utf8");
+if (!electronMain.includes('__mcp_tools_list') || !electronMain.includes('mcpRpc("tools/list"')) fail("Electron must answer capability prompts via tools/list");
+const tauriMain = fs.readFileSync(mainRsPath, "utf8");
+if (!tauriMain.includes("__mcp_tools_list") || !tauriMain.includes('mcp_rpc("tools/list"')) fail("Tauri must answer capability prompts via tools/list");
+console.log("capability catalog path OK");
 console.log("Health layout and light surfaces OK");
 
 // Tauri command registration check

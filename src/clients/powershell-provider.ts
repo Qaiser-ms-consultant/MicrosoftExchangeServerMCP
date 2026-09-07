@@ -78,8 +78,8 @@ export class PowerShellProvider {
 
   private assertAllowed(cmdlet: string) {
     const base = cmdlet.trim().split(/\s+/)[0].replace(/-.*/, (m) => m).split("|")[0].trim();
-    // Extract first cmdlet token before space/pipe
-    const token = cmdlet.trim().split(/[\s|;]/)[0];
+    // Extract first cmdlet token before space/pipe, ignoring wrappers like @( ) or $( )
+    const token = cmdlet.trim().split(/[\s|;]/)[0].replace(/^[^A-Za-z]+/, "");
     if (!ALLOWED_CMDLETS.has(token)) {
       throw new ExchangeError({ message: `Cmdlet not allowed: ${token}`, code: "PERMISSION_DENIED", provider: "powershell" });
     }
@@ -290,12 +290,14 @@ try {
     return arr[0];
   }
 
-  async listDistributionGroups(filter?: string): Promise<any[]> {
-    return this.invokeJson(filter ? `Get-DistributionGroup -Filter {Name -like "*${filter}*"} -ResultSize 20` : "Get-DistributionGroup -ResultSize 20");
+  async listDistributionGroups(filter?: string, resultSize: number = 100): Promise<any[]> {
+    // Project light columns: full group objects are huge and break WinRM JSON parsing (empty results).
+    const cols = "DisplayName,PrimarySmtpAddress,RecipientType,GroupType,ManagedBy,RequireSenderAuthenticationEnabled";
+    return this.invokeJson(filter ? `Get-DistributionGroup -Filter {Name -like "*${filter}*"} | Select-Object ${cols} | Select-Object -First ${resultSize}` : `Get-DistributionGroup -ResultSize ${resultSize} | Select-Object ${cols} | Select-Object -First ${resultSize}`);
   }
 
   async getTransportRules(): Promise<any[]> {
-    return this.invokeJson("Get-TransportRule");
+    return this.invokeJson("Get-TransportRule | Select-Object Name,Priority,State,Mode | Select-Object -First 100");
   }
 
   // Generic passthrough for new tools

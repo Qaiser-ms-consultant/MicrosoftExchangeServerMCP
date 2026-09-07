@@ -212,7 +212,7 @@ ipcMain.handle("mcp:start", async () => {
   mcpInitialized = false;
   return { pid: mcpProc.pid, configPath };
 });
-ipcMain.handle("mcp:stop", async () => { if (mcpProc) { mcpProc.kill(); mcpProc=null; } mcpInitialized = false; return { ok:true }; });
+ipcMain.handle("mcp:stop", async () => { try { mcpProc?.kill(); } catch {} mcpProc = null; mcpInitialized = false; return { ok:true }; });
 
 ipcMain.handle("mcp:isRunning", async () => !!mcpProc);
 const WRITE_REQUIRED_ARGS: Record<string, string[]> = {
@@ -243,7 +243,7 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
     if("help" in route){
       return { prompt, tool: "help", result: {
         message: "I can run Exchange queries. Try one of these:",
-        examples: ["what version of exchange do i have", "show delayed queues", "server health report", "database whitespace and growth", "certificates expiring soon", "explain bounce 5.7.1", "trace messages from bob@contoso.com", "tell me everything about alice@contoso.com", "dismount database DB01"],
+        examples: ["what version of exchange do i have", "show delayed queues", "server health report", "database whitespace and growth", "certificates expiring soon", "explain bounce 5.7.1", "trace messages from admin@contoso.com", "tell me everything about admin@contoso.com", "dismount database DB01", "what tools do you offer"],
       }};
     }
     tool = route.tool; args = route.args; write = route.write;
@@ -256,6 +256,23 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
     return { prompt, tool, args, needsConfirm: true, result: { message: `Ready to run ${tool}`, parameters: args } };
   }
   if(write) args = { ...args, confirm: true };
+
+  // Live MCP capability catalog (protocol tools/list) for "what tools..." prompts.
+  // Grouped summary up front, full tool names in a paged list + Raw JSON.
+  if (tool === "__mcp_tools_list") {
+    await ensureMcpInitialized();
+    try {
+      const list = await mcpRpc("tools/list", {});
+      const names: string[] = (((list as any)?.tools ?? []) as any[]).map((t: any) => String(t?.name ?? "")).filter((n) => n);
+      const counts: Record<string, number> = {};
+      for (const n of names) { const g = n.split(/[._]/)[0] || "other"; counts[g] = (counts[g] ?? 0) + 1; }
+      const groups = Object.entries(counts).map(([prefix, count]) => ({ prefix, count })).sort((a, b) => b.count - a.count);
+      const psTrace = await readPsTrace();
+      return { prompt, tool: "tools", result: { toolCount: names.length, groups, tools: [...names].sort() }, psTrace };
+    } catch {
+      return { prompt, tool: "help", result: { message: "I can run Exchange queries. Try one of these:", examples: ["what version of exchange do i have", "show delayed queues", "server health report", "database whitespace and growth", "certificates expiring soon", "explain bounce 5.7.1", "trace messages from admin@contoso.com", "tell me everything about admin@contoso.com", "dismount database DB01", "what tools do you offer"] } };
+    }
+  }
 
   // Per-query PowerShell trace: clear, run, then read (take semantics).
   // Failures are returned (not thrown) so the trace still reaches the card.

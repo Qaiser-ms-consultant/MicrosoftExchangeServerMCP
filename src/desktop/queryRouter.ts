@@ -41,6 +41,8 @@ export function routeQuery(prompt: string): Route {
   if (has("database", "databases", "db01", "db0") && has("list", "number", "count", "how many", "show", "all")) return { tool: "database.list", args: {}, write: false };
   if (has("databases") && !has("dismount", "mount", "backup", "whitespace", "growth", "repair")) return { tool: "database.list", args: {}, write: false };
   if (has("disk")) return { tool: "server.get_disk_space", args: {}, write: false };
+  // AI capacity prediction must precede the whitespace rules below (both mention capacity)
+  if (has("capacity") && has("predict", "exhaust", "run out", "fill up")) return { tool: "ai.capacity_forecast", args: {}, write: false };
   if (has("capacity forecast")) return { tool: "database.get_whitespace_and_growth", args: {}, write: false };
   if (has("whitespace", "growth", "storage", "size of database", "forecast", "capacity") && !has("trend")) return { tool: "database.get_whitespace_and_growth", args: {}, write: false };
   if (has("backup")) return { tool: "database.get_backup_status", args: {}, write: false };
@@ -57,6 +59,7 @@ export function routeQuery(prompt: string): Route {
   if (has("daily report", "daily brief", "morning brief", "daily exchange report")) return { tool: "ai.daily_report", args: {}, write: false };
   if (has("things you should know", "things i should know", "should know", "need to know")) return { tool: "ai.things_you_should_know", args: {}, write: false };
   if (has("management report", "cto dashboard", "executive dashboard")) return { tool: "ai.management_report", args: {}, write: false };
+  if (has("executive summary")) return { tool: "ai.exchange_executive_summary", args: {}, write: false };
   if (has("anomal")) return { tool: "ai.anomaly_detection", args: {}, write: false };
   if (has("cleanup", "stale mailbox", "recover space", "dead mailbox") && !email) return { tool: "ai.cleanup_recommendation", args: {}, write: false };
   if (has("migration") && has("batch", "order", "sequence", "priorit")) return { tool: "ai.migration_prioritization", args: {}, write: false };
@@ -93,7 +96,16 @@ export function routeQuery(prompt: string): Route {
   if (has("contact") && !has("mailbox")) return { tool: "exchange_list_mail_contacts", args: {}, write: false };
   if (has("mail user")) return { tool: "exchange_list_mail_users", args: {}, write: false };
   if (has("dynamic") && has("group")) return { tool: "exchange_list_dynamic_distribution_groups", args: {}, write: false };
-  if (has("distribution group", "distribution list")) return { tool: "exchange_list_distribution_groups", args: {}, write: false };
+  if (has("distribution group", "distribution list")) {
+    // Pure count questions get the exact total; listings fetch up to 1000
+    // so the output card pager covers large orgs.
+    if (has("how many", "number of") || (has("count") && !has("list", "show", "all"))) {
+      return { tool: "exchange_list_distribution_groups", args: { countOnly: true }, write: false };
+    }
+    const m = prompt.match(/(\d+)\s*distribution/i);
+    const n = m ? Math.min(1000, Math.max(1, parseInt(m[1], 10))) : 1000;
+    return { tool: "exchange_list_distribution_groups", args: { resultSize: n }, write: false };
+  }
   if (has("role group", "rbac")) return { tool: "exchange_get_role_groups", args: {}, write: false };
   // Compliance & mailbox features
   if (has("journal")) return { tool: "exchange_get_journal_rule", args: {}, write: false };
@@ -170,7 +182,24 @@ export function routeQuery(prompt: string): Route {
   if (has("add copy")) return { tool: "database.add_copy", args: {}, write: true };
   if (has("remove copy")) return { tool: "database.remove_copy", args: {}, write: true };
   if (has("set activation", "activation polic")) return { tool: "dag.set_activation_policy", args: {}, write: true };
-  if (has("mailbox", "mailboxes") && has("list", "number", "count", "how many", "show", "all")) return { tool: "exchange_list_mailboxes", args: {}, write: false };
+  if (has("mailbox", "mailboxes") && has("list", "number", "count", "how many", "show", "all")) {
+    // Pure count questions get the exact total; listings fetch up to 1000
+    // so the output card pager covers large orgs. An explicit count in the
+    // prompt wins for listings, clamped to the tool maximum.
+    if (has("how many", "number of") || (has("count") && !has("list", "show", "all"))) {
+      return { tool: "exchange_list_mailboxes", args: { countOnly: true }, write: false };
+    }
+    const m = prompt.match(/(\d+)\s*mailbox/i);
+    const n = m ? Math.min(1000, Math.max(1, parseInt(m[1], 10))) : 1000;
+    return { tool: "exchange_list_mailboxes", args: { resultSize: n }, write: false };
+  }
+  // Live sample for UI placeholder substitution (small, cheap fetch)
+  if (has("first mailbox")) return { tool: "exchange_list_mailboxes", args: { resultSize: 5 }, write: false };
+  // MCP capability questions — answered live via tools/list (see desktop main.ts).
+  // Placed last so every concrete intent keeps precedence.
+  if (has("tools", "capabilit", "what can you do", "offer", "feature", "function")) {
+    return { tool: "__mcp_tools_list", args: {}, write: false };
+  }
   if (email) return { tool: "ai.tell_me_everything", args: { identity: email }, write: false };
   return { help: true };
 }

@@ -541,7 +541,52 @@ fn route_query(prompt: &str) -> Option<(String, serde_json::Value, bool)> {
             return Some(("mailbox.add_permission".into(), serde_json::Value::Object(m), true));
         }
     }
-    if has_any(&p, &["mailbox", "mailboxes"]) && has_any(&p, &["list", "number", "count", "how many", "show", "all"]) { return Some(("exchange_list_mailboxes".into(), serde_json::json!({}), false)); }
+    if has_any(&p, &["mailbox", "mailboxes"]) && has_any(&p, &["list", "number", "count", "how many", "show", "all"]) {
+        // Pure count questions get the exact total; listings fetch up to 1000.
+        if has_any(&p, &["how many", "number of"])
+            || (p.contains("count") && !has_any(&p, &["list", "show", "all"]))
+        {
+            return Some(("exchange_list_mailboxes".into(), serde_json::json!({ "countOnly": true }), false));
+        }
+        // Default 1000 so the output pager covers large orgs; explicit count wins, clamped to 1000.
+        let mut n: i64 = 1000;
+        let words: Vec<&str> = p.split_whitespace().collect();
+        for i in 0..words.len() {
+            if let Ok(v) = words[i].parse::<i64>() {
+                if i + 1 < words.len() && words[i + 1].starts_with("mailbox") {
+                    n = v.clamp(1, 1000);
+                    break;
+                }
+            }
+        }
+        return Some(("exchange_list_mailboxes".into(), serde_json::json!({ "resultSize": n }), false));
+    }
+    if has_any(&p, &["distribution group", "distribution list"]) {
+        // Pure count questions get the exact total; listings fetch up to 1000.
+        if has_any(&p, &["how many", "number of"])
+            || (p.contains("count") && !has_any(&p, &["list", "show", "all"]))
+        {
+            return Some(("exchange_list_distribution_groups".into(), serde_json::json!({ "countOnly": true }), false));
+        }
+        let mut n: i64 = 1000;
+        let words: Vec<&str> = p.split_whitespace().collect();
+        for i in 0..words.len() {
+            if let Ok(v) = words[i].parse::<i64>() {
+                if i + 1 < words.len() && words[i + 1].starts_with("distribution") {
+                    n = v.clamp(1, 1000);
+                    break;
+                }
+            }
+        }
+        return Some(("exchange_list_distribution_groups".into(), serde_json::json!({ "resultSize": n }), false));
+    }
+    // Live sample for UI placeholder substitution (small, cheap fetch)
+    if p.contains("first mailbox") { return Some(("exchange_list_mailboxes".into(), serde_json::json!({ "resultSize": 5 }), false)); }
+    // MCP capability questions — answered live via tools/list (see ask_exchange).
+    // Placed last so every concrete intent keeps precedence.
+    if has_any(&p, &["tools", "capabilit", "what can you do", "offer", "feature", "function"]) {
+        return Some(("__mcp_tools_list".into(), serde_json::json!({}), false));
+    }
     if let Some(e) = email { return Some(("ai.tell_me_everything".into(), obj(vec![("identity", e)]), false)); }
     None
 }
@@ -620,7 +665,7 @@ fn ask_exchange(args: AskArgs) -> Result<serde_json::Value, String> {
                     "tool": "help",
                     "result": {
                         "message": "I can run Exchange queries. Try one of these:",
-                        "examples": ["what version of exchange do i have", "show delayed queues", "server health report", "database whitespace and growth", "certificates expiring soon", "explain bounce 5.7.1", "trace messages from bob@contoso.com", "tell me everything about alice@contoso.com", "dismount database DB01"],
+                        "examples": ["what version of exchange do i have", "show delayed queues", "server health report", "database whitespace and growth", "certificates expiring soon", "explain bounce 5.7.1", "trace messages from admin@contoso.com", "tell me everything about admin@contoso.com", "dismount database DB01", "what tools do you offer"],
                     },
                 }));
             }
@@ -642,6 +687,55 @@ fn ask_exchange(args: AskArgs) -> Result<serde_json::Value, String> {
         if let Some(map) = rpc_args.as_object_mut() {
             map.insert("confirm".to_string(), serde_json::Value::Bool(true));
         }
+    }
+    // Live MCP capability catalog (protocol tools/list) for "what tools..." prompts.
+    if tool == "__mcp_tools_list" {
+        let mut names: Vec<String> = Vec::new();
+        if let Ok(list) = mcp_rpc("tools/list", serde_json::json!({})) {
+            if let Some(arr) = list.get("tools").and_then(|t| t.as_array()) {
+                for t in arr {
+                    if let Some(n) = t.get("name").and_then(|n| n.as_str()) {
+                        if !n.is_empty() {
+                            names.push(n.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        if names.is_empty() {
+            return Ok(serde_json::json!({
+                "prompt": prompt,
+                "tool": "help",
+                "result": {
+                    "message": "I can run Exchange queries. Try one of these:",
+                    "examples": ["what version of exchange do i have", "show delayed queues", "server health report", "database whitespace and growth", "certificates expiring soon", "explain bounce 5.7.1", "trace messages from admin@contoso.com", "tell me everything about admin@contoso.com", "dismount database DB01", "what tools do you offer"],
+                },
+            }));
+        }
+        names.sort();
+        let mut counts: HashMap<String, usize> = HashMap::new();
+        for n in &names {
+            let g = n.split(|c| c == '.' || c == '_').next().unwrap_or("other").to_string();
+            *counts.entry(g).or_insert(0) += 1;
+        }
+        let mut groups: Vec<serde_json::Value> = counts
+            .into_iter()
+            .map(|(prefix, count)| serde_json::json!({ "prefix": prefix, "count": count }))
+            .collect();
+        groups.sort_by(|a, b| {
+            b.get("count").and_then(|c| c.as_u64()).cmp(&a.get("count").and_then(|c| c.as_u64()))
+        });
+        let _ = mcp_rpc(
+            "tools/call",
+            serde_json::json!({ "name": "exchange_get_ps_trace", "arguments": {} }),
+        );
+        let ps_trace = read_ps_trace();
+        return Ok(serde_json::json!({
+            "prompt": prompt,
+            "tool": "tools",
+            "result": { "toolCount": names.len(), "groups": groups, "tools": names },
+            "psTrace": ps_trace,
+        }));
     }
     // Per-query PowerShell trace: clear, run, then read (take semantics).
     // Failures are returned (not propagated) so the trace still reaches the card.

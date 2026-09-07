@@ -6,7 +6,15 @@ import type { PowerShellProvider } from "../clients/powershell-provider.js";
 export function registerRecipientAdminTools(server: McpServer, ps: PowerShellProvider) {
   server.tool("exchange_list_mailboxes", "List mailboxes (admin) — supports filter and RecipientTypeDetails", {
     filter: z.string().optional().describe("Name filter (wildcard)"), recipientType: z.string().optional().describe("UserMailbox, SharedMailbox, RoomMailbox, EquipmentMailbox, etc."), resultSize: z.number().min(1).max(1000).optional(),
-  }, async ({ filter, recipientType, resultSize }) => {
+    countOnly: z.boolean().optional().describe("Return only the total mailbox count (ignores filter) — use for 'how many mailboxes'"),
+  }, async ({ filter, recipientType, resultSize, countOnly }) => {
+    if (countOnly) {
+      // Count client-side from a light DisplayName-only fetch: Measure-Object /
+      // Select -ExpandProperty are unreliable on constrained endpoints (yield 0).
+      const all = await ps.invokeJson(`Get-Mailbox -ResultSize Unlimited | Select-Object DisplayName`);
+      const n = Array.isArray(all) ? all.length : 0;
+      return { content: [{ type: "text", text: JSON.stringify({ totalMailboxes: n }, null, 2) }] };
+    }
     const data = await ps.listMailboxes(filter, recipientType, resultSize ?? 20);
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
   });
@@ -82,8 +90,17 @@ export function registerRecipientAdminTools(server: McpServer, ps: PowerShellPro
     return { content: [{ type: "text", text: typeof data === "string" ? data : JSON.stringify(data, null, 2) }] };
   });
 
-  server.tool("exchange_list_distribution_groups", "List distribution groups", { filter: z.string().optional() }, async ({ filter }) => {
-    const data = await ps.listDistributionGroups(filter);
+  server.tool("exchange_list_distribution_groups", "List distribution groups (light columns; resultSize default 100, countOnly for totals)", {
+    filter: z.string().optional(), resultSize: z.number().min(1).max(1000).optional(),
+    countOnly: z.boolean().optional().describe("Return only the total group count (ignores filter)"),
+  }, async ({ filter, resultSize, countOnly }) => {
+    if (countOnly) {
+      // Count client-side from a light DisplayName-only fetch (see mailbox countOnly).
+      const all = await ps.invokeJson(`Get-DistributionGroup -ResultSize Unlimited | Select-Object DisplayName`);
+      const n = Array.isArray(all) ? all.length : 0;
+      return { content: [{ type: "text", text: JSON.stringify({ totalDistributionGroups: n }, null, 2) }] };
+    }
+    const data = await ps.listDistributionGroups(filter, resultSize ?? 100);
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
   });
 
@@ -93,7 +110,7 @@ export function registerRecipientAdminTools(server: McpServer, ps: PowerShellPro
   });
 
   server.tool("exchange_list_dynamic_distribution_groups", "List dynamic distribution groups", {}, async () => {
-    const data = await ps.invokeJson("Get-DynamicDistributionGroup -ResultSize 20");
+    const data = await ps.invokeJson("Get-DynamicDistributionGroup -ResultSize 100 | Select-Object DisplayName,PrimarySmtpAddress,RecipientContainer | Select-Object -First 100");
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
   });
 

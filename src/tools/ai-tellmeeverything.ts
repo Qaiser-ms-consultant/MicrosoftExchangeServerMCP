@@ -3,6 +3,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { PowerShellProvider } from "../clients/powershell-provider.js";
+import { ExchangeError } from "../errors.js";
 
 export function registerTellMeEverything(server: McpServer, ps: PowerShellProvider) {
   server.tool(
@@ -17,9 +18,15 @@ export function registerTellMeEverything(server: McpServer, ps: PowerShellProvid
       const id = identity.replace(/'/g, "''");
       const domain = (identity.split("@")[1] ?? "contoso.com").replace(/'/g, "''");
 
+      // Existence gate first: never fabricate a summary for a missing mailbox.
+      const mbx = await ps.invokeJson(`Get-Mailbox -Identity '${id}' | Select-Object DisplayName,PrimarySmtpAddress,RecipientTypeDetails,Database,ServerName,OrganizationalUnit,WhenCreated,ExchangeVersion,AdminDisplayVersion | Select-Object -First 1`).catch(() => []);
+      const mb = (mbx as any[])[0];
+      if (!mb || mb.DisplayName == null) {
+        throw new ExchangeError({ message: `Mailbox '${identity}' not found on the Exchange server.`, code: "NOT_FOUND", provider: "powershell" });
+      }
+      const serverFilter = mb.ServerName ? ` -Identity '${String(mb.ServerName).replace(/'/g, "''")}'` : "";
       // Parallel fetch all relevant data
-      const [mbx, stats, quotaInfo, oof, perms, fwd, rules, cas, health, cert] = await Promise.all([
-        ps.invokeJson(`Get-Mailbox -Identity '${id}' | Select-Object DisplayName,PrimarySmtpAddress,RecipientTypeDetails,Database,ServerName,OrganizationalUnit,WhenCreated,ExchangeVersion,AdminDisplayVersion | Select-Object -First 1`).catch(() => []),
+      const [stats, quotaInfo, oof, perms, fwd, rules, cas, health, cert] = await Promise.all([
         ps.invokeJson(`Get-MailboxStatistics -Identity '${id}' | Select-Object DisplayName,ItemCount,TotalItemSize,TotalDeletedItemSize,LastLogonTime,Database,ServerName | Select-Object -First 1`).catch(() => []),
         ps.invokeJson(`Get-Mailbox -Identity '${id}' | Select-Object ProhibitSendQuota,ProhibitSendReceiveQuota,IssueWarningQuota,UseDatabaseQuotaDefaults,RetentionPolicy,LitigationHoldEnabled | Select-Object -First 1`).catch(() => []),
         ps.invokeJson(`Get-MailboxAutoReplyConfiguration -Identity '${id}' | Select-Object AutoReplyState | Select-Object -First 1`).catch(() => []),
@@ -27,11 +34,11 @@ export function registerTellMeEverything(server: McpServer, ps: PowerShellProvid
         ps.invokeJson(`Get-Mailbox -Identity '${id}' | Select-Object ForwardingSmtpAddress,ForwardingAddress,DeliverToMailboxAndForward | Select-Object -First 1`).catch(() => []),
         ps.invokeJson(`Get-InboxRule -Mailbox '${id}' | Select-Object Name,Enabled,ForwardTo,RedirectTo | Select-Object -First 5`).catch(() => []),
         ps.invokeJson(`Get-CASMailbox -Identity '${id}' | Select-Object OWAEnabled,MAPIEnabled,ActiveSyncEnabled,PopEnabled,ImapEnabled | Select-Object -First 1`).catch(() => []),
-        ps.invokeJson(`Get-ServerHealth -Identity DEVEX02 | Select-Object HealthSet,AlertValue | Select-Object -First 50`).then((rows: any[]) => rows.filter((r: any) => String(r.AlertValue ?? "") !== "Healthy").slice(0, 3)).catch(() => []),
+        serverFilter
+          ? ps.invokeJson(`Get-ServerHealth${serverFilter} | Select-Object HealthSet,AlertValue | Select-Object -First 50`).then((rows: any[]) => rows.filter((r: any) => String(r.AlertValue ?? "") !== "Healthy").slice(0, 3)).catch(() => [])
+          : Promise.resolve([]),
         ps.invokeJson(`Get-ExchangeCertificate | Select-Object Subject,NotAfter | Select-Object -First 20`).then((rows: any[]) => { const cutoff = Date.now() + 30 * 86400 * 1000; return rows.filter((r: any) => { const t = Date.parse(String(r.NotAfter ?? "")); return !isNaN(t) && t < cutoff; }).slice(0, 1); }).catch(() => []),
       ]);
-
-      const mb = (mbx as any[])[0] ?? {};
       const st = (stats as any[])[0] ?? {};
       const parseBytes = (s: string): number => {
         if (!s) return 0;
@@ -164,11 +171,15 @@ export function registerTellMeEverything(server: McpServer, ps: PowerShellProvid
       // Reuse same logic via direct call — duplicate tool to match spec wording "Analyze user@company.com"
       const id = identity.replace(/'/g, "''");
       const mbx = await ps.invokeJson(`Get-Mailbox -Identity '${id}' | Select-Object DisplayName | Select-Object -First 1`).catch(() => []);
+      const mb0 = (mbx as any[])[0];
+      if (!mb0 || mb0.DisplayName == null) {
+        throw new ExchangeError({ message: `Mailbox '${identity}' not found on the Exchange server.`, code: "NOT_FOUND", provider: "powershell" });
+      }
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify({ alias: "ai.tell_me_everything", mailbox: identity, displayName: (mbx as any[])[0]?.DisplayName ?? identity, note: "Use ai.tell_me_everything for full Executive Summary" }, null, 2),
+            text: JSON.stringify({ alias: "ai.tell_me_everything", mailbox: identity, displayName: mb0.DisplayName, note: "Use ai.tell_me_everything for full Executive Summary" }, null, 2),
           },
         ],
       };
