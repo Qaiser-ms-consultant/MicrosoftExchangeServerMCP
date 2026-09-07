@@ -784,7 +784,15 @@ document.getElementById("aiRunAgent")?.addEventListener('click', async () => {
   }
   if (statusEl) statusEl.textContent = `Done in ${elapsed}s`;
 });
-document.querySelectorAll("[data-quick]").forEach(b=> b.addEventListener('click', ()=>{ const p=document.getElementById("aiChatInput"); if(p){ p.value=(b).getAttribute("data-quick")||""; p.focus(); } const home=document.querySelector('[data-tab="home"]'); if(home) home.click(); }));
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-quick]');
+  if (btn) {
+    const p = document.getElementById("aiChatInput");
+    if (p) { p.value = btn.getAttribute("data-quick") || ""; p.focus(); }
+    const home = document.querySelector('[data-tab="home"]');
+    if (home) home.click();
+  }
+});
 // Gather generic output text for copy/export
 function getOutputText(){
   const el=document.getElementById("outResult");
@@ -1161,12 +1169,6 @@ function initQuickPrompts(){
   const all = [...seen.entries()];
   for(let i=all.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [all[i],all[j]]=[all[j],all[i]]; }
   container.innerHTML = all.slice(0,10).map(([prompt,label])=>`<button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="${esc(prompt)}">${esc(label)}</button>`).join("");
-  container.querySelectorAll("[data-quick]").forEach((b)=>{
-    b.addEventListener("click", ()=>{
-      const p=document.getElementById("prompt");
-      if(p){ p.value=b.getAttribute("data-quick")||""; p.focus(); }
-    });
-  });
 }
 initQuickPrompts();
 
@@ -1323,9 +1325,11 @@ function aiClearChat() {
   const container = document.getElementById('aiMessagesContainer');
   const emptyState = document.getElementById('aiEmptyState');
   const title = document.getElementById('aiConversationTitle');
+  const chatInput = document.getElementById('aiChatInput');
   if (container) container.innerHTML = '';
   if (emptyState) emptyState.classList.remove('hidden');
   if (title) title.textContent = 'New Conversation';
+  if (chatInput) chatInput.value = '';
   const resultContent = document.getElementById("aiResultContent");
   const resultEmpty = document.getElementById("aiResultEmpty");
   const aiResultOutput = document.getElementById("aiResultOutput");
