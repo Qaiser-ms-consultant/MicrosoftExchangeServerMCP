@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "Exchange Agentic Admin — AI Powered Exchange Operations Intelligence Platform (MCP server + Desktop for on-premise Exchange: EWS, REST, PowerShell)",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "bin": {
     "exchange-mcp": "./dist/cli/cli.js"
   },
@@ -13,6 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src --ext .ts",
+    "setup": "node scripts/setup.mjs",
     "inspector": "npx @modelcontextprotocol/inspector node dist/server.js",
     "init": "tsx src/cli/init.ts",
     "doctor": "tsx src/cli/doctor.ts",

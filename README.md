@@ -57,39 +57,48 @@ Exchange administrators can use AI assistants such as OpenCode, Claude Code, Cur
 
 ---
 
-## Quick Start
+## Quick Start (Windows-first; macOS/Linux notes inline)
+
+### Option A — ZIP download (simplest)
+
+1. Download the repo ZIP from GitHub (**Code → Download ZIP**) and extract it.
+2. Open a terminal in the extracted folder and check Node:
+   ```bash
+   node --version   # needs v20 or later — https://nodejs.org/en/download
+   ```
+3. Install, then run the one-command setup:
+   ```bash
+   npm install
+   npm run setup
+   ```
+   This builds the project, runs the init wizard (asks for your Exchange host
+   and account, writes `config.yaml`), then runs `doctor` to test PowerShell
+   and EWS connectivity. Re-run it any time — it stops at the first failing step.
+4. Start the desktop app:
+   ```bash
+   npm run desktop
+   ```
+
+### Option B — git clone (enables in-app updates)
 
 ```bash
-git clone https://github.com/<your-org>/exchange-mcp-server.git
-cd exchange-mcp-server
-npm install
-
-# 1. Configure
-npm run build
-npx exchange-mcp init
-# Prompts for Exchange host, username and password environment variable.
-# Tests both PowerShell and EWS connectivity and writes config.yaml.
-# Alternatively: cp config.example.yaml config.yaml and edit manually.
-
-# 2. Build and run
-npm run build
-npm start                                    # stdio transport (default)
-# or: node dist/server.js --config=./config.yaml --transport=http  # http on port 3000
-
-# 3. Verify
-npm test
-npx @modelcontextprotocol/inspector node dist/server.js --config=./config.yaml
-# Open the inspector URL and confirm 200 tools are listed.
-
-# 4. Connect a client (see below) and try:
-#   "list mailboxes with exchange_list_mailboxes"
-#   "show queue health on MAIL01 with exchange_get_queue"
+git clone https://github.com/Qaiser-ms-consultant/MicrosoftExchangeServerMCP.git
+cd MicrosoftExchangeServerMCP
 ```
 
-### Simplest Install — Wizard and Auto-Patch
+Then steps 2–4 above. Running from a clone additionally enables the in-app
+update pill (header shows `N behind — Update` when GitHub has new commits).
+
+### What success looks like
+
+- `npm run setup` ends with `Setup complete.` and `doctor` reports reachable PowerShell + EWS endpoints.
+- `npm run desktop` opens Exchange Agentic Admin; the header shows your Exchange host.
+- `npm test` passes the suite.
+- To use the MCP server directly: `npm start` (stdio) or `node dist/server.js --config=./config.yaml --transport=http` (port 3000), then point a client at it and try `"list mailboxes with exchange_list_mailboxes"`.
+
+### Wizard and Auto-Patch (MCP clients)
 
 ```bash
-# After git clone, npm install and npm run build:
 npx exchange-mcp init
 # Creates config.yaml with file-based password reference and tests connectivity.
 
@@ -100,6 +109,16 @@ npx exchange-mcp doctor  # Tests both PowerShell and EWS endpoints
 opencode mcp list        # Should show connected
 claude mcp list          # Should show connected
 ```
+
+### Troubleshooting a fresh install
+
+- **`npm install` looks stuck:** the first install downloads Electron (~100 MB) — give it several minutes on a slow link before retrying.
+- **Node version error:** `npm run setup` exits immediately with a download link — install Node 20+, then re-run.
+- **PowerShell scripts blocked (Windows):** `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, then re-run setup.
+- **Skipped/failed the wizard:** run `npm run init` manually, or copy `config.example.yaml` to `config.yaml` and edit it.
+- **`doctor` fails:** verify the host is the FQDN (`Get-PowerShellVirtualDirectory`, `Test-WSMan <host>`), and the account has an RBAC role like Organization Management (`Get-ManagementRole -Cmdlet Get-Queue` shows what's needed).
+- **No update pill:** expected for ZIP installs (no `.git` present) — clone the repo to get in-app updates.
+- **macOS/Linux:** the app and EWS/REST tools work, but PowerShell-based tools need a custom remoting wrapper (see Prerequisites).
 
 ## Run with Docker
 
