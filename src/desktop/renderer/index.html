@@ -1783,11 +1783,17 @@ async function refreshUpdatePill(manual){
       return;
     }
     pill.classList.remove("hidden"); pill.classList.add("flex");
-    if (s.behind > 0) {
+    const isZip = s.kind === "zip";
+    // ZIP installs have no commit count: behind===null means unknown baseline,
+    // which is still actionable (sync once to establish it).
+    const needsUpdate = isZip ? s.behind !== false : s.behind > 0;
+    if (needsUpdate) {
       window.__updateState = "behind";
       if (dot) dot.className = "w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse";
-      if (txt) txt.textContent = s.behind + " behind — Update";
-      pill.title = s.dirty ? "Local changes present — stash or commit first, then update" : "Pull latest from GitHub and restart";
+      if (txt) txt.textContent = isZip ? (s.behind === null ? "Sync to latest" : "Update available") : s.behind + " behind — Update";
+      pill.title = isZip
+        ? "Download the latest GitHub code over this install (your config is preserved)" + (s.date ? " — latest commit " + s.date.slice(0, 10) : "")
+        : (s.dirty ? "Local changes present — stash or commit first, then update" : "Pull latest from GitHub and restart");
     } else {
       window.__updateState = "idle";
       if (dot) dot.className = "w-1.5 h-1.5 rounded-full bg-emerald-400";

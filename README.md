@@ -192,7 +192,7 @@ npm run desktop:build      # uses electron-builder, outputs dist/installer
 
 **Prerequisites:** Node.js 20+, `npm install`, and the same Exchange reachability/credentials as the server (the app spawns its MCP backend from the repo's `./config.yaml` plus environment variables). Windows is recommended for full PowerShell-tool functionality.
 
-**Updating:** the header shows an update pill driven by your git clone — `Up to date`, or `N behind — Update` when the GitHub repo has new commits. Clicking it pulls fast-forward only, runs `npm install` when dependencies changed, then offers **Restart now** (a restart rebuilds and runs the new code, since `npm run desktop` builds on launch). Rules: the working tree must be clean (commit or stash local changes first — the updater refuses otherwise and changes nothing), and details land in the Logs view. No git checkout (e.g. an installed build) means no pill.
+**Updating:** the header shows an update pill. From a git clone it reads `Up to date` or `N behind — Update`; clicking pulls fast-forward only (clean tree required — commit or stash first, otherwise it refuses and changes nothing), runs `npm install` when dependencies changed, then offers **Restart now**. From a ZIP download (no git) it reads `Up to date` or `Sync to latest`/`Update available`; clicking downloads the latest GitHub ZIP and overlays it, preserving your local `config.yaml`/`.env`, then runs `npm install` only if the lockfile changed. Either way a restart rebuilds and runs the new code (`npm run desktop` builds on launch), and details land in the Logs view. Non-checkout installs that are neither (e.g. a packaged build) show no pill.
 
 **Features:**
 

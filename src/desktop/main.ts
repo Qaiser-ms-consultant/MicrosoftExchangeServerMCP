@@ -11,7 +11,7 @@ import { loadConfig } from "../config.js";
 import { parse as parseYaml } from "yaml";
 import { buildSummaryMessages, buildToolPickerMessages, chatComplete, isAiProvider, parseNoToolVerdict, parseToolSelection } from "./modelClient.js";
 import { appendExchange, buildContextBlocks, narrowCatalog, type ExchangeRecord } from "./conversationContext.js";
-import { checkForUpdates, performUpdate } from "./updater.js";
+import { checkForUpdates, checkZipUpdate, isGitCheckout, performUpdate, performZipUpdate } from "./updater.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -99,8 +99,14 @@ ipcMain.handle("config:save", async (_e, content: string) => {
 ipcMain.handle("config:path", async () => ensureConfig());
 // Self-update for source-checkout installs: compare/f pull the git clone the
 // app was launched from, then relaunch into the rebuilt code.
-ipcMain.handle("updater:check", async () => checkForUpdates(process.cwd()));
-ipcMain.handle("updater:update", async () => performUpdate(process.cwd()));
+ipcMain.handle("updater:check", async () => {
+  if (isGitCheckout(process.cwd())) return { kind: "git", ...(await checkForUpdates(process.cwd())) };
+  return checkZipUpdate(process.cwd());
+});
+ipcMain.handle("updater:update", async () => {
+  if (isGitCheckout(process.cwd())) return performUpdate(process.cwd());
+  return performZipUpdate(process.cwd());
+});
 ipcMain.handle("updater:restart", async () => {
   app.relaunch({ args: process.argv.slice(1) });
   app.quit();
