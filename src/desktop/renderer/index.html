@@ -204,6 +204,9 @@
 <select id="model" class="bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200 focus:border-blue-500 outline-none cursor-pointer" style="background: #0b0f19; color: #e2e8f0;"><option>Select provider first</option></select>
 </div>
 <button class="w-full px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium" id="saveModel">Save</button>
+<div class="flex items-center gap-2 mt-2">
+  <span id="aiModeBadge" class="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-500/10 text-slate-400 border border-slate-500/30">AI Mode: Off</span>
+</div>
 <div class="text-[10px] font-mono text-slate-500 break-all cursor-pointer hover:text-slate-300" id="cfgPath" title="Settings file location — click to copy">Settings file: loading…</div>
 <div id="modelOut" class="text-[11px] font-mono text-slate-400 bg-[#0b0f19] border border-[#1d2943] rounded p-2 max-h-20 overflow-auto">Not tested</div>
 </div>
@@ -677,6 +680,7 @@ async function restoreModelConfig(){
           }
         }
       }
+      updateAiModeBadge();
     }
   }catch(e){ console.error('restoreModelConfig failed', e); }
 }
@@ -685,7 +689,10 @@ document.getElementById("provider")?.addEventListener('change', ()=>{
   const provider=(document.getElementById("provider")).value;
   populateModelsForProvider(provider, null, false);
   showStatus("modelOut", `Showing fallback models for ${provider}. Enter API key and click "Test connection" to fetch live models.`);
+  updateAiModeBadge();
 });
+document.getElementById("model")?.addEventListener('change', updateAiModeBadge);
+document.getElementById("apiKey")?.addEventListener('input', updateAiModeBadge);
 function safeHandler(id, fn, outIdOverride){
   const el=document.getElementById(id);
   if(!el) return;
@@ -710,6 +717,7 @@ async function testAndPopulateModels(){
   if(r?.ok && r?.models?.length){
     populateModelsForProvider(provider, r.models, false);
     showStatus("modelOut", `✅ Connected! Fetched ${r.models.length} live models.` + (aiProviderOn(provider) ? " • AI answers ON" : ""));
+    updateAiModeBadge();
     return true;
   }
   showStatus("modelOut", `❌ ${r?.error || "Failed to fetch models"} - showing fallback`);
@@ -728,6 +736,7 @@ safeHandler("saveModel", async()=>{
     cfgObj.systemPrompt = data.systemPrompt;
     await window.exchangeDesktop.saveConfig(dumpYaml(cfgObj));
     showStatus("modelOut", "Saved model config to file" + (aiProviderOn(data.provider) ? " • AI answers ON" : ""));
+    updateAiModeBadge();
 
 });
 safeHandler("runDoctor", async()=>{
@@ -1663,7 +1672,7 @@ function aiScrollToBottom() {
 
 function aiSetInputEnabled(enabled) {
   const input = document.getElementById('aiChatInput');
-  const sendBtn = document.getElementById('aiChatSend');
+  const sendBtn = document.getElementById('aiRunAgent');
   const stopBtn = document.getElementById('aiStopGenerate');
   if (input) input.disabled = !enabled;
   if (sendBtn) sendBtn.disabled = !enabled;
@@ -1884,6 +1893,19 @@ function populateAiModelSelect() {
     opt.textContent = `${provider} - ${model}`;
     select.appendChild(opt);
   }
+  updateAiModeBadge();
+}
+
+function updateAiModeBadge() {
+  const badge = document.getElementById('aiModeBadge');
+  if (!badge) return;
+  const provider = (document.getElementById('provider') || {}).value || '';
+  const model = (document.getElementById('model') || {}).value || '';
+  const apiKey = (document.getElementById('apiKey') || {}).value || '';
+  const isAiProvider = ["OpenAI","Groq","Together","OpenRouter","Mistral","Ollama","Ollama Cloud","Custom","OpenCode"].includes(provider);
+  const active = isAiProvider && model && apiKey;
+  badge.textContent = active ? 'AI Mode: On' : 'AI Mode: Off';
+  badge.className = 'px-2 py-0.5 rounded text-[10px] font-mono border ' + (active ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-slate-500/10 text-slate-400 border-slate-500/30');
 }
 
 document.getElementById('aiNewChat')?.addEventListener('click', () => {
