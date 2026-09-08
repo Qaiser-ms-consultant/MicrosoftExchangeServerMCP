@@ -916,10 +916,11 @@ document.getElementById("aiRunAgent")?.addEventListener('click', async () => {
     // Help results carry relevant example prompts — render them as clickable
     // chips (the document-level data-quick handler fills the prompt box).
     if (tool === "help" && data && Array.isArray(data.examples) && data.examples.length && aiResultOutput) {
+      const hintHtml = data.hint ? '<div class="mt-3 p-2.5 rounded-lg bg-sky-500/5 border border-sky-500/25 text-xs text-sky-200 leading-relaxed">' + aiEscapeHtml(data.hint) + '</div>' : '';
       const chips = data.examples.map(function(ex){
         return '<button data-quick="' + aiEscapeHtml(ex).replace(/"/g, "&quot;") + '" class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300 text-left transition">' + aiEscapeHtml(ex) + '</button>';
       }).join("");
-      aiResultOutput.insertAdjacentHTML("beforeend", '<div class="mt-3"><div class="text-[11px] text-slate-500 mb-2">Try one of these:</div><div class="flex flex-wrap gap-2">' + chips + "</div></div>");
+      aiResultOutput.insertAdjacentHTML("beforeend", hintHtml + '<div class="mt-3"><div class="text-[11px] text-slate-500 mb-2">Try one of these:</div><div class="flex flex-wrap gap-2">' + chips + "</div></div>");
       document.getElementById("aiChatInput")?.focus();
     }
     if (aiUsage) aiUsage.textContent = res?.aiUsage ? `${fmtTok(res.aiUsage.input)} in / ${fmtTok(res.aiUsage.output)} out` : "Completed";
@@ -1337,32 +1338,9 @@ function initQuickPrompts(){
 }
 initQuickPrompts();
 
-// Real-mailbox samples — replace dummy placeholder identities in prompts
-// with a live mailbox from the backend Exchange (silent, falls back to
-// placeholders when the backend is unreachable).
-async function initRealMailboxSamples(){
-  try{
-    if(!isDesktop) return;
-    const res = await window.exchangeDesktop.askExchange({ prompt: "first mailbox" });
-    const data = (res && res.result !== undefined) ? res.result : res;
-    const rows = Array.isArray(data) ? data : [];
-    const pool = rows.filter((r)=>r && !/^(HealthMailbox|SystemMailbox|DiscoverySearchMailbox|Migration)/i.test(String((r.DisplayName ?? r.Name) || "")));
-    const first = (pool.length ? pool : rows).map((r)=>r && (r.PrimarySmtpAddress || r.UserPrincipalName)).find(Boolean);
-    if(!first) return;
-    const sub = (s)=>String(s == null ? "" : s).replace(/alice@contoso\.com|bob@contoso\.com|admin@contoso\.com/gi, first);
-    document.querySelectorAll('[data-view="prompts"] [data-quick]').forEach((b)=>{
-      const q = b.getAttribute("data-quick") || "";
-      const nq = sub(q);
-      if(nq !== q) b.setAttribute("data-quick", nq);
-    });
-    const p = document.getElementById("prompt");
-    if(p){ const nv = sub(p.value); if(nv !== p.value) p.value = nv; }
-    const lbl = document.getElementById("currentMailboxLabel");
-    if(lbl){ const nt = sub(lbl.textContent || ""); if(nt !== (lbl.textContent || "")) lbl.textContent = nt; }
-    initQuickPrompts();
-  }catch(e){ console.error('initRealMailboxSamples failed', e); }
-}
-initRealMailboxSamples();
+// NOTE: the old initRealMailboxSamples() startup fetch ("first mailbox" via
+// MCP to swap placeholder identities) was removed — it blocked app launch
+// on a backend round-trip. Placeholders stay as-is until the user runs a query.
 document.getElementById("prompt")?.addEventListener("input", updatePromptTokens);
 document.getElementById("provider")?.addEventListener("change", updatePromptTokens);
 document.getElementById("model")?.addEventListener("change", updatePromptTokens);

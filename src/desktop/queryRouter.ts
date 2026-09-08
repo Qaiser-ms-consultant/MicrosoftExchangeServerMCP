@@ -88,6 +88,29 @@ export function helpExamplesFor(prompt: string): string[] {
   return out.length ? out.slice(0, 6) : GENERIC_HELP_EXAMPLES;
 }
 
+const EMAIL_LIKE = /[\w.+-]+@[\w-]+\.[\w.]+/;
+const OBJECT_WORDS = ["mailbox", "transport", "database", "queue", "connector", "group", "permission", "service", "certificate", "dag", "contact", "domain", "rule"];
+
+/**
+ * A specific clue about which keywords the backend mappings expect, so an
+ * unparseable prompt teaches instead of dead-ending. Empty when nothing
+ * specific applies (the generic examples suffice).
+ */
+export function helpHintFor(prompt: string): string {
+  const p = normalizePrompt(prompt.toLowerCase());
+  const has = (...words: string[]) => words.some((w) => p.includes(w));
+  if (has("rule") && !has("transport", "inbox", "journal", "retention")) {
+    return "Tip: say which kind of rule — “transport rule” for mail flow — plus an action (list, delete, disable, set) and the rule name in quotes.";
+  }
+  if (WRITE_VERBS.test(p) && !OBJECT_WORDS.some((w) => p.includes(w))) {
+    return "Tip: tell me what to change — a mailbox, transport rule, database, queue, connector, group, permission, or service — and which one by name.";
+  }
+  if (has("mailbox") && !EMAIL_LIKE.test(p)) {
+    return "Tip: include the mailbox address, e.g. “…for alice@contoso.com”.";
+  }
+  return "";
+}
+
 export function routeQuery(prompt: string): Route {
   const p = normalizePrompt(prompt.toLowerCase());
   const email = extractIdentity(prompt);
@@ -103,6 +126,7 @@ export function routeQuery(prompt: string): Route {
   if (has("health", "healthy", "unhealthy")) return { tool: "exchange_test_service_health", args: {}, write: false };
   if (has("database", "databases", "db01", "db0") && has("list", "number", "count", "how many", "show", "all")) return { tool: "database.list", args: {}, write: false };
   if (has("databases") && !has("dismount", "mount", "backup", "whitespace", "growth", "repair")) return { tool: "database.list", args: {}, write: false };
+  if (has("per database") || (has("distribution") && has("database", "mailbox"))) return { tool: "report.generate_database_distribution_report", args: {}, write: false };
   if (has("disk")) return { tool: "server.get_disk_space", args: {}, write: false };
   // AI capacity prediction must precede the whitespace rules below (both mention capacity)
   if (has("capacity") && has("predict", "exhaust", "run out", "fill up")) return { tool: "ai.capacity_forecast", args: {}, write: false };
@@ -121,6 +145,7 @@ export function routeQuery(prompt: string): Route {
     const mm = prompt.match(/max\w*\s*message\w*\s*size\s+(\S+)/i);
     return { tool: "mailflow.set_receive_connector", args: { ...(id ? { identity: id } : {}), ...(bm ? { banner: bm[1] || bm[2] } : {}), ...(mm ? { maxMessageSize: mm[1] } : {}) }, write: true };
   }
+  if (has("connector") && has("inventory", "overview", "all", "audit")) return { tool: "report.generate_connector_report", args: {}, write: false };
   if (has("connector")) return { tool: "exchange_list_send_connectors", args: {}, write: false };
   // Transport-rule writes must precede the list-all read below
   if (has("remove", "delete") && has("transport rule")) {
@@ -156,6 +181,7 @@ export function routeQuery(prompt: string): Route {
       return { tool: "exchange_set_transport_rule", args: { ...(id ? { identity: id } : {}), ...(pm ? { priority: parseInt(pm[1], 10) } : {}) }, write: true };
     }
   }
+  if (has("transport rule") && has("inventory", "overview", "summary", "report")) return { tool: "report.generate_transport_rule_report", args: {}, write: false };
   if (has("transport rule")) return { tool: "exchange_get_transport_rules", args: {}, write: false };
   if (has("server") && has("list")) return { tool: "exchange_list_servers", args: {}, write: false };
   if (has("topology")) return { tool: "report.exchange_topology", args: {}, write: false };
@@ -214,6 +240,7 @@ export function routeQuery(prompt: string): Route {
     const gname = gq || (graw && graw.indexOf("@") < 0 ? graw : null);
     return { tool: "group.new", args: gname ? { name: gname } : {}, write: true };
   }
+  if (has("group") && has("empty", "oversized", "oversize", "unused", "hygiene")) return { tool: "report.generate_group_hygiene_report", args: {}, write: false };
   if (has("distribution group", "distribution list")) {
     // Pure count questions get the exact total; listings fetch up to 1000
     // so the output card pager covers large orgs.
@@ -236,9 +263,11 @@ export function routeQuery(prompt: string): Route {
   if (has("audit log")) return { tool: "exchange_search_admin_audit_log", args: {}, write: false };
   if (has("archive") && email) return { tool: "exchange_get_archive_status", args: { identity: email }, write: false };
   if (has("quota") && !has("set", "change", "increase", "raise") && email) return { tool: "exchange_get_mailbox_quota", args: { identity: email }, write: false };
+  if (has("quota") && !has("set", "change", "increase", "raise") && !email) return { tool: "report.generate_quota_pressure_report", args: {}, write: false };
   if (has("mobile", "activesync device", "phone") && email) return { tool: "exchange_get_mobile_device", args: { mailbox: email }, write: false };
   if (has("public folder")) return { tool: "exchange_get_public_folder", args: {}, write: false };
   if (has("folder statistic") && email) return { tool: "mailbox.get_folder_statistics", args: { identity: email }, write: false };
+  if (has("move request") && has("all", "board", "list", "overview", "dashboard")) return { tool: "report.generate_move_request_report", args: {}, write: false };
   if (has("move request status", "move status")) return { tool: "mailbox.get_move_request_status", args: {}, write: false };
   if (has("import request")) return { tool: "exchange_get_mailbox_import_request", args: {}, write: false };
   if (has("restore request")) return { tool: "exchange_get_mailbox_restore_request", args: {}, write: false };
@@ -248,12 +277,15 @@ export function routeQuery(prompt: string): Route {
   if (has("mailbox health") && email) return { tool: "report.mailbox_health_individual", args: { identity: email }, write: false };
   if (has("mailbox compliance") && email) return { tool: "report.mailbox_compliance_individual", args: { identity: email }, write: false };
   if (has("forwarding") && email) return { tool: "report.mailbox_forwarding_individual", args: { identity: email }, write: false };
+  if (has("forwarding")) return { tool: "report.generate_forwarding_report", args: {}, write: false };
   if (has("client access", "owa enabled", "mapi enabled", "pop enabled", "imap enabled", "ews enabled") && email) return { tool: "report.mailbox_client_access_individual", args: { identity: email }, write: false };
+  if ((/\bpop3?\b|\bimap\b/.test(p) || (has("mapi", "activesync", "protocol") && has("enabled", "disabled", "who", "which", "sprawl"))) && !email) return { tool: "report.generate_protocol_report", args: {}, write: false };
   if (has("mailbox size for", "size of mailbox") && email) return { tool: "report.mailbox_size_individual", args: { identity: email }, write: false };
   if (has("mailbox activity", "activity for", "user activity") && email) return { tool: "report.mailbox_activity_individual", args: { identity: email }, write: false };
   if (has("flow profile") && email) return { tool: "report.mailflow_profile", args: { identity: email }, write: false };
   if (has("cleanup advisor") && email) return { tool: "ai.mailbox_cleanup_advisor", args: { identity: email }, write: false };
   // Org & misc reads
+  if (has("domain") && has("inventory", "overview")) return { tool: "report.generate_domain_report", args: {}, write: false };
   if (has("accepted domain", "remote domain")) return { tool: "exchange_list_accepted_domains", args: {}, write: false };
   if (has("virtual director", "vdir")) return { tool: "exchange_get_virtual_directory", args: {}, write: false };
   if (has("autodiscover")) { const d = (email && email.split("@")[1]) || extractDomain(prompt); return { tool: "clientaccess.get_autodiscover_info", args: d ? { domain: d } : {}, write: false }; }

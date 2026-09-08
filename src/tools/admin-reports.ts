@@ -63,6 +63,18 @@ export function registerReportTools(server: McpServer, ps: PowerShellProvider) {
   );
 
   server.tool(
+    "report.generate_forwarding_report",
+    "Forwarding report — mailboxes with forwarding enabled (ForwardingAddress/SmtpAddress), plus deliver-to-both flag",
+    { resultSize: z.number().optional() },
+    async ({ resultSize }) => {
+      const n = Math.min(resultSize ?? 500, 1000);
+      const all = await ps.invokeJson(`Get-Mailbox -ResultSize ${n} | Select-Object DisplayName,PrimarySmtpAddress,ForwardingAddress,ForwardingSmtpAddress,DeliverToMailboxAndForward | Select-Object -First ${n}`);
+      const rows = (Array.isArray(all) ? all : []).filter((x: any) => x && (x.ForwardingAddress || x.ForwardingSmtpAddress));
+      return { content: [{ type: "text", text: JSON.stringify({ count: rows.length, forwardingEnabled: rows }, null, 2) }] };
+    },
+  );
+
+  server.tool(
     "report.generate_archive_report",
     "Archive mailbox report — archive status, quota, database",
     { top: z.number().optional() },
@@ -136,6 +148,151 @@ export function registerReportTools(server: McpServer, ps: PowerShellProvider) {
       allQueues.sort((a: any, b: any) => Number(b.MessageCount ?? 0) - Number(a.MessageCount ?? 0));
       const queues = allQueues.slice(0, 5);
       return { content: [{ type: "text", text: JSON.stringify({ servers, databases: dbs, expiringCertsNext60Days: certs, topQueues: queues, generatedAt: new Date().toISOString() }, null, 2) }] };
+    },
+  );
+
+  // ByteQuantified values arrive as "48 GB (51,539,607,552 bytes)" (or bare
+  // "48 GB"); "Unlimited" means no quota to rank against.
+  function bytesOf(v: any): number {
+    const s = String(v ?? "");
+    const paren = s.match(/\(([\d,]+)\s*bytes\)/i);
+    if (paren) return Number(paren[1].replace(/,/g, ""));
+    const m = s.match(/([\d.]+)\s*(GB|MB|KB|B)\b/i);
+    if (m) {
+      const mult: Record<string, number> = { GB: 1024 ** 3, MB: 1024 ** 2, KB: 1024, B: 1 };
+      return Number(m[1]) * (mult[m[2].toUpperCase()] ?? NaN);
+    }
+    return NaN;
+  }
+
+  server.tool(
+    "report.generate_quota_pressure_report",
+    "Quota pressure — mailboxes closest to their ProhibitSendQuota (top 20 by % used)",
+    { resultSize: z.number().optional() },
+    async ({ resultSize }) => {
+      const n = Math.min(resultSize ?? 200, 1000);
+      const boxes = await ps.invokeJson(`Get-Mailbox -ResultSize ${n} | Select-Object DisplayName,PrimarySmtpAddress,ProhibitSendQuota | Select-Object -First ${n}`);
+      const stats = await ps.invokeJson(`Get-Mailbox -ResultSize ${n} | Get-MailboxStatistics | Select-Object DisplayName,TotalItemSize | Select-Object -First ${n}`).catch(() => []);
+      const sizeByName = new Map((Array.isArray(stats) ? stats : []).map((s: any) => [String(s.DisplayName ?? ""), s.TotalItemSize]));
+      const ranked = (Array.isArray(boxes) ? boxes : [])
+        .map((b: any) => {
+          const quota = bytesOf(b.ProhibitSendQuota);
+          const used = bytesOf(sizeByName.get(String(b.DisplayName ?? "")));
+          if (!isFinite(quota) || quota <= 0 || !isFinite(used)) return null;
+          return { DisplayName: b.DisplayName, PrimarySmtpAddress: b.PrimarySmtpAddress, percentUsed: Math.round((used / quota) * 1000) / 10 };
+        })
+        .filter((x: any) => x)
+        .sort((a: any, b: any) => b.percentUsed - a.percentUsed)
+        .slice(0, 20);
+      return { content: [{ type: "text", text: JSON.stringify({ count: ranked.length, top: ranked }, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    "report.generate_protocol_report",
+    "Client protocol sprawl — POP/IMAP/MAPI/ActiveSync enabled counts plus offender lists",
+    { resultSize: z.number().optional() },
+    async ({ resultSize }) => {
+      const n = Math.min(resultSize ?? 500, 1000);
+      const d = await ps.invokeJson(`Get-CASMailbox -ResultSize ${n} | Select-Object DisplayName,PrimarySmtpAddress,OWAEnabled,MAPIEnabled,ActiveSyncEnabled,PopEnabled,ImapEnabled | Select-Object -First ${n}`);
+      const rows = Array.isArray(d) ? d : [];
+      const pick = (k: string) => rows.filter((x: any) => x[k] === true).map((x: any) => ({ DisplayName: x.DisplayName, PrimarySmtpAddress: x.PrimarySmtpAddress })).slice(0, 50);
+      const popUsers = pick("PopEnabled");
+      const imapUsers = pick("ImapEnabled");
+      const summary = { popEnabled: popUsers.length, imapEnabled: imapUsers.length, mapiEnabled: rows.filter((x: any) => x.MAPIEnabled === true).length, activeSyncEnabled: rows.filter((x: any) => x.ActiveSyncEnabled === true).length };
+      return { content: [{ type: "text", text: JSON.stringify({ count: rows.length, summary, popUsers, imapUsers }, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    "report.generate_connector_report",
+    "Connector inventory — send and receive connectors with key settings in one view",
+    {},
+    async () => {
+      const send = await ps.invokeJson(`Get-SendConnector | Select-Object Name,Enabled,AddressSpaces | Select-Object -First 20`).catch(() => []);
+      const recv = await ps.invokeJson(`Get-ReceiveConnector | Select-Object Name,Enabled,Bindings | Select-Object -First 20`).catch(() => []);
+      return { content: [{ type: "text", text: JSON.stringify({ sendConnectors: send, receiveConnectors: recv }, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    "report.generate_transport_rule_report",
+    "Transport rule inventory — all rules with state, priority and mode, plus counts by state",
+    {},
+    async () => {
+      const rules = await ps.getTransportRules().catch(() => []);
+      const rows = Array.isArray(rules) ? rules : [];
+      const byState: Record<string, number> = {};
+      for (const r of rows) {
+        const s = String((r as any)?.State ?? "Unknown");
+        byState[s] = (byState[s] ?? 0) + 1;
+      }
+      return { content: [{ type: "text", text: JSON.stringify({ count: rows.length, byState, rules: rows }, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    "report.generate_group_hygiene_report",
+    "Distribution group hygiene — empty groups plus largest groups by member count",
+    { resultSize: z.number().optional() },
+    async ({ resultSize }) => {
+      const g = Math.min(resultSize ?? 50, 200);
+      const groups = await ps.invokeJson(`Get-DistributionGroup -ResultSize ${g} | Select-Object Name,PrimarySmtpAddress | Select-Object -First ${g}`);
+      const rows = Array.isArray(groups) ? groups.slice(0, g) : [];
+      const out: Array<{ name: string; primarySmtpAddress: string; memberCount: number }> = [];
+      for (const grp of rows) {
+        const members = await ps.invokeJson(`Get-DistributionGroupMember -Identity "${grp.Name}" | Select-Object DisplayName | Select-Object -First 1000`).catch(() => []);
+        out.push({ name: grp.Name, primarySmtpAddress: grp.PrimarySmtpAddress, memberCount: Array.isArray(members) ? members.length : 0 });
+      }
+      const empty = out.filter((x) => x.memberCount === 0);
+      const largest = [...out].sort((a, b) => b.memberCount - a.memberCount).slice(0, 10);
+      return { content: [{ type: "text", text: JSON.stringify({ groupsChecked: out.length, empty, largest }, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    "report.generate_move_request_report",
+    "Move request board — all move requests with status, progress and target database",
+    {},
+    async () => {
+      const d = await ps.invokeJson(`Get-MoveRequest -ResultSize 100 | Select-Object DisplayName,Status,PercentComplete,TargetDatabase | Select-Object -First 100`).catch(() => []);
+      const rows = Array.isArray(d) ? d : [];
+      const byStatus: Record<string, number> = {};
+      for (const r of rows) {
+        const s = String((r as any)?.Status ?? "Unknown");
+        byStatus[s] = (byStatus[s] ?? 0) + 1;
+      }
+      return { content: [{ type: "text", text: JSON.stringify({ count: rows.length, byStatus, requests: rows }, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    "report.generate_database_distribution_report",
+    "Database distribution — mailbox counts per database (rebalancing view)",
+    { resultSize: z.number().optional() },
+    async ({ resultSize }) => {
+      const n = Math.min(resultSize ?? 1000, 1000);
+      const d = await ps.invokeJson(`Get-Mailbox -ResultSize ${n} | Select-Object DisplayName,Database | Select-Object -First ${n}`);
+      const counts = new Map<string, number>();
+      for (const m of Array.isArray(d) ? d : []) {
+        const db = String((m as any)?.Database ?? "Unknown");
+        counts.set(db, (counts.get(db) ?? 0) + 1);
+      }
+      const perDatabase = [...counts.entries()]
+        .map(([database, count]) => ({ database, count }))
+        .sort((a, b) => b.count - a.count);
+      return { content: [{ type: "text", text: JSON.stringify({ total: perDatabase.reduce((s, x) => s + x.count, 0), perDatabase }, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    "report.generate_domain_report",
+    "Domain inventory — accepted and remote domains in one view",
+    {},
+    async () => {
+      const accepted = await ps.invokeJson(`Get-AcceptedDomain | Select-Object Name,DomainName,Default | Select-Object -First 50`).catch(() => []);
+      const remote = await ps.invokeJson(`Get-RemoteDomain | Select-Object Name,DomainName | Select-Object -First 50`).catch(() => []);
+      return { content: [{ type: "text", text: JSON.stringify({ acceptedDomains: accepted, remoteDomains: remote }, null, 2) }] };
     },
   );
 }

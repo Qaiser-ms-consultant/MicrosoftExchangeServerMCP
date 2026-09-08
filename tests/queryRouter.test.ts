@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractIdentity, hasWriteIntent, helpExamplesFor, normalizePrompt, routeQuery } from "../src/desktop/queryRouter.js";
+import { extractIdentity, hasWriteIntent, helpExamplesFor, helpHintFor, normalizePrompt, routeQuery } from "../src/desktop/queryRouter.js";
 
 describe("extractIdentity", () => {
   it("pulls an email out of free text", () => {
@@ -394,6 +394,33 @@ describe("routeQuery", () => {
     const r = routeQuery("forwarding for alice@contoso.com");
     expect(r).toEqual({ tool: "report.mailbox_forwarding_individual", args: { identity: "alice@contoso.com" }, write: false });
   });
+  it("routes org-wide forwarding prompts to the forwarding report", () => {
+    expect(routeQuery("which mailboxes have forwarding enabled")).toEqual({ tool: "report.generate_forwarding_report", args: {}, write: false });
+  });
+  it("routes quota pressure prompts to the quota report", () => {
+    expect(routeQuery("mailboxes approaching quota")).toEqual({ tool: "report.generate_quota_pressure_report", args: {}, write: false });
+  });
+  it("routes protocol sprawl prompts to the protocol report", () => {
+    expect(routeQuery("which mailboxes have pop enabled")).toEqual({ tool: "report.generate_protocol_report", args: {}, write: false });
+  });
+  it("routes connector inventory prompts to the connector report", () => {
+    expect(routeQuery("connector inventory")).toEqual({ tool: "report.generate_connector_report", args: {}, write: false });
+  });
+  it("routes transport rule inventory prompts to the rule report", () => {
+    expect(routeQuery("transport rule inventory")).toEqual({ tool: "report.generate_transport_rule_report", args: {}, write: false });
+  });
+  it("routes empty group prompts to the hygiene report", () => {
+    expect(routeQuery("empty distribution groups")).toEqual({ tool: "report.generate_group_hygiene_report", args: {}, write: false });
+  });
+  it("routes move request board prompts to the move report", () => {
+    expect(routeQuery("list all move requests")).toEqual({ tool: "report.generate_move_request_report", args: {}, write: false });
+  });
+  it("routes per-database distribution prompts to the distribution report", () => {
+    expect(routeQuery("mailboxes per database")).toEqual({ tool: "report.generate_database_distribution_report", args: {}, write: false });
+  });
+  it("routes domain inventory prompts to the domain report", () => {
+    expect(routeQuery("domain inventory")).toEqual({ tool: "report.generate_domain_report", args: {}, write: false });
+  });
   it("routes client access prompts", () => {
     const r = routeQuery("client access for alice@contoso.com");
     expect(r).toEqual({ tool: "report.mailbox_client_access_individual", args: { identity: "alice@contoso.com" }, write: false });
@@ -633,6 +660,18 @@ describe("routeQuery", () => {
     const ex = helpExamplesFor("hello there");
     expect(ex).toContain("what version of exchange do i have");
     expect(ex.length).toBeGreaterThan(0);
+  });
+  it("hints the rule family when the kind is missing", () => {
+    expect(helpHintFor("update X rule")).toContain("transport rule");
+  });
+  it("hints the missing object for bare write verbs", () => {
+    expect(helpHintFor("update test dc_1200")).toContain("mailbox");
+  });
+  it("hints the missing address for bare mailbox prompts", () => {
+    expect(helpHintFor("mailbox")).toContain("alice@contoso.com");
+  });
+  it("stays silent when nothing specific applies", () => {
+    expect(helpHintFor("hello there")).toBe("");
   });
   it("tolerates transport typos on delete", () => {
     expect(routeQuery('delete tranport rule "Block Executables"')).toEqual({ tool: "exchange_remove_transport_rule", args: { identity: "Block Executables" }, write: true });

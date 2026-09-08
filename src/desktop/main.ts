@@ -5,7 +5,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { spawn, ChildProcess } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { hasWriteIntent, helpExamplesFor, routeQuery } from "./queryRouter.js";
+import { hasWriteIntent, helpExamplesFor, helpHintFor, routeQuery } from "./queryRouter.js";
 import type { RouteResult } from "./queryRouter.js";
 import { loadConfig } from "../config.js";
 import { parse as parseYaml } from "yaml";
@@ -339,6 +339,7 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
     if ("help" in route && !aiRouted) return { prompt, tool: "help", result: {
       message: "I can run Exchange queries. Try one of these:",
       examples: helpExamplesFor(prompt),
+      ...(helpHintFor(prompt) ? { hint: helpHintFor(prompt) } : {}),
       ...(modelCfg && !isAiProvider(modelCfg.provider) ? { note: "Tip: AI answers need an OpenAI-compatible provider (OpenAI, Groq, Together, OpenRouter, Mistral, Ollama, Custom)." } : {}),
     },
     ...((aiMode && modelCfg) ? { aiNote: "Model could not interpret this request — keyword help below." } : {}) };
