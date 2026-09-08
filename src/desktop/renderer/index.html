@@ -234,6 +234,7 @@
 <button class="px-3.5 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-[#1b253c] flex items-center gap-1.5" data-output-tab="mcp" role="tab" aria-selected="false">MCP</button>
 <button class="px-3.5 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-[#1b253c] flex items-center gap-1.5" data-output-tab="json" role="tab" aria-selected="false">Raw JSON</button>
 <button class="px-3.5 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-[#1b253c] flex items-center gap-1.5" data-output-tab="ps" role="tab" aria-selected="false">PowerShell Trace</button>
+<button class="px-3.5 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-[#1b253c] flex items-center gap-1.5" data-output-tab="history" role="tab" aria-selected="false">History</button>
 </div>
 </div>
 <span class="text-[11px] font-mono text-slate-500" id="hostPill">Host: mail.contoso.com</span>
@@ -305,6 +306,10 @@
 <div class="p-4 rounded-lg bg-[#111726] border border-[#1d2a42]" id="psCard" style="display:none">
 <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">PowerShell Trace (PS-Remoting)</h3>
 <div class="text-xs text-slate-400" id="psTrace">Run a prompt to see the PowerShell commands behind it.</div>
+</div>
+<div class="p-4 rounded-lg bg-[#111726] border border-[#1d2a42]" id="historyCard" style="display:none">
+<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Prompt History <span class="normal-case font-normal text-slate-500">(this session — click an entry to reuse it)</span></h3>
+<div class="text-xs text-slate-400 max-h-[60vh] overflow-y-auto" id="historyList">No prompts yet this session. Run something from the AI Chat tab.</div>
 </div>
 </div>
 <div class="px-4 py-2 bg-[#0c111e] border-t border-[#1b253b] flex items-center justify-between text-[11px] text-slate-500 font-mono flex-shrink-0">
@@ -470,7 +475,7 @@ if(!isDesktop){
 
 }
 // Output tabs — AI / MCP / Raw JSON / PowerShell Trace
-var OUT_TABS={ai:'aiChatCard',mcp:'resultCard',json:'jsonCard',ps:'psCard'};
+var OUT_TABS={ai:'aiChatCard',mcp:'resultCard',json:'jsonCard',ps:'psCard',history:'historyCard'};
 var OUT_ACTIVE=['bg-gradient-to-r','from-blue-600','to-indigo-600','text-white','shadow-sm'];
 var OUT_IDLE=['text-slate-400','hover:text-slate-200','hover:bg-[#1b253c]'];
 function switchOutputTab(name){
@@ -486,6 +491,7 @@ function switchOutputTab(name){
     if(j) j.textContent=(window.__lastRaw===undefined)?'Run a prompt to see raw MCP JSON here.':((typeof window.__lastRaw==="string")?window.__lastRaw:JSON.stringify(window.__lastRaw,null,2));
   }
   if(name==='ps'){ renderPsTrace(); }
+  if(name==='history'){ renderHistory(); }
 }
 $$('[data-output-tab]').forEach(function(b){ b.addEventListener('click',function(){ switchOutputTab(b.getAttribute('data-output-tab')); }); });
 // Tabs — use data-tab / data-view
@@ -726,6 +732,43 @@ document.getElementById("clearLogs")?.addEventListener('click', ()=>{ const el=d
 document.getElementById("exportLogs")?.addEventListener('click', ()=>{ const el=document.getElementById("logView"); if(el) navigator.clipboard.writeText(el.textContent||""); });
 document.getElementById("clearPrompt")?.addEventListener('click', ()=>{ const el=document.getElementById("prompt"); if(el) el.value=""; });
 document.getElementById("aiClearChat")?.addEventListener('click', () => { aiClearChat(); });
+// Session prompt history (in-memory only — cleared on restart)
+window.__promptHistory = [];
+window.__histIdx = -1;
+window.__histDraft = "";
+function aiRecordStart(prompt){
+  const entry = { at: new Date().toISOString(), prompt: prompt, tool: "", status: "running" };
+  window.__promptHistory.push(entry);
+  if(window.__promptHistory.length > 100) window.__promptHistory.shift();
+  window.__histIdx = -1; window.__histDraft = "";
+  return entry;
+}
+function aiHistStatus(entry, tool, status){
+  if(entry){ entry.tool = tool || ""; entry.status = status; }
+  const card = document.getElementById("historyCard");
+  if(card && card.style.display !== "none") renderHistory();
+}
+function renderHistory(){
+  const el = document.getElementById("historyList");
+  if(!el) return;
+  const items = window.__promptHistory.slice().reverse();
+  if(!items.length){ el.innerHTML = "No prompts yet this session. Run something from the AI Chat tab."; return; }
+  el.innerHTML = items.map(function(e, i){
+    const idx = window.__promptHistory.length - 1 - i;
+    const t = new Date(e.at).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit", second:"2-digit"});
+    const st = e.status || "running";
+    const pill = st === "completed" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : st === "failed" ? "bg-red-500/10 text-red-400 border-red-500/30" : st === "cancelled" ? "bg-slate-500/10 text-slate-300 border-slate-500/30" : "bg-amber-500/10 text-amber-300 border-amber-500/30";
+    return '<div class="ai-hist-row mb-2 p-2 bg-[#0b0f19] rounded border border-[#1a253a] cursor-pointer hover:border-[#2b3a58]" data-idx="' + idx + '"><div class="flex items-center gap-2 mb-1"><span class="text-[10px] font-mono text-slate-500">' + t + '</span><span class="inline-flex items-center px-1.5 py-0 rounded text-[10px] border ' + pill + '">' + esc(st) + '</span>' + (e.tool ? '<span class="text-[10px] font-mono text-cyan-300">' + esc(e.tool) + '</span>' : '') + '</div><div class="text-xs text-slate-200 break-words">' + esc(e.prompt) + '</div></div>';
+  }).join("");
+  el.querySelectorAll(".ai-hist-row").forEach(function(row){
+    row.addEventListener("click", function(){
+      const e = window.__promptHistory[parseInt(row.getAttribute("data-idx"), 10)];
+      const p = document.getElementById("aiChatInput");
+      if(e && p){ p.value = e.prompt; p.focus(); }
+      switchOutputTab("ai");
+    });
+  });
+}
 document.getElementById("aiRunAgent")?.addEventListener('click', async () => {
   const promptEl = document.getElementById("aiChatInput");
   const statusEl = document.getElementById("aiExecText");
@@ -749,6 +792,7 @@ document.getElementById("aiRunAgent")?.addEventListener('click', async () => {
     window.__pendingWrite = null;
     promptEl.value = "";
     if (denyRe.test(promptValue)) {
+      if (pendingOp.hist) aiHistStatus(pendingOp.hist, pendingOp.tool, "cancelled");
       aiSetRichText(aiResultOutput, "Action cancelled. Nothing was changed.");
       if (aiUsage) aiUsage.textContent = "Cancelled";
       if (statusBadge) statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> <span id="aiExecText">Cancelled</span>';
@@ -769,6 +813,7 @@ document.getElementById("aiRunAgent")?.addEventListener('click', async () => {
     renderPsTrace();
     const aiAns2 = res2?.aiAnswer || res2?.result?.message || aiHumanFallback(res2?.result);
     aiSetRichText(aiResultOutput, aiAns2 || "Action completed.");
+    if (pendingOp.hist) aiHistStatus(pendingOp.hist, (res2 && res2.tool) || pendingOp.tool, "completed");
     if (aiUsage) aiUsage.textContent = res2?.aiUsage ? `${fmtTok(res2.aiUsage.input)} in / ${fmtTok(res2.aiUsage.output)} out` : "Completed";
     renderResult((res2 && res2.tool) || pendingOp.tool, data2);
     if (statusBadge) statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> <span id="aiExecText">Completed</span>';
@@ -787,6 +832,7 @@ document.getElementById("aiRunAgent")?.addEventListener('click', async () => {
   if (aiResultOutput) aiResultOutput.textContent = "Processing...";
   const start = Date.now();
   window.__lastPromptText = promptValue;
+  const histEntry = aiRecordStart(promptValue);
   const res = await window.exchangeDesktop.askExchange({ prompt: promptValue });
   const elapsed = ((Date.now() - start) / 1000).toFixed(2);
   const data = (res && res.result !== undefined) ? res.result : res;
@@ -797,9 +843,11 @@ document.getElementById("aiRunAgent")?.addEventListener('click', async () => {
   renderPsTrace();
   if (res && res.error) {
     if (aiResultOutput) aiResultOutput.innerHTML = `<div class="p-3 rounded border border-red-500/40 bg-red-500/5 text-xs text-red-300">${esc(res.error)}</div>`;
+    aiHistStatus(histEntry, tool, "failed");
     if (statusBadge) statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-red-400"></span> <span id="aiExecText">Failed</span>';
   } else if (res && res.needsConfirm) {
-    window.__pendingWrite = { tool, args: res.args || (data && data.parameters) || {}, prompt: promptValue };
+    window.__pendingWrite = { tool, args: res.args || (data && data.parameters) || {}, prompt: promptValue, hist: histEntry };
+    aiHistStatus(histEntry, tool, "needs confirm");
     if (aiResultOutput) aiResultOutput.innerHTML = `<div class="p-3 rounded border border-amber-500/40 bg-amber-500/5 text-xs"><p class="text-amber-300 font-semibold mb-1">Confirm action: ${esc(tool)}</p><p class="text-slate-400 mb-2">Type <code class="text-cyan-300">yes</code> or press Confirm to proceed, <code class="text-cyan-300">no</code> to cancel.</p>${kvTable(data.parameters || {})}<div class="flex gap-2 mt-3"><button id="confirmWrite" class="px-3 py-1.5 rounded-md bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs">Confirm</button><button id="cancelWrite" class="px-3 py-1.5 rounded-md bg-[#141d30] border border-[#22304d] text-xs text-slate-300">Cancel</button></div></div>`;
     if (statusBadge) statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-yellow-400"></span> <span id="aiExecText">Needs confirm</span>';
     setTimeout(() => {
@@ -818,10 +866,12 @@ document.getElementById("aiRunAgent")?.addEventListener('click', async () => {
       });
     }, 0);
   } else if (res && res.needsInfo) {
+    aiHistStatus(histEntry, tool, "needs info");
     aiSetRichText(aiResultOutput, (data && data.message) || "I need a bit more detail to run that. Tell me which mailbox, server, or database you mean.");
     if (statusBadge) statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-yellow-400"></span> <span id="aiExecText">Needs info</span>';
   } else {
     const aiAns = res && res.aiAnswer ? res.aiAnswer : (res && res.aiNote ? res.aiNote : aiHumanFallback(data));
+    aiHistStatus(histEntry, tool, "completed");
     aiSetRichText(aiResultOutput, aiAns);
     if (aiUsage) aiUsage.textContent = res?.aiUsage ? `${fmtTok(res.aiUsage.input)} in / ${fmtTok(res.aiUsage.output)} out` : "Completed";
     renderResult(tool, data);
@@ -1509,6 +1559,7 @@ function aiClearChat() {
   if (emptyState) emptyState.classList.remove('hidden');
   if (title) title.textContent = 'New Conversation';
   if (chatInput) chatInput.value = '';
+  window.__histIdx = -1; window.__histDraft = "";
   const resultContent = document.getElementById("aiResultContent");
   const resultEmpty = document.getElementById("aiResultEmpty");
   const aiResultOutput = document.getElementById("aiResultOutput");
@@ -1700,6 +1751,17 @@ document.getElementById('aiNewChat')?.addEventListener('click', () => {
 });
 
 document.getElementById('aiChatInput')?.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+    const hist = window.__promptHistory || [];
+    if (!hist.length) return;
+    e.preventDefault();
+    const input = e.target;
+    if (window.__histIdx === -1) window.__histDraft = input.value;
+    if (e.key === 'ArrowUp') window.__histIdx = Math.min(hist.length - 1, window.__histIdx + 1);
+    else window.__histIdx = Math.max(-1, window.__histIdx - 1);
+    input.value = window.__histIdx === -1 ? window.__histDraft : hist[hist.length - 1 - window.__histIdx].prompt;
+    return;
+  }
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     document.getElementById('aiRunAgent')?.click();
@@ -1708,6 +1770,7 @@ document.getElementById('aiChatInput')?.addEventListener('keydown', (e) => {
 
 document.getElementById('aiChatInput')?.addEventListener('input', (e) => {
   const el = e.target;
+  window.__histIdx = -1;
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight, 150) + 'px';
 });
