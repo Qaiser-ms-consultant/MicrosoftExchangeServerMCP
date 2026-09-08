@@ -941,6 +941,8 @@ document.getElementById("aiRunAgent")?.addEventListener('click', async () => {
     const aiAns = res && res.aiAnswer ? res.aiAnswer : (res && res.aiNote ? res.aiNote : aiHumanFallback(data));
     aiHistStatus(histEntry, tool, "completed");
     aiSetRichText(aiResultOutput, aiAns);
+    // Extract and render suggested next actions from AI answer
+    if (aiResultOutput) aiExtractAndRenderActions(aiAns, aiResultOutput);
     // Help results carry relevant example prompts — render them as clickable
     // chips (the document-level data-quick handler fills the prompt box).
     if (tool === "help" && data && Array.isArray(data.examples) && data.examples.length && aiResultOutput) {
@@ -1565,6 +1567,43 @@ function aiHumanFallback(data){
   return String(data);
 }
 
+// Extract suggested next actions from AI response and render as clickable buttons
+function aiExtractAndRenderActions(text, container) {
+  if (!container || !text) return;
+  const actionPatterns = [
+    /(?:next step|recommended action|suggested action|try running|run this|you can run)[:\s]+([^\n.]+)/gi,
+    /(?:^|\n)\s*(?:run|execute)\s+([A-Za-z0-9_.-]+(?:\([^)]*\))?)/gi,
+    /(?:^|\n)\s*[`-](\s*(?:Get|Set|Test|New|Remove|Move|Enable|Disable|Start|Stop|Restart|Suspend|Resume|Mount|Dismount|Add|Grant|Revoke)\s+[A-Za-z0-9_.-\s]+)/gim
+  ];
+  const actions = [];
+  for (const re of actionPatterns) {
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      const cmd = (m[1] || m[0]).trim();
+      if (cmd.length > 3 && cmd.length < 200 && !actions.includes(cmd)) actions.push(cmd);
+    }
+  }
+  if (!actions.length) return;
+  const actionHtml = actions.slice(0, 4).map(a => 
+    `<button class="ai-suggested-action px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300 text-left transition" data-action="${aiEscapeHtml(a).replace(/"/g, '"')}">${aiEscapeHtml(a)}</button>`
+  ).join('');
+  const wrapper = document.createElement('div');
+  wrapper.className = 'mt-3 flex flex-wrap gap-2';
+  wrapper.innerHTML = '<div class="text-[11px] text-slate-500 mb-2">Suggested next actions:</div><div class="flex flex-wrap gap-2">' + actionHtml + '</div>';
+  container.appendChild(wrapper);
+  wrapper.querySelectorAll('.ai-suggested-action').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const action = btn.getAttribute('data-action');
+      const input = document.getElementById('aiChatInput');
+      if (input && action) {
+        input.value = action;
+        input.focus();
+        document.getElementById('aiRunAgent')?.click();
+      }
+    });
+  });
+}
+
 function aiRenderConversationList() {
   const container = document.getElementById('aiConversationList');
   if (!container) return;
@@ -1656,12 +1695,19 @@ function aiRenderMessage(msg) {
   const bubble = `<div class="flex ${isUser ? 'justify-end' : 'justify-start'}">
     <div class="max-w-[85%] ${isUser ? 'bg-blue-600 text-white' : 'bg-[#1a253a] border border-[#25354d] text-slate-200'} rounded-2xl px-4 py-3">
       <div class="text-[10px] font-medium ${isUser ? 'text-blue-200' : 'text-violet-400'} mb-1">${isUser ? 'You' : '✦ AI'}</div>
-      <div class="text-sm whitespace-pre-wrap leading-relaxed">${aiRenderMarkdown(msg.content)}</div>
+      <div class="text-sm whitespace-pre-wrap leading-relaxed ai-msg-content">${aiRenderMarkdown(msg.content)}</div>
       ${msg.toolActivity ? `<div class="mt-2 pt-2 border-t border-[#2a3854] text-xs text-slate-400">${msg.toolActivity}</div>` : ''}
       ${msg.error ? `<div class="mt-2 text-xs text-red-400">Error: ${aiEscapeHtml(msg.error)}</div>` : ''}
     </div>
   </div>`;
   container.insertAdjacentHTML('beforeend', bubble);
+  // Extract and render suggested actions for AI messages
+  if (!isUser) {
+    setTimeout(() => {
+      const lastBubble = container.lastElementChild?.querySelector('.ai-msg-content');
+      if (lastBubble) aiExtractAndRenderActions(msg.content, lastBubble.parentElement);
+    }, 0);
+  }
   aiScrollToBottom();
 }
 
