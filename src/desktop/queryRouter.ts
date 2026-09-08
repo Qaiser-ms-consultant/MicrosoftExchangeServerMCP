@@ -25,13 +25,50 @@ function afterWord(prompt: string, word: string): string | null {
   return rest || null;
 }
 
+// Loose-language tolerance: common typos + synonyms, applied to the
+// lowercased prompt before keyword matching. Extraction (emails, quotes,
+// afterWord) keeps using the original prompt.
+const TYPO_FIXES: Array<[RegExp, string]> = [
+  [/\btranport\b/g, "transport"],
+  [/\bmailobx\b/g, "mailbox"],
+  [/\bdistrubution\b/g, "distribution"],
+  [/\bdistibution\b/g, "distribution"],
+  [/\bpermision\b/g, "permission"],
+  [/\bpermisison\b/g, "permission"],
+  [/\bdatabse\b/g, "database"],
+  [/\bdatabasae\b/g, "database"],
+  [/\bpolicie\b/g, "policy"],
+  [/\bquue\b/g, "queue"],
+  [/\bqueu\b/g, "queue"],
+  [/\bservcie\b/g, "service"],
+  [/\bcertficate\b/g, "certificate"],
+  [/\bmial\b/g, "mail"],
+  [/\bdelet\b/g, "delete"],
+  [/\bremvoe\b/g, "remove"],
+  [/\bdisbale\b/g, "disable"],
+  [/\bcretae\b/g, "create"],
+  [/\bmail\s*flow\s+rule\b/g, "transport rule"],
+];
+
+export function normalizePrompt(lowered: string): string {
+  let s = lowered;
+  for (const [re, fix] of TYPO_FIXES) s = s.replace(re, fix);
+  return s;
+}
+
+const WRITE_VERBS = /\b(remove|delete|disable|enable|create|set|change|update|modify|add|grant|give|revoke|suspend|resume|retry|restart|mount|dismount|move|purge|rid)\b/;
+
+export function hasWriteIntent(prompt: string): boolean {
+  return WRITE_VERBS.test(normalizePrompt(prompt.toLowerCase()));
+}
+
 export function routeQuery(prompt: string): Route {
-  const p = prompt.toLowerCase();
+  const p = normalizePrompt(prompt.toLowerCase());
   const email = extractIdentity(prompt);
   const has = (...words: string[]) => words.some((w) => p.includes(w));
 
   if (has("version", "cumulative", " cu", "build", "patch") && !has("compliance")) return { tool: "report.exchange_version_and_cu", args: {}, write: false };
-  if (has("queue", "delayed", "stuck", "backlog", "mailflow", "mail flow", "pending mail") && !has("retry", "suspend", "report", "intelligence", "root cause")) return { tool: "exchange_get_queue", args: {}, write: false };
+  if (has("queue", "delayed", "stuck", "backlog", "mailflow", "mail flow", "pending mail") && !has("retry", "suspend", "resume", "report", "intelligence", "root cause")) return { tool: "exchange_get_queue", args: {}, write: false };
   if (has("search health", "content index")) return { tool: "diagnostics.test_exchange_search", args: {}, write: false };
   if (has("replication")) return { tool: "exchange_test_replication_health", args: {}, write: false };
   if (has("health", "healthy", "unhealthy") && has("full", "report", "detail", "dag")) return { tool: "exchange_get_health_report", args: {}, write: false };
@@ -50,7 +87,34 @@ export function routeQuery(prompt: string): Route {
   if (has("cert", "expir")) return { tool: "exchange_get_exchange_certificate", args: {}, write: false };
   if (has("uptime", "reboot", "last boot")) return { tool: "server.get_uptime", args: {}, write: false };
   if (has("service") && has("status", "running")) return { tool: "exchange_test_service_health", args: {}, write: false };
+  // Connector writes must precede the list-all read below
+  if (has("set", "change", "update", "modify") && has("send connector")) { const id = afterWord(prompt, "connector"); return { tool: "mailflow.set_send_connector", args: id ? { identity: id } : {}, write: true }; }
+  if (has("set", "change", "update", "modify") && has("receive connector")) {
+    const id = afterWord(prompt, "connector");
+    const bm = prompt.match(/banner\s+"([^"]+)"|banner\s+(\S+)/i);
+    const mm = prompt.match(/max\w*\s*message\w*\s*size\s+(\S+)/i);
+    return { tool: "mailflow.set_receive_connector", args: { ...(id ? { identity: id } : {}), ...(bm ? { banner: bm[1] || bm[2] } : {}), ...(mm ? { maxMessageSize: mm[1] } : {}) }, write: true };
+  }
   if (has("connector")) return { tool: "exchange_list_send_connectors", args: {}, write: false };
+  // Transport-rule writes must precede the list-all read below
+  if (has("remove", "delete") && has("transport rule")) {
+    const q = QUOTED_RE.exec(prompt)?.[1];
+    const raw = afterWord(prompt, "rule")?.replace(/^(with\s+name|named?|called)\s+/i, "") || null;
+    const id = q || raw;
+    return { tool: "exchange_remove_transport_rule", args: id ? { identity: id } : {}, write: true };
+  }
+  if (has("enable", "disable") && has("transport rule")) {
+    const q = QUOTED_RE.exec(prompt)?.[1];
+    const raw = afterWord(prompt, "rule")?.replace(/^(with\s+name|named?|called)\s+/i, "") || null;
+    const id = q || raw;
+    return { tool: "exchange_set_transport_rule", args: { ...(id ? { identity: id } : {}), state: has("disable") ? "Disabled" : "Enabled" }, write: true };
+  }
+  if (has("set", "change", "update", "modify", "priorit") && has("transport rule")) {
+    const q = QUOTED_RE.exec(prompt)?.[1];
+    const raw = afterWord(prompt, "rule")?.replace(/^(with\s+name|named?|called)\s+/i, "") || null;
+    const pm = prompt.match(/priority\s+(\d+)/i);
+    return { tool: "exchange_set_transport_rule", args: { ...(q || raw ? { identity: (q || raw)! } : {}), ...(pm ? { priority: parseInt(pm[1], 10) } : {}) }, write: true };
+  }
   if (has("transport rule")) return { tool: "exchange_get_transport_rules", args: {}, write: false };
   if (has("server") && has("list")) return { tool: "exchange_list_servers", args: {}, write: false };
   if (has("topology")) return { tool: "report.exchange_topology", args: {}, write: false };
@@ -96,6 +160,19 @@ export function routeQuery(prompt: string): Route {
   if (has("contact") && !has("mailbox")) return { tool: "exchange_list_mail_contacts", args: {}, write: false };
   if (has("mail user")) return { tool: "exchange_list_mail_users", args: {}, write: false };
   if (has("dynamic") && has("group")) return { tool: "exchange_list_dynamic_distribution_groups", args: {}, write: false };
+  // Group writes must precede the distribution-group read below
+  if (has("add", "create", "give") && has("group", "member") && email && !has("permission", "access")) {
+    const gq = QUOTED_RE.exec(prompt)?.[1];
+    const graw = afterWord(prompt, "group")?.replace(/^(for|named?|called)\s+/i, "") || null;
+    const gname = gq || (graw && graw.indexOf("@") < 0 ? graw : null);
+    return { tool: "group.add_member", args: { ...(gname ? { identity: gname } : {}), member: email }, write: true };
+  }
+  if (has("create", "new") && has("group") && !email) {
+    const gq = QUOTED_RE.exec(prompt)?.[1];
+    const graw = afterWord(prompt, "group")?.replace(/^(for|named?|called)\s+/i, "") || null;
+    const gname = gq || (graw && graw.indexOf("@") < 0 ? graw : null);
+    return { tool: "group.new", args: gname ? { name: gname } : {}, write: true };
+  }
   if (has("distribution group", "distribution list")) {
     // Pure count questions get the exact total; listings fetch up to 1000
     // so the output card pager covers large orgs.
@@ -160,6 +237,17 @@ export function routeQuery(prompt: string): Route {
     const q = QUOTED_RE.exec(prompt)?.[1];
     return { tool: "mailflow.get_message_trace", args: { ...(email ? { sender: email } : {}), ...(q ? { subject: q } : {}) }, write: false };
   }
+  // Write intents that must precede the read-only permission/mailbox fallbacks
+  if (has("remove", "revoke") && has("permission", "access") && email) {
+    const all = prompt.match(/[\w.+-]+@[\w-]+\.[\w.]+/g) || [];
+    const from = prompt.match(/from\s+([\w.+-]+@[\w-]+\.[\w.]+)/i);
+    const user = from ? from[1] : all[1];
+    return { tool: "mailbox.remove_permission", args: { identity: email, ...(user ? { user } : {}), accessRights: /sendas/i.test(prompt) ? "SendAs" : "FullAccess" }, write: true };
+  }
+  if (has("remove", "delete", "disable") && has("mailbox") && !has("permission", "access") && email) {
+    const permanent = has("permanent", "forever", "purge", "hard delete");
+    return { tool: "exchange_remove_mailbox", args: { identity: email, ...(permanent ? { permanent: true } : {}) }, write: true };
+  }
   if (has("permission", "access", "fullaccess", "sendas", "send as") && email) return { tool: "exchange_get_mailbox_permissions", args: { identity: email }, write: false };
   if (has("statistic", "how big", "item count", "last logon") && email) return { tool: "exchange_get_mailbox_statistics", args: { identity: email }, write: false };
   // Write intents (need confirm — enforced by caller)
@@ -167,9 +255,19 @@ export function routeQuery(prompt: string): Route {
   if (has("mount") && !has("amount")) { const raw = afterWord(prompt, "mount"); const id = raw?.replace(/^database\s+/i, "") || null; return { tool: "database.mount", args: id ? { identity: id } : {}, write: true }; }
   if (has("retry") && has("queue")) { const id = afterWord(prompt, "queue"); return { tool: "exchange_retry_queue", args: id ? { identity: id } : {}, write: true }; }
   if (has("suspend") && has("queue")) { const id = afterWord(prompt, "queue"); return { tool: "exchange_suspend_queue", args: id ? { identity: id } : {}, write: true }; }
+  if (has("resume") && has("queue")) { const id = afterWord(prompt, "queue"); return { tool: "mailflow.resume_queue", args: id ? { identity: id } : {}, write: true }; }
   if (has("restart") && has("service")) { const m = prompt.match(/restart\s+(?:the\s+)?([A-Za-z*]+)/i); return { tool: "server.restart_service", args: { ...(m ? { name: m[1] } : {}), confirm: true }, write: true }; }
-  if (has("move") && has("mailbox", "request")) return { tool: "mailbox.new_move_request", args: email ? { identity: email } : {}, write: true };
+  if (has("move") && has("mailbox", "request")) {
+    const dbm = prompt.match(/(?:\bto\b|\btarget\b(?:\s+database\b)?|\bdatabase\b)\s+([A-Za-z0-9_\-]+)/i);
+    const targetDatabase = dbm && dbm[1].indexOf("@") < 0 ? dbm[1] : undefined;
+    return { tool: "mailbox.new_move_request", args: { ...(email ? { identity: email } : {}), ...(targetDatabase ? { targetDatabase } : {}) }, write: true };
+  }
   if (has("quota") && has("set", "change", "increase", "raise")) return { tool: "mailbox.set_quota", args: email ? { identity: email } : {}, write: true };
+  if (has("set") && has("mailbox") && email) return { tool: "exchange_set_mailbox", args: { identity: email }, write: true };
+  if (has("create", "new") && has("mailbox") && !has("move request", "move status")) {
+    const q = QUOTED_RE.exec(prompt)?.[1];
+    return { tool: "exchange_create_mailbox", args: { ...(q ? { name: q } : {}), ...(has("shared") ? { shared: true } : {}), ...(has("room") ? { room: true } : {}), ...(has("equipment") ? { equipment: true } : {}) }, write: true };
+  }
   if (has("repair") && has("database", "mailbox")) return { tool: "database.new_repair_request", args: {}, write: true };
   if ((has("grant", "give", "add") && has("permission", "access")) && email) {
     const m = prompt.match(/to\s+([\w.+-]+@[\w-]+\.[\w.]+)/i);

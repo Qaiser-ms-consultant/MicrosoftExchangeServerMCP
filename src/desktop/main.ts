@@ -5,7 +5,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { spawn, ChildProcess } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { routeQuery } from "./queryRouter.js";
+import { hasWriteIntent, routeQuery } from "./queryRouter.js";
 import type { RouteResult } from "./queryRouter.js";
 import { loadConfig } from "../config.js";
 import { parse as parseYaml } from "yaml";
@@ -226,6 +226,17 @@ const WRITE_REQUIRED_ARGS: Record<string, string[]> = {
   "server.restart_service": ["name"],
   "mailbox.new_move_request": ["identity", "targetDatabase"],
   "mailbox.set_quota": ["identity"],
+  "exchange_remove_mailbox": ["identity"],
+  "exchange_set_mailbox": ["identity"],
+  "exchange_create_mailbox": ["name"],
+  "mailbox.remove_permission": ["identity", "user"],
+  "exchange_remove_transport_rule": ["identity"],
+  "exchange_set_transport_rule": ["identity"],
+  "group.new": ["name"],
+  "group.add_member": ["identity", "member"],
+  "mailflow.resume_queue": ["identity"],
+  "mailflow.set_receive_connector": ["identity"],
+  "mailflow.set_send_connector": ["identity"],
   "database.new_repair_request": ["database"],
   "mailbox.add_permission": ["identity", "user"],
 };
@@ -275,8 +286,13 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
   } else {
     const route = routeQuery(prompt);
     // AI fallback: model interprets prompts the keyword router cannot classify.
+    // It also reinterprets loose write phrasing that matched a read-only route
+    // (e.g. typos/synonyms the keywords missed) across the full tool catalog.
     let aiRouted: { tool: string; args: any; write: boolean } | null = null;
-    if ("help" in route && aiMode && modelCfg) aiRouted = await tryAiRoute(prompt, modelCfg);
+    if (aiMode && modelCfg) {
+      if ("help" in route) aiRouted = await tryAiRoute(prompt, modelCfg);
+      else if (!route.write && hasWriteIntent(prompt)) aiRouted = await tryAiRoute(prompt, modelCfg);
+    }
     if ("help" in route && !aiRouted) return { prompt, tool: "help", result: {
       message: "I can run Exchange queries. Try one of these:",
       examples: ["what version of exchange do i have", "show delayed queues", "server health report", "database whitespace and growth", "certificates expiring soon", "explain bounce 5.7.1", "trace messages from admin@contoso.com", "tell me everything about admin@contoso.com", "dismount database DB01", "what tools do you offer"],

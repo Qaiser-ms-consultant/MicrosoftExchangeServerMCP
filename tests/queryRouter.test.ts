@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractIdentity, routeQuery } from "../src/desktop/queryRouter.js";
+import { extractIdentity, hasWriteIntent, normalizePrompt, routeQuery } from "../src/desktop/queryRouter.js";
 
 describe("extractIdentity", () => {
   it("pulls an email out of free text", () => {
@@ -568,6 +568,67 @@ describe("routeQuery", () => {
   });
   it("routes set activation policy as write", () => {
     expect(routeQuery("set activation policy")).toEqual({ tool: "dag.set_activation_policy", args: {}, write: true });
+  });
+  it("routes delete mailbox as a write, not a read report", () => {
+    expect(routeQuery("delete mailbox alice@contoso.com")).toEqual({ tool: "exchange_remove_mailbox", args: { identity: "alice@contoso.com" }, write: true });
+  });
+  it("routes disable mailbox as a soft remove write", () => {
+    expect(routeQuery("disable mailbox alice@contoso.com")).toEqual({ tool: "exchange_remove_mailbox", args: { identity: "alice@contoso.com" }, write: true });
+  });
+  it("routes permanent delete with the permanent flag", () => {
+    expect(routeQuery("permanently delete mailbox alice@contoso.com")).toEqual({ tool: "exchange_remove_mailbox", args: { identity: "alice@contoso.com", permanent: true }, write: true });
+  });
+  it("routes remove permission as a write with identity and user", () => {
+    expect(routeQuery("remove FullAccess for alice@contoso.com from bob@contoso.com")).toEqual({ tool: "mailbox.remove_permission", args: { identity: "alice@contoso.com", user: "bob@contoso.com", accessRights: "FullAccess" }, write: true });
+  });
+  it("routes create mailbox as a write needing a name", () => {
+    expect(routeQuery("create mailbox")).toEqual({ tool: "exchange_create_mailbox", args: {}, write: true });
+  });
+  it("routes set mailbox as a write", () => {
+    expect(routeQuery("set mailbox alice@contoso.com")).toEqual({ tool: "exchange_set_mailbox", args: { identity: "alice@contoso.com" }, write: true });
+  });
+  it("extracts the target database on move mailbox", () => {
+    expect(routeQuery("move mailbox alice@contoso.com to DB05")).toEqual({ tool: "mailbox.new_move_request", args: { identity: "alice@contoso.com", targetDatabase: "DB05" }, write: true });
+  });
+  it("routes delete transport rule as a write, not a list", () => {
+    expect(routeQuery('delete transport rule "Block Executables"')).toEqual({ tool: "exchange_remove_transport_rule", args: { identity: "Block Executables" }, write: true });
+  });
+  it("routes disable transport rule as a state-change write", () => {
+    expect(routeQuery("disable transport rule Block Executables")).toEqual({ tool: "exchange_set_transport_rule", args: { identity: "Block Executables", state: "Disabled" }, write: true });
+  });
+  it("routes add group member as a write", () => {
+    expect(routeQuery('add alice@contoso.com to group "Sales Team"')).toEqual({ tool: "group.add_member", args: { identity: "Sales Team", member: "alice@contoso.com" }, write: true });
+  });
+  it("routes new distribution group as a write", () => {
+    expect(routeQuery('create distribution group "Sales"')).toEqual({ tool: "group.new", args: { name: "Sales" }, write: true });
+  });
+  it("routes resume queue as a write", () => {
+    expect(routeQuery("resume queue EXCH01\\Submission")).toEqual({ tool: "mailflow.resume_queue", args: { identity: "EXCH01\\Submission" }, write: true });
+  });
+  it("routes set send connector as a write", () => {
+    expect(routeQuery("set send connector Outbound")).toEqual({ tool: "mailflow.set_send_connector", args: { identity: "Outbound" }, write: true });
+  });
+  it("tolerates transport typos on delete", () => {
+    expect(routeQuery('delete tranport rule "Block Executables"')).toEqual({ tool: "exchange_remove_transport_rule", args: { identity: "Block Executables" }, write: true });
+  });
+  it("understands mail flow rule as transport rule", () => {
+    expect(routeQuery("disable mail flow rule Block Executables")).toEqual({ tool: "exchange_set_transport_rule", args: { identity: "Block Executables", state: "Disabled" }, write: true });
+  });
+  it("tolerates mailbox typos on delete", () => {
+    expect(routeQuery("delete mailobx alice@contoso.com")).toEqual({ tool: "exchange_remove_mailbox", args: { identity: "alice@contoso.com" }, write: true });
+  });
+  it("normalizes common typos", () => {
+    expect(normalizePrompt("delete tranport rule")).toBe("delete transport rule");
+    expect(normalizePrompt("distrubution permision")).toBe("distribution permission");
+  });
+  it("detects write intent in loose phrasing", () => {
+    expect(hasWriteIntent("get rid of that rule blocking executables")).toBe(true);
+    expect(hasWriteIntent("please remove alice@contoso.com")).toBe(true);
+  });
+  it("does not flag pure reads as writes", () => {
+    expect(hasWriteIntent("show transport rules")).toBe(false);
+    expect(hasWriteIntent("mailbox size report")).toBe(false);
+    expect(hasWriteIntent("how healthy is my environment")).toBe(false);
   });
   it("returns help when nothing matches", () => {
     expect(routeQuery("hello there")).toEqual({ help: true });

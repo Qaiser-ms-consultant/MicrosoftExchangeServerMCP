@@ -9,6 +9,19 @@ export function registerTransportAdminTools(server: McpServer, ps: PowerShellPro
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
   });
 
+  server.tool("exchange_remove_transport_rule", "Remove a transport (mail flow) rule (Remove-TransportRule) — confirm required", { identity: z.string().describe("Rule name or identity") }, async ({ identity }) => {
+    await ps.invoke(`Remove-TransportRule -Identity "${identity}" -Confirm:$false`);
+    return { content: [{ type: "text", text: `Removed transport rule ${identity}` }] };
+  });
+
+  server.tool("exchange_set_transport_rule", "Modify a transport rule: enable/disable or set priority (Set-TransportRule) — confirm required", { identity: z.string().describe("Rule name or identity"), state: z.enum(["Enabled", "Disabled"]).optional(), priority: z.number().optional() }, async ({ identity, state, priority }) => {
+    let cmd = `Set-TransportRule -Identity "${identity}"`;
+    if (state) cmd += ` -State ${state}`;
+    if (priority !== undefined) cmd += ` -Priority ${priority}`;
+    await ps.invoke(cmd);
+    return { content: [{ type: "text", text: `Updated transport rule ${identity}` }] };
+  });
+
   server.tool("exchange_list_send_connectors", "List Send connectors", {}, async () => {
     const data = await ps.invokeJson("Get-SendConnector");
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
