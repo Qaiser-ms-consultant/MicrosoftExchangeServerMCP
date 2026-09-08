@@ -158,6 +158,7 @@
 <span class="text-slate-300 font-mono text-[11px] font-medium" id="serverPill">mail.contoso.com</span>
 <span class="text-slate-500 text-[10px] font-mono" id="latencyPill">| 24ms</span>
 </div>
+<button id="updatePill" title="Check for updates from GitHub" class="hidden items-center gap-1.5 px-3 py-1 rounded-full bg-[#141d2f] border border-[#23314c] text-[11px] font-mono text-slate-300 hover:text-white hover:border-[#2b3a58] transition"><span class="w-1.5 h-1.5 rounded-full bg-slate-400" id="updateDot"></span><span id="updateText">Checking…</span></button>
 </header>
 
 <nav class="bg-[#0e1424] border-b border-[#1b253b] px-6 py-2.5 flex items-center justify-between flex-shrink-0">
@@ -1754,7 +1755,82 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     updateAiMcpStatus();
     populateAiModelSelect();
+    setTimeout(() => refreshUpdatePill(false), 3500);
   }, 500);
+});
+
+// Self-update pill (source checkouts only — hidden when the app is not
+// running from a git clone, e.g. a future packaged build).
+window.__updateState = "idle";
+function updateLogLine(line){
+  const lv = document.getElementById("logView");
+  if (lv) { lv.textContent += line + "\n"; lv.scrollTop = lv.scrollHeight; }
+}
+async function refreshUpdatePill(manual){
+  const pill = document.getElementById("updatePill");
+  const dot = document.getElementById("updateDot");
+  const txt = document.getElementById("updateText");
+  if (!pill || !window.exchangeDesktop?.updaterCheck) return;
+  if (window.__updateState === "updating" || window.__updateState === "done") return;
+  window.__updateState = "checking";
+  if (manual && txt) txt.textContent = "Checking…";
+  try {
+    const s = await window.exchangeDesktop.updaterCheck();
+    if (!s || !s.ok) {
+      if (!manual) { pill.classList.add("hidden"); pill.classList.remove("flex"); }
+      else if (txt) { txt.textContent = "Check failed"; pill.title = s?.error || "Check failed"; }
+      window.__updateState = "idle";
+      return;
+    }
+    pill.classList.remove("hidden"); pill.classList.add("flex");
+    if (s.behind > 0) {
+      window.__updateState = "behind";
+      if (dot) dot.className = "w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse";
+      if (txt) txt.textContent = s.behind + " behind — Update";
+      pill.title = s.dirty ? "Local changes present — stash or commit first, then update" : "Pull latest from GitHub and restart";
+    } else {
+      window.__updateState = "idle";
+      if (dot) dot.className = "w-1.5 h-1.5 rounded-full bg-emerald-400";
+      if (txt) txt.textContent = "Up to date";
+      pill.title = "Running the latest commit";
+    }
+  } catch (e) {
+    if (manual && txt) txt.textContent = "Check failed";
+    window.__updateState = "idle";
+  }
+}
+document.getElementById("updatePill")?.addEventListener("click", async () => {
+  const txt = document.getElementById("updateText");
+  const dot = document.getElementById("updateDot");
+  if (window.__updateState === "done") {
+    try { await window.exchangeDesktop.updaterRestart(); } catch (e) { console.error("restart failed", e); }
+    return;
+  }
+  if (window.__updateState !== "behind") { refreshUpdatePill(true); return; }
+  window.__updateState = "updating";
+  if (txt) txt.textContent = "Updating…";
+  if (dot) dot.className = "w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse";
+  try {
+    const r = await window.exchangeDesktop.updaterUpdate();
+    updateLogLine("[updater] " + (r?.message || "Update finished."));
+    if (r?.updated) {
+      window.__updateState = "done";
+      if (txt) txt.textContent = "Restart now";
+      if (dot) dot.className = "w-1.5 h-1.5 rounded-full bg-emerald-400";
+    } else {
+      window.__updateState = "idle";
+      if (txt) txt.textContent = "Up to date";
+      if (r?.message) {
+        const pill = document.getElementById("updatePill");
+        if (pill) pill.title = r.message;
+        updateLogLine("[updater] " + r.message);
+      }
+    }
+  } catch (e) {
+    window.__updateState = "idle";
+    if (txt) txt.textContent = "Update failed";
+    updateLogLine("[updater] Update failed: " + (e?.message || e));
+  }
 });
 
 async function updateAiMcpStatus() {

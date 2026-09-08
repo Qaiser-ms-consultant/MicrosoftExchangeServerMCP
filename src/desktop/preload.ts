@@ -12,4 +12,7 @@ contextBridge.exposeInMainWorld("exchangeDesktop", {
   askExchange: (payload: { prompt: string; conversationId?: string }) => ipcRenderer.invoke("exchange:ask", payload),
   isMcpRunning: () => ipcRenderer.invoke("mcp:isRunning"),
   getBackendInfo: () => ipcRenderer.invoke("backend:info"),
+  updaterCheck: () => ipcRenderer.invoke("updater:check"),
+  updaterUpdate: () => ipcRenderer.invoke("updater:update"),
+  updaterRestart: () => ipcRenderer.invoke("updater:restart"),
 });
