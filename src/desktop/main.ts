@@ -12,6 +12,7 @@ import { parse as parseYaml } from "yaml";
 import { buildSummaryMessages, buildToolPickerMessages, chatComplete, isAiProvider, parseNoToolVerdict, parseToolSelection } from "./modelClient.js";
 import { appendExchange, buildContextBlocks, narrowCatalog, type ExchangeRecord } from "./conversationContext.js";
 import { checkForUpdates, checkZipUpdate, isGitCheckout, performUpdate, performZipUpdate } from "./updater.js";
+import { enhancePrompt, enhancePromptWithModel, guardResult } from "./promptGuard.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -111,6 +112,35 @@ ipcMain.handle("updater:restart", async () => {
   app.relaunch({ args: process.argv.slice(1) });
   app.quit();
   return { ok: true };
+});
+// Prompt coach: validate + rewrite the AI Chat input before it runs.
+// Pure rules first; an optional model-assisted rewrite is layered on top
+// when a provider is configured, falling back to rules on any failure.
+ipcMain.handle("prompt:validate", async (_e, { prompt }: { prompt: string }) => {
+  return guardResult(prompt || "");
+});
+ipcMain.handle("prompt:enhance", async (_e, { prompt, useModel }: { prompt: string; useModel?: boolean }) => {
+  const p = (prompt || "").trim();
+  if (!p) return { enhanced: "", changed: false, scoreBefore: 0, scoreAfter: 0, findings: [] };
+  if (useModel) {
+    const modelCfg = readModelConfig();
+    if (modelCfg && isAiProvider(modelCfg.provider)) {
+      try {
+        const enhanced = await enhancePromptWithModel(p, async (text) => {
+          const r = await chatComplete(modelCfg, [
+            { role: "system", content: "Rewrite the user's Exchange admin request into a professional prompt for an AI agent. Include: role, task, scope, constraints, and output format. Preserve every named identity (mailbox, server, database, domain) and action verb verbatim. Reply with ONLY the rewritten prompt, no preamble." },
+            { role: "user", content: text },
+          ]);
+          return r.text;
+        });
+        const before = guardResult(p);
+        return { enhanced, changed: enhanced !== p, scoreBefore: before.score, scoreAfter: guardResult(enhanced).score, findings: before.findings };
+      } catch {}
+    }
+  }
+  const enhanced = enhancePrompt(p);
+  const before = guardResult(p);
+  return { enhanced, changed: enhanced !== p, scoreBefore: before.score, scoreAfter: guardResult(enhanced).score, findings: before.findings };
 });
 // IPC: backend Exchange identity — resolved with the same loader the MCP
 // server uses (./config.yaml + env), so labels always match the live backend.

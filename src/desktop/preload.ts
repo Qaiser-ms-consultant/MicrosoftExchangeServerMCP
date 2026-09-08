@@ -15,4 +15,6 @@ contextBridge.exposeInMainWorld("exchangeDesktop", {
   updaterCheck: () => ipcRenderer.invoke("updater:check"),
   updaterUpdate: () => ipcRenderer.invoke("updater:update"),
   updaterRestart: () => ipcRenderer.invoke("updater:restart"),
+  promptValidate: (prompt: string) => ipcRenderer.invoke("prompt:validate", { prompt }),
+  promptEnhance: (prompt: string, useModel?: boolean) => ipcRenderer.invoke("prompt:enhance", { prompt, useModel }),
 });

@@ -297,6 +297,23 @@
 </div>
 <div class="flex items-center justify-between mt-2 text-[10px] text-slate-500">
 <span>Press Enter to send, Shift+Enter for new line</span>
+<span id="aiCoachWrap" class="hidden items-center gap-1.5">
+  <span id="aiScorePill" class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-[#141c2e] border border-[#22304d] text-slate-400">—</span>
+  <button id="aiEnhanceBtn" class="px-2 py-0.5 rounded text-[10px] bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-medium">Enhance</button>
+  <button id="aiCoachToggle" class="px-2 py-0.5 rounded text-[10px] bg-[#141c2e] hover:bg-[#1c273e] text-slate-300 border border-[#22304d]">Coach</button>
+</span>
+</div>
+<div id="aiCoachPanel" class="hidden mt-2 p-2.5 rounded-lg bg-[#0b0f19] border border-[#22304d] text-[11px]">
+  <div id="aiCoachFindings" class="space-y-1"></div>
+</div>
+<div id="aiEnhancePreview" class="hidden mt-2 p-2.5 rounded-lg bg-violet-500/5 border border-violet-500/25 text-[11px]">
+  <div class="text-[10px] uppercase tracking-wider text-violet-300 mb-1">Enhanced prompt</div>
+  <div id="aiEnhancePreviewText" class="text-slate-300 leading-relaxed whitespace-pre-wrap"></div>
+  <div class="flex gap-2 mt-2">
+    <button id="aiEnhanceUse" class="px-2.5 py-1 rounded-md bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[11px] font-medium">Use enhanced</button>
+    <button id="aiEnhanceKeep" class="px-2.5 py-1 rounded-md bg-[#141c2e] hover:bg-[#1c273e] text-slate-300 border border-[#22304d] text-[11px]">Keep original</button>
+    <button id="aiEnhanceModel" class="ml-auto px-2.5 py-1 rounded-md bg-[#141c2e] hover:bg-[#1c273e] text-slate-300 border border-[#22304d] text-[11px]">Enhance with AI</button>
+  </div>
 </div>
 </div>
 </div>
@@ -815,6 +832,7 @@ document.getElementById("aiRunAgent")?.addEventListener('click', async () => {
   // (Enter and Run Agent funnel here), and controls lock until it finishes.
   promptEl.value = "";
   promptEl.style.height = "auto";
+  aiCoachRender([]);
   aiSetRunEnabled(false);
   // Typed continuation: "yes/ok/proceed/confirm" resumes the pending write,
   // "no/cancel/stop" abandons it. Otherwise a stale pending op is dropped so
@@ -1895,6 +1913,7 @@ document.getElementById('aiChatInput')?.addEventListener('input', (e) => {
   window.__histIdx = -1;
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight, 150) + 'px';
+  aiCoachValidate();
 });
 
 document.getElementById('aiStopGenerate')?.addEventListener('click', aiStopGeneration);
@@ -1911,6 +1930,83 @@ document.querySelectorAll('.ai-starter-prompt').forEach(btn => {
 document.getElementById('model')?.addEventListener('change', populateAiModelSelect);
 document.getElementById('provider')?.addEventListener('change', populateAiModelSelect);
 setInterval(updateAiMcpStatus, 10000);
+
+// --- Prompt coach: validate + enhance the AI Chat input inline ---
+function aiCoachColor(score){
+  if (score >= 80) return 'text-emerald-400 border-emerald-500/30';
+  if (score >= 50) return 'text-amber-400 border-amber-500/30';
+  return 'text-red-400 border-red-500/30';
+}
+function aiCoachRender(findings){
+  const wrap = document.getElementById('aiCoachWrap');
+  const panel = document.getElementById('aiCoachPanel');
+  const list = document.getElementById('aiCoachFindings');
+  if (!wrap || !panel || !list) return;
+  const hasFindings = !!(findings && findings.length);
+  wrap.classList.toggle('hidden', !hasFindings);
+  panel.classList.toggle('hidden', !hasFindings);
+  if (!hasFindings){ list.innerHTML = ''; return; }
+  const sevIcon = { error: '⛔', warn: '⚠', info: 'ℹ' };
+  list.innerHTML = findings.map((f)=> {
+    const fix = f.fix ? `<div class="text-slate-500 mt-0.5">→ ${esc(f.fix)}</div>` : '';
+    return `<div class="flex items-start gap-1.5"><span class="text-slate-500">${sevIcon[f.severity]||'•'}</span><div><span class="text-slate-300">${esc(f.message)}</span>${fix}</div></div>`;
+  }).join('');
+}
+function aiCoachValidate(){
+  const input = document.getElementById('aiChatInput');
+  if (!input) return;
+  const v = input.value.trim();
+  const pill = document.getElementById('aiScorePill');
+  if (!v){ if (pill) pill.textContent = '—'; aiCoachRender([]); return; }
+  window.exchangeDesktop.promptValidate(v).then((r)=>{
+    if (pill){ pill.textContent = r.score; pill.className = 'px-1.5 py-0.5 rounded text-[10px] font-mono bg-[#141c2e] border ' + aiCoachColor(r.score); }
+    aiCoachRender(r.findings || []);
+  }).catch(()=>{});
+}
+async function aiCoachEnhance(useModel){
+  const input = document.getElementById('aiChatInput');
+  if (!input) return;
+  const v = input.value.trim();
+  if (!v){ aiCoachValidate(); return; }
+  const preview = document.getElementById('aiEnhancePreview');
+  const previewText = document.getElementById('aiEnhancePreviewText');
+  const modelBtn = document.getElementById('aiEnhanceModel');
+  if (previewText) previewText.textContent = 'Rewriting…';
+  preview.classList.remove('hidden');
+  if (modelBtn) modelBtn.disabled = true;
+  try {
+    const r = await window.exchangeDesktop.promptEnhance(v, !!useModel);
+    if (previewText) previewText.textContent = r.enhanced || v;
+    window.__aiEnhancedOriginal = v;
+    window.__aiEnhancedScore = r.scoreAfter;
+  } catch (e) {
+    if (previewText) previewText.textContent = v;
+  } finally {
+    if (modelBtn) modelBtn.disabled = false;
+  }
+}
+document.getElementById('aiEnhanceBtn')?.addEventListener('click', () => aiCoachEnhance(false));
+document.getElementById('aiEnhanceModel')?.addEventListener('click', () => aiCoachEnhance(true));
+document.getElementById('aiEnhanceUse')?.addEventListener('click', () => {
+  const input = document.getElementById('aiChatInput');
+  const preview = document.getElementById('aiEnhancePreview');
+  const previewText = document.getElementById('aiEnhancePreviewText');
+  if (input && previewText && previewText.textContent){
+    input.value = previewText.textContent;
+    aiCoachValidate();
+  }
+  preview?.classList.add('hidden');
+});
+document.getElementById('aiEnhanceKeep')?.addEventListener('click', () => {
+  document.getElementById('aiEnhancePreview')?.classList.add('hidden');
+});
+document.getElementById('aiCoachToggle')?.addEventListener('click', () => {
+  const panel = document.getElementById('aiCoachPanel');
+  if (!panel) return;
+  const hidden = panel.classList.toggle('hidden');
+  document.getElementById('aiCoachWrap')?.classList.toggle('hidden', hidden);
+  if (!hidden) aiCoachValidate();
+});
 </script>
 </body>
 </html>
