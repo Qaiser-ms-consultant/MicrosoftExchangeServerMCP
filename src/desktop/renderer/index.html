@@ -1570,17 +1570,28 @@ function aiHumanFallback(data){
 // Extract suggested next actions from AI response and render as clickable buttons
 function aiExtractAndRenderActions(text, container) {
   if (!container || !text) return;
-  const actionPatterns = [
-    /(?:next step|recommended action|suggested action|try running|run this|you can run)[:\s]+([^\n.]+)/gi,
+const actionPatterns = [
+    // Pattern 1: "Next Step:", "Recommended action:", etc. - capture first sentence after colon
+    /(?:next step|recommended action|suggested action|try running|run this|you can run)[:\s]+([^.]{10,150}\.)/gi,
+    // Pattern 2: Explicit "run <command>" or "execute <command>"
     /(?:^|\n)\s*(?:run|execute)\s+([A-Za-z0-9_.-]+(?:\([^)]*\))?)/gi,
-    /(?:^|\n)\s*[`-](\s*(?:Get|Set|Test|New|Remove|Move|Enable|Disable|Start|Stop|Restart|Suspend|Resume|Mount|Dismount|Add|Grant|Revoke)\s+[A-Za-z0-9_.-\s]+)/gim
+    // Pattern 3: Bullet points with PowerShell verbs (single line)
+    /(?:^|\n)\s*[`\-]\s*((?:Get|Set|Test|New|Remove|Move|Enable|Disable|Start|Stop|Restart|Suspend|Resume|Mount|Dismount|Add|Grant|Revoke|Invoke|Measure|Select|Where|Sort|Group|Format|Export|Import)\-[A-Za-z0-9_.-]+(?:\s+[\-\w\d.\@\"']+)*)/gim,
+    // Pattern 4: Any PowerShell-like command anywhere in text - capture verb-noun + up to 5 params
+    /((?:Get|Set|Test|New|Remove|Move|Enable|Disable|Start|Stop|Restart|Suspend|Resume|Mount|Dismount|Add|Grant|Revoke|Invoke|Measure|Select|Where|Sort|Group|Format|Export|Import)\-[A-Za-z0-9_.-]+(?:\s+(?:[\-\w\d.\@\"']+|\[[^\]]*\]|\{[^}]*\})){0,5})/gi
   ];
   const actions = [];
   for (const re of actionPatterns) {
     let m;
     while ((m = re.exec(text)) !== null) {
       const cmd = (m[1] || m[0]).trim();
-      if (cmd.length > 3 && cmd.length < 200 && !actions.includes(cmd)) actions.push(cmd);
+      // Clean up: remove trailing filler words and multi-line artifacts
+      const clean = cmd
+        .split('\n')[0]  // Take only first line
+        .replace(/\s+(?:command|to|via|and|then|the|a|an|is|will|would|could|should|might|for|in|on|at|by|from|with|using)\b.*$/i, '')
+        .replace(/[.,;:]+$/, '')
+        .trim();
+      if (clean.length > 3 && clean.length < 200 && !actions.includes(clean)) actions.push(clean);
     }
   }
   if (!actions.length) return;
