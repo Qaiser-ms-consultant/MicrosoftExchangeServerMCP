@@ -62,6 +62,32 @@ export function hasWriteIntent(prompt: string): boolean {
   return WRITE_VERBS.test(normalizePrompt(prompt.toLowerCase()));
 }
 
+const GENERIC_HELP_EXAMPLES = ["what version of exchange do i have", "show delayed queues", "server health report", "database whitespace and growth", "certificates expiring soon", "explain bounce 5.7.1", "trace messages from admin@contoso.com", "tell me everything about admin@contoso.com", "dismount database DB01", "what tools do you offer"];
+
+const HELP_EXAMPLE_SETS: Array<{ match: RegExp; examples: string[] }> = [
+  { match: /\btransport\b|\bmail\s*flow\s+rule\b|\brules?\b/, examples: ["list transport rules", 'delete transport rule "Old Rule"', 'disable transport rule "Old Rule"', 'set transport rule "Old Rule" priority 1'] },
+  { match: /\bmailbox\b|@/, examples: ["tell me everything about admin@contoso.com", "mailbox statistics for admin@contoso.com", "show 50 mailboxes"] },
+  { match: /\bdatabase\b|\b\w*db\d*\b|\bdag\b|\bmount\b/, examples: ["list databases", "database whitespace and growth", "dismount database DB01"] },
+  { match: /\bqueue\b|\bdelayed\b|\bstuck\b|\bmailflow\b|\bmail flow\b/, examples: ["show delayed queues", "resume queue EXCH01\\Submission", "transport queue report"] },
+  { match: /\bcert\b|\bexpir\b/, examples: ["certificates expiring soon"] },
+  { match: /\bquota\b/, examples: ["quota for alice@contoso.com", "mailbox statistics for alice@contoso.com"] },
+  { match: /\bpermission\b|\baccess\b/, examples: ["permissions of alice@contoso.com", "permission risk report"] },
+  { match: /\bconnector\b/, examples: ["list send connectors", "set send connector Outbound"] },
+  { match: /\bservice\b|\brestart\b|\bhealth\b/, examples: ["is the server healthy", "full health report", "restart service MSExchangeTransport"] },
+  { match: /\bmigrat/, examples: ["migration ETA", "migration readiness"] },
+];
+
+/** Relevant example prompts for the help card, based on what the user typed. */
+export function helpExamplesFor(prompt: string): string[] {
+  const p = normalizePrompt(prompt.toLowerCase());
+  const out: string[] = [];
+  for (const set of HELP_EXAMPLE_SETS) {
+    if (set.match.test(p)) out.push(...set.examples);
+    if (out.length >= 6) break;
+  }
+  return out.length ? out.slice(0, 6) : GENERIC_HELP_EXAMPLES;
+}
+
 export function routeQuery(prompt: string): Route {
   const p = normalizePrompt(prompt.toLowerCase());
   const email = extractIdentity(prompt);
@@ -114,6 +140,21 @@ export function routeQuery(prompt: string): Route {
     const raw = afterWord(prompt, "rule")?.replace(/^(with\s+name|named?|called)\s+/i, "") || null;
     const pm = prompt.match(/priority\s+(\d+)/i);
     return { tool: "exchange_set_transport_rule", args: { ...(q || raw ? { identity: (q || raw)! } : {}), ...(pm ? { priority: parseInt(pm[1], 10) } : {}) }, write: true };
+  }
+  // Bare "X rule" phrasing (no "transport" word): assume transport rule unless
+  // the prompt names another rule family with its own read path.
+  if (has("rule") && !has("inbox", "journal", "retention", "transport")) {
+    const q = QUOTED_RE.exec(prompt)?.[1];
+    const raw = afterWord(prompt, "rule")?.replace(/^(with\s+name|named?|called)\s+/i, "") || null;
+    const unquoted = afterWord(prompt, "update") || afterWord(prompt, "delete") || afterWord(prompt, "remove") || afterWord(prompt, "disable") || afterWord(prompt, "enable") || afterWord(prompt, "set");
+    const bare = (q || (unquoted ? unquoted.replace(/\s+rules?$/i, "") : null) || raw) || null;
+    const id = bare && bare.length < 80 ? bare : null;
+    if (has("remove", "delete")) return { tool: "exchange_remove_transport_rule", args: id ? { identity: id } : {}, write: true };
+    if (has("enable", "disable")) return { tool: "exchange_set_transport_rule", args: { ...(id ? { identity: id } : {}), state: has("disable") ? "Disabled" : "Enabled" }, write: true };
+    if (has("set", "change", "update", "modify", "priorit")) {
+      const pm = prompt.match(/priority\s+(\d+)/i);
+      return { tool: "exchange_set_transport_rule", args: { ...(id ? { identity: id } : {}), ...(pm ? { priority: parseInt(pm[1], 10) } : {}) }, write: true };
+    }
   }
   if (has("transport rule")) return { tool: "exchange_get_transport_rules", args: {}, write: false };
   if (has("server") && has("list")) return { tool: "exchange_list_servers", args: {}, write: false };

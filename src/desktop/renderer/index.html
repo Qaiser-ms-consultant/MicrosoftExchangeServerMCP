@@ -135,6 +135,12 @@
     html body { overflow-y: auto !important; }
     main[data-purpose="split-pane-workflow"] { flex: none !important; height: auto !important; overflow: visible !important; }
   }
+  /* AI busy indicator: three pulsing dots + label */
+  .thinking-animation{ display:inline-flex; align-items:center; gap:7px; }
+  .thinking-animation .tdot{ width:6px; height:6px; border-radius:9999px; background:#64748b; animation:ai-blink 1.2s infinite; }
+  .thinking-animation .tdot:nth-child(2){ animation-delay:.2s; }
+  .thinking-animation .tdot:nth-child(3){ animation-delay:.4s; }
+  @keyframes ai-blink{ 0%,100%{ opacity:.25 } 50%{ opacity:1 } }
 </style>
 </head>
 <body class="h-full antialiased font-sans select-none overflow-hidden flex flex-col">
@@ -174,26 +180,26 @@
 <div class="flex items-center gap-2"><span class="text-xs font-bold uppercase tracking-wider text-slate-400">BYOM — Bring Your Own Model</span></div>
 </div>
 <div class="p-4 flex-1 flex flex-col gap-3">
-<div class="flex items-center justify-between"><label class="text-xs font-medium text-slate-300">SYSTEM PROMPT</label></div>
+<div class="flex items-center justify-between"><label for="systemPrompt" class="text-xs font-medium text-slate-300">SYSTEM PROMPT</label></div>
 <div class="relative flex-1 min-h-[90px] group">
 <textarea class="w-full h-full p-3 bg-[#0b0f19] text-slate-100 rounded-lg border border-[#22304d] text-sm font-mono focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition resize-none leading-relaxed placeholder-slate-600" id="systemPrompt" placeholder="Define how the AI should behave when answering Exchange queries. E.g. You are an Exchange Server admin assistant..." rows="4"></textarea>
 <input type="hidden" id="prompt" value="" />
 </div>
 <div class="flex flex-col gap-2 text-xs">
 <div class="bg-[#0b0f19] border border-[#1d2943] rounded-lg p-2 flex items-center justify-between">
-<span class="text-slate-400 text-[11px]">Model Target:</span>
+<label for="provider" class="text-slate-400 text-[11px]">Model Target:</label>
 <select id="provider" class="bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200 focus:border-blue-500 outline-none cursor-pointer" style="background: #0b0f19; color: #e2e8f0;">
 <option>OpenAI</option><option>Anthropic</option><option>Google</option><option>Azure OpenAI</option><option>AWS Bedrock</option><option>Ollama</option><option>Ollama Cloud</option><option>Mistral</option><option>Cohere</option><option>Groq</option><option>Together</option><option>OpenRouter</option><option>Custom</option><option>OpenCode</option>
 </select>
 </div>
 <div class="bg-[#0b0f19] border border-[#1d2943] rounded-lg p-2 flex flex-col gap-2">
-<div class="flex items-center justify-between"><span class="text-[11px] text-slate-400">API Key</span><span class="text-[10px] text-slate-500">file-based ${API_KEY}</span></div>
+<div class="flex items-center justify-between"><label for="apiKey" class="text-[11px] text-slate-400">API Key</label><span class="text-[10px] text-slate-500">file-based ${API_KEY}</span></div>
 <input id="apiKey" type="password" placeholder="Stored file-based, never shown" class="w-full p-2 bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200 placeholder-slate-600 focus:border-blue-500 outline-none" />
-<input id="baseUrl" placeholder="https://api.openai.com/v1 (custom/Ollama)" class="w-full p-2 bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200 placeholder-slate-600 focus:border-blue-500 outline-none" />
+<input id="baseUrl" aria-label="Base URL (custom provider or Ollama)" placeholder="https://api.openai.com/v1 (custom/Ollama)" class="w-full p-2 bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200 placeholder-slate-600 focus:border-blue-500 outline-none" />
 </div>
 <button class="w-full px-3 py-1.5 rounded-md bg-[#1a2336] hover:bg-[#1e2d4a] border border-[#23314e] text-xs text-slate-300" id="testModel">Test connection</button>
 <div class="bg-[#0b0f19] border border-[#1d2943] rounded-lg p-2 flex items-center justify-between">
-<span class="text-slate-400 text-[11px]">Model:</span>
+<label for="model" class="text-slate-400 text-[11px]">Model:</label>
 <select id="model" class="bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200 focus:border-blue-500 outline-none cursor-pointer" style="background: #0b0f19; color: #e2e8f0;"><option>Select provider first</option></select>
 </div>
 <button class="w-full px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium" id="saveModel">Save</button>
@@ -271,7 +277,10 @@
 <div class="p-4 rounded-lg bg-[#111726] border border-[#1d2a42]">
 <div class="flex items-center justify-between mb-2">
 <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">✦ AI Response</h3>
+<div class="flex items-center gap-2">
+<button id="aiCopyResponse" title="Copy response as plain text" class="px-2 py-0.5 rounded-md text-[11px] text-slate-400 hover:text-slate-100 hover:bg-[#1a2538] border border-transparent hover:border-[#2b3a58] transition">Copy</button>
 <span class="text-[10px] font-mono text-slate-500" id="aiUsage">—</span>
+</div>
 </div>
 <div class="text-sm text-slate-200 leading-relaxed space-y-2" id="aiResultOutput">Run a prompt to see the AI response here.</div>
 </div>
@@ -769,6 +778,31 @@ function renderHistory(){
     });
   });
 }
+// Single place that paints run status: the AI card badge plus the Home
+// header pill (the badge rewrites its own innerHTML, so this re-queries
+// every time instead of holding a node that gets detached).
+function aiSetExecState(kind, text){
+  const dots = {
+    running: '<span class="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse"></span>',
+    ok: '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>',
+    warn: '<span class="w-1.5 h-1.5 rounded-full bg-yellow-400"></span>',
+    bad: '<span class="w-1.5 h-1.5 rounded-full bg-red-400"></span>',
+    muted: '<span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>'
+  };
+  const badge = document.getElementById("aiExecBadge");
+  if (badge) badge.innerHTML = (dots[kind] || dots.ok) + ' <span id="aiExecText">' + esc(text) + '</span>';
+  const home = document.getElementById("execText");
+  if (home) home.textContent = text;
+}
+function aiSetRunEnabled(on){
+  const input = document.getElementById("aiChatInput");
+  const btn = document.getElementById("aiRunAgent");
+  if (input) input.disabled = !on;
+  if (btn) btn.disabled = !on;
+}
+function aiThinkingHtml(label){
+  return '<div class="thinking-animation"><span class="tdot"></span><span class="tdot"></span><span class="tdot"></span><span class="text-xs text-slate-400">' + esc(label || "Working...") + '</span></div>';
+}
 document.getElementById("aiRunAgent")?.addEventListener('click', async () => {
   const promptEl = document.getElementById("aiChatInput");
   const statusEl = document.getElementById("aiExecText");
@@ -776,6 +810,11 @@ document.getElementById("aiRunAgent")?.addEventListener('click', async () => {
   if (!promptEl || !statusEl) return;
   const promptValue = promptEl.value.trim();
   if (!promptValue) return;
+  // Industry-standard chat behavior: the box clears the moment a run starts
+  // (Enter and Run Agent funnel here), and controls lock until it finishes.
+  promptEl.value = "";
+  promptEl.style.height = "auto";
+  aiSetRunEnabled(false);
   // Typed continuation: "yes/ok/proceed/confirm" resumes the pending write,
   // "no/cancel/stop" abandons it. Otherwise a stale pending op is dropped so
   // a later "yes" can never confirm an unrelated earlier request.
@@ -790,20 +829,18 @@ document.getElementById("aiRunAgent")?.addEventListener('click', async () => {
     if (emptyState) emptyState.classList.add("hidden");
     if (resultContent) resultContent.classList.remove("hidden");
     window.__pendingWrite = null;
-    promptEl.value = "";
     if (denyRe.test(promptValue)) {
       if (pendingOp.hist) aiHistStatus(pendingOp.hist, pendingOp.tool, "cancelled");
       aiSetRichText(aiResultOutput, "Action cancelled. Nothing was changed.");
       if (aiUsage) aiUsage.textContent = "Cancelled";
-      if (statusBadge) statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> <span id="aiExecText">Cancelled</span>';
-      if (statusEl) statusEl.textContent = "Cancelled";
+      aiSetExecState("muted", "Cancelled");
+      aiSetRunEnabled(true);
       return;
     }
-    statusEl.textContent = "Running…";
-    if (statusBadge) statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse"></span> <span id="aiExecText">Running…</span>';
-    if (aiResultOutput) aiResultOutput.textContent = "Processing...";
+    aiSetExecState("running", "Running…");
+    if (aiResultOutput) aiResultOutput.innerHTML = aiThinkingHtml("Running checks...");
     const start = Date.now();
-    const res2 = await window.exchangeDesktop.askExchange({ prompt: pendingOp.prompt || pendingOp.tool, confirmed: true, tool: pendingOp.tool, args: pendingOp.args });
+    const res2 = await window.exchangeDesktop.askExchange({ prompt: pendingOp.prompt || pendingOp.tool, confirmed: true, tool: pendingOp.tool, args: pendingOp.args, conversationId: window.__aiCurrentConversationId || undefined });
     const elapsed = ((Date.now() - start) / 1000).toFixed(2);
     const data2 = (res2 && res2.result !== undefined) ? res2.result : res2;
     window.__lastPromptText = pendingOp.prompt || pendingOp.tool;
@@ -816,24 +853,23 @@ document.getElementById("aiRunAgent")?.addEventListener('click', async () => {
     if (pendingOp.hist) aiHistStatus(pendingOp.hist, (res2 && res2.tool) || pendingOp.tool, "completed");
     if (aiUsage) aiUsage.textContent = res2?.aiUsage ? `${fmtTok(res2.aiUsage.input)} in / ${fmtTok(res2.aiUsage.output)} out` : "Completed";
     renderResult((res2 && res2.tool) || pendingOp.tool, data2);
-    if (statusBadge) statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> <span id="aiExecText">Completed</span>';
-    if (statusEl) statusEl.textContent = `Done in ${elapsed}s`;
+    aiSetExecState("ok", `Done in ${elapsed}s`);
+    aiSetRunEnabled(true);
     return;
   }
   window.__pendingWrite = null;
-  statusEl.textContent = "Running…";
-  if (statusBadge) statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse"></span> <span id="aiExecText">Running…</span>';
+  aiSetExecState("running", "Running…");
   const emptyState = document.getElementById("aiResultEmpty");
   const resultContent = document.getElementById("aiResultContent");
   const aiResultOutput = document.getElementById("aiResultOutput");
   const aiUsage = document.getElementById("aiUsage");
   if (emptyState) emptyState.classList.add("hidden");
   if (resultContent) resultContent.classList.remove("hidden");
-  if (aiResultOutput) aiResultOutput.textContent = "Processing...";
+  if (aiResultOutput) aiResultOutput.innerHTML = aiThinkingHtml("Running checks...");
   const start = Date.now();
   window.__lastPromptText = promptValue;
   const histEntry = aiRecordStart(promptValue);
-  const res = await window.exchangeDesktop.askExchange({ prompt: promptValue });
+  const res = await window.exchangeDesktop.askExchange({ prompt: promptValue, conversationId: window.__aiCurrentConversationId || undefined });
   const elapsed = ((Date.now() - start) / 1000).toFixed(2);
   const data = (res && res.result !== undefined) ? res.result : res;
   const tool = (res && res.tool) || "";
@@ -844,40 +880,54 @@ document.getElementById("aiRunAgent")?.addEventListener('click', async () => {
   if (res && res.error) {
     if (aiResultOutput) aiResultOutput.innerHTML = `<div class="p-3 rounded border border-red-500/40 bg-red-500/5 text-xs text-red-300">${esc(res.error)}</div>`;
     aiHistStatus(histEntry, tool, "failed");
-    if (statusBadge) statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-red-400"></span> <span id="aiExecText">Failed</span>';
+    aiSetExecState("bad", "Failed");
+    aiSetRunEnabled(true);
+    document.getElementById("aiChatOutput")?.scrollTo({ top: 0, behavior: "smooth" });
   } else if (res && res.needsConfirm) {
     window.__pendingWrite = { tool, args: res.args || (data && data.parameters) || {}, prompt: promptValue, hist: histEntry };
     aiHistStatus(histEntry, tool, "needs confirm");
     if (aiResultOutput) aiResultOutput.innerHTML = `<div class="p-3 rounded border border-amber-500/40 bg-amber-500/5 text-xs"><p class="text-amber-300 font-semibold mb-1">Confirm action: ${esc(tool)}</p><p class="text-slate-400 mb-2">Type <code class="text-cyan-300">yes</code> or press Confirm to proceed, <code class="text-cyan-300">no</code> to cancel.</p>${kvTable(data.parameters || {})}<div class="flex gap-2 mt-3"><button id="confirmWrite" class="px-3 py-1.5 rounded-md bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs">Confirm</button><button id="cancelWrite" class="px-3 py-1.5 rounded-md bg-[#141d30] border border-[#22304d] text-xs text-slate-300">Cancel</button></div></div>`;
-    if (statusBadge) statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-yellow-400"></span> <span id="aiExecText">Needs confirm</span>';
+    aiSetExecState("warn", "Needs confirm");
+    aiSetRunEnabled(true);
     setTimeout(() => {
       document.getElementById("confirmWrite")?.addEventListener("click", async () => {
         window.__pendingWrite = null;
-        const res2 = await window.exchangeDesktop.askExchange({ prompt: promptValue, confirmed: true, tool, args: res.args });
+        const res2 = await window.exchangeDesktop.askExchange({ prompt: promptValue, confirmed: true, tool, args: res.args, conversationId: window.__aiCurrentConversationId || undefined });
         const aiAns = res2?.aiAnswer || res2?.result?.message || aiHumanFallback(res2?.result);
         aiSetRichText(aiResultOutput, aiAns || "Action completed.");
         if (aiUsage) aiUsage.textContent = res2?.aiUsage ? `${fmtTok(res2.aiUsage.input)} in / ${fmtTok(res2.aiUsage.output)} out` : "Completed";
-        if (statusBadge) statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> <span id="aiExecText">Completed</span>';
+        aiSetExecState("ok", "Completed");
       });
       document.getElementById("cancelWrite")?.addEventListener("click", () => {
         window.__pendingWrite = null;
         aiSetRichText(aiResultOutput, "Action cancelled.");
-        if (statusBadge) statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> <span id="aiExecText">Cancelled</span>';
+        aiSetExecState("muted", "Cancelled");
       });
     }, 0);
   } else if (res && res.needsInfo) {
     aiHistStatus(histEntry, tool, "needs info");
     aiSetRichText(aiResultOutput, (data && data.message) || "I need a bit more detail to run that. Tell me which mailbox, server, or database you mean.");
-    if (statusBadge) statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-yellow-400"></span> <span id="aiExecText">Needs info</span>';
+    aiSetExecState("warn", "Needs info");
+    aiSetRunEnabled(true);
   } else {
     const aiAns = res && res.aiAnswer ? res.aiAnswer : (res && res.aiNote ? res.aiNote : aiHumanFallback(data));
     aiHistStatus(histEntry, tool, "completed");
     aiSetRichText(aiResultOutput, aiAns);
+    // Help results carry relevant example prompts — render them as clickable
+    // chips (the document-level data-quick handler fills the prompt box).
+    if (tool === "help" && data && Array.isArray(data.examples) && data.examples.length && aiResultOutput) {
+      const chips = data.examples.map(function(ex){
+        return '<button data-quick="' + aiEscapeHtml(ex).replace(/"/g, "&quot;") + '" class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300 text-left transition">' + aiEscapeHtml(ex) + '</button>';
+      }).join("");
+      aiResultOutput.insertAdjacentHTML("beforeend", '<div class="mt-3"><div class="text-[11px] text-slate-500 mb-2">Try one of these:</div><div class="flex flex-wrap gap-2">' + chips + "</div></div>");
+      document.getElementById("aiChatInput")?.focus();
+    }
     if (aiUsage) aiUsage.textContent = res?.aiUsage ? `${fmtTok(res.aiUsage.input)} in / ${fmtTok(res.aiUsage.output)} out` : "Completed";
     renderResult(tool, data);
-    if (statusBadge) statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> <span id="aiExecText">Completed</span>';
+    aiSetExecState("ok", `Done in ${elapsed}s`);
+    aiSetRunEnabled(true);
+    document.getElementById("aiChatOutput")?.scrollTo({ top: 0, behavior: "smooth" });
   }
-  if (statusEl) statusEl.textContent = `Done in ${elapsed}s`;
 });
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-quick]');
@@ -894,6 +944,12 @@ function getOutputText(){
   return el ? (el.textContent || "") : "";
 }
 document.getElementById("copyOut")?.addEventListener('click', ()=> navigator.clipboard.writeText(getOutputText()));
+document.getElementById("aiCopyResponse")?.addEventListener('click', function(){
+  const el = document.getElementById("aiResultOutput");
+  if (el && el.innerText) navigator.clipboard.writeText(el.innerText);
+  const b = this; const t = b.textContent; b.textContent = "Copied";
+  setTimeout(()=>{ b.textContent = t; }, 1200);
+});
 document.getElementById("exportOut")?.addEventListener('click', ()=>{ const blob=new Blob([getOutputText()],{type:"text/markdown"}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download="output.md"; a.click(); });
 document.addEventListener('DOMContentLoaded', async () => {
   // Auto‑enable Run button when MCP is ready (auto‑started)
@@ -1643,7 +1699,7 @@ async function aiSendMessage(text) {
   try {
     window.__aiAbortController = new AbortController();
     const systemPrompt = (document.getElementById('systemPrompt') || {}).value || '';
-    const res = await window.exchangeDesktop.askExchange({ prompt: text.trim(), systemPrompt });
+    const res = await window.exchangeDesktop.askExchange({ prompt: text.trim(), systemPrompt, conversationId: window.__aiCurrentConversationId || undefined });
     window.__aiAbortController = null;
     conv.messages.pop();
     if (res.error) {
@@ -1662,7 +1718,7 @@ async function aiSendMessage(text) {
       aiRenderMessage({ role: 'assistant', content: res.result?.message || 'Confirmation required', toolActivity: confirmHtml });
       setTimeout(() => {
         document.querySelector('.ai-confirm-btn')?.addEventListener('click', async () => {
-          const confirmRes = await window.exchangeDesktop.askExchange({ prompt: text.trim(), confirmed: true, tool: res.tool, args: res.args });
+          const confirmRes = await window.exchangeDesktop.askExchange({ prompt: text.trim(), confirmed: true, tool: res.tool, args: res.args, conversationId: window.__aiCurrentConversationId || undefined });
           conv.messages.push({ role: 'assistant', content: confirmRes.aiAnswer || confirmRes.result?.message || 'Action completed' });
           aiRenderMessage({ role: 'assistant', content: confirmRes.aiAnswer || confirmRes.result?.message || 'Action completed' });
           aiSaveConversations();
@@ -1708,6 +1764,12 @@ function aiStopGeneration() {
 
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
+    // Session conversation id: nothing else sets one (the chat sidebar that
+    // used to own it is gone), so create it here — otherwise every ask sends
+    // conversationId: undefined and the model memory path stays empty forever.
+    // Fresh id per launch = session-scoped memory; restart resets it.
+    window.__aiCurrentConversationId = 'sess-' + Date.now().toString(36);
+    try { localStorage.setItem('aiCurrentConversationId', window.__aiCurrentConversationId); } catch {}
     aiRenderConversationList();
     if (window.__aiCurrentConversationId) {
       aiLoadConversation(window.__aiCurrentConversationId);

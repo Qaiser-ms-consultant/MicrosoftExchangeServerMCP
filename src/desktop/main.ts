@@ -5,11 +5,12 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { spawn, ChildProcess } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { hasWriteIntent, routeQuery } from "./queryRouter.js";
+import { hasWriteIntent, helpExamplesFor, routeQuery } from "./queryRouter.js";
 import type { RouteResult } from "./queryRouter.js";
 import { loadConfig } from "../config.js";
 import { parse as parseYaml } from "yaml";
-import { buildSummaryMessages, buildToolPickerMessages, chatComplete, isAiProvider, parseToolSelection } from "./modelClient.js";
+import { buildSummaryMessages, buildToolPickerMessages, chatComplete, isAiProvider, parseNoToolVerdict, parseToolSelection } from "./modelClient.js";
+import { appendExchange, buildContextBlocks, narrowCatalog, type ExchangeRecord } from "./conversationContext.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -256,19 +257,58 @@ function readModelConfig(): { provider: string; apiKey: string; baseUrl?: string
 
 // AI fallback: let the configured model pick an MCP tool for prompts the
 // keyword router cannot classify. Returns null to keep today's help card.
-async function tryAiRoute(prompt: string, modelCfg: { provider: string; apiKey: string; baseUrl?: string; model: string; systemPrompt?: string }): Promise<{ tool: string; args: any; write: boolean } | null> {
+// With conversation context, the model may also answer "__no_tool" when a
+// follow-up is answerable from recent exchanges without running anything.
+async function tryAiRoute(prompt: string, modelCfg: { provider: string; apiKey: string; baseUrl?: string; model: string; systemPrompt?: string }, context?: string, recentTools?: string[]): Promise<{ tool: string; args: any; write: boolean } | null> {
   try {
     await ensureMcpInitialized();
     const list = await mcpRpc("tools/list", {});
-    const names: string[] = (((list as any)?.tools ?? []) as any[]).map((t: any) => String(t?.name ?? "")).filter((n) => n);
-    if (!names.length) return null;
-    const picked = parseToolSelection((await chatComplete(modelCfg, buildToolPickerMessages(prompt, names, modelCfg.systemPrompt))).text, names);
-    if (!picked) return null;
-    return { tool: picked.tool, args: picked.args, write: picked.tool in WRITE_REQUIRED_ARGS };
+    const entries: Array<{ name: string; description?: string }> = (((list as any)?.tools ?? []) as any[])
+      .map((t: any) => ({ name: String(t?.name ?? ""), description: typeof t?.description === "string" ? t.description.slice(0, 160) : undefined }))
+      .filter((t) => t.name);
+    if (!entries.length) return null;
+    const names = entries.map((t) => t.name);
+    // Full catalog with one-line descriptions so loose phrasing can resolve
+    // across MCP, AI-suite and report tools. Validation still uses exact names.
+    const labelFor = (n: string) => {
+      const e = entries.find((x) => x.name === n);
+      return e?.description ? `${n} — ${e.description}` : n;
+    };
+    const pickFrom = async (pool: string[]) => {
+      const reply = (await chatComplete(modelCfg, buildToolPickerMessages(prompt, pool.map(labelFor), modelCfg.systemPrompt, context))).text;
+      if (parseNoToolVerdict(reply)) return { verdict: "no_tool" as const };
+      const picked = parseToolSelection(reply, pool);
+      return picked ? { verdict: "picked" as const, picked } : { verdict: "miss" as const, reply };
+    };
+    let r = await pickFrom(names);
+    if (r.verdict === "no_tool") return { tool: "__no_tool", args: {}, write: false };
+    if (r.verdict === "miss" && recentTools?.length) {
+      // Vague follow-up ("update X") over 200+ tools: retry against the
+      // family of recently used tools before giving up to the help card.
+      const narrowed = narrowCatalog(names, recentTools);
+      if (narrowed.length >= 2 && narrowed.length < names.length) r = await pickFrom(narrowed);
+    }
+    if (r.verdict === "picked") return { tool: r.picked.tool, args: r.picked.args, write: r.picked.tool in WRITE_REQUIRED_ARGS };
+    if (r.verdict === "miss") console.error("AI tool pick unparseable for prompt:", JSON.stringify(prompt).slice(0, 200), "reply:", JSON.stringify(r.reply).slice(0, 500));
+    return null;
   } catch (e) { console.error("AI routing failed, falling back to help", e); return null; }
 }
 
-ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?: boolean; tool?: string; args?: any }) => {
+// Rolling per-conversation memory for follow-up questions. Session-only:
+// entries are clipped summaries (never credentials), capped so a long chat
+// cannot blow up model input. Keyed by the renderer's conversation id;
+// prompts without one stay stateless exactly as before.
+const conversationMemory = new Map<string, ExchangeRecord[]>();
+function contextFor(conversationId: string | undefined): string {
+  if (!conversationId) return "";
+  return buildContextBlocks(conversationMemory.get(conversationId) ?? []);
+}
+function rememberConversation(conversationId: string | undefined, record: ExchangeRecord): void {
+  if (!conversationId) return;
+  conversationMemory.set(conversationId, appendExchange(conversationMemory.get(conversationId) ?? [], record));
+}
+
+ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?: boolean; tool?: string; args?: any; conversationId?: string }) => {
   console.log("exchange:ask invoked", payload);
   const prompt = payload.prompt ?? "";
   if(!prompt.trim()) throw new Error("Type a prompt first");
@@ -277,6 +317,9 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
   const modelCfg = readModelConfig();
   const aiMode = !!modelCfg && isAiProvider(modelCfg.provider);
   await ensureMcpInitialized();
+  const conversationId = payload.conversationId || undefined;
+  const contextBlock = aiMode ? contextFor(conversationId) : "";
+  const recentTools = aiMode ? (conversationMemory.get(conversationId ?? "") ?? []).map((x) => x.tool) : [];
 
   // Explicit tool+args after in-card Confirm skips re-routing
   let tool: string; let args: any; let write = false;
@@ -290,16 +333,29 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
     // (e.g. typos/synonyms the keywords missed) across the full tool catalog.
     let aiRouted: { tool: string; args: any; write: boolean } | null = null;
     if (aiMode && modelCfg) {
-      if ("help" in route) aiRouted = await tryAiRoute(prompt, modelCfg);
-      else if (!route.write && hasWriteIntent(prompt)) aiRouted = await tryAiRoute(prompt, modelCfg);
+      if ("help" in route) aiRouted = await tryAiRoute(prompt, modelCfg, contextBlock || undefined, recentTools);
+      else if (!route.write && hasWriteIntent(prompt)) aiRouted = await tryAiRoute(prompt, modelCfg, contextBlock || undefined, recentTools);
     }
     if ("help" in route && !aiRouted) return { prompt, tool: "help", result: {
       message: "I can run Exchange queries. Try one of these:",
-      examples: ["what version of exchange do i have", "show delayed queues", "server health report", "database whitespace and growth", "certificates expiring soon", "explain bounce 5.7.1", "trace messages from admin@contoso.com", "tell me everything about admin@contoso.com", "dismount database DB01", "what tools do you offer"],
+      examples: helpExamplesFor(prompt),
       ...(modelCfg && !isAiProvider(modelCfg.provider) ? { note: "Tip: AI answers need an OpenAI-compatible provider (OpenAI, Groq, Together, OpenRouter, Mistral, Ollama, Custom)." } : {}),
     },
     ...((aiMode && modelCfg) ? { aiNote: "Model could not interpret this request — keyword help below." } : {}) };
-    if (aiRouted) { tool = aiRouted.tool; args = aiRouted.args; write = aiRouted.write; }
+    if (aiRouted) {
+      // Follow-up answerable from recent exchanges: no tool runs. The answer
+      // is narrated from context below; still recorded so later turns see it.
+      if (aiRouted.tool === "__no_tool" && modelCfg) {
+        let ctxAnswer: string | undefined; let ctxUsage: { input: number; output: number } | undefined; let ctxNote: string | undefined;
+        try {
+          const s = await chatComplete(modelCfg, buildSummaryMessages(prompt, "history", "No new tool result for this follow-up — answer from the conversation context.", modelCfg.systemPrompt, contextBlock || undefined));
+          ctxAnswer = s.text; ctxUsage = s.usage;
+        } catch (e: any) { console.error("Context answer failed", e); ctxNote = `AI unavailable (${e?.message || e}) — no new Exchange data was fetched.`; }
+        if (ctxAnswer || ctxNote) rememberConversation(conversationId, { prompt, tool: "history", resultJson: "", aiAnswer: ctxAnswer });
+        return { prompt, tool: "history", args: {}, result: { message: "Answered from conversation context." }, psTrace: [], ...(ctxAnswer ? { aiAnswer: ctxAnswer, aiUsage: ctxUsage } : { aiNote: ctxNote }) };
+      }
+      tool = aiRouted.tool; args = aiRouted.args; write = aiRouted.write;
+    }
     else { const r = route as RouteResult; tool = r.tool; args = r.args; write = r.write; }
   }
 
@@ -357,10 +413,11 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
   let aiAnswer: string | undefined; let aiUsage: { input: number; output: number } | undefined; let aiNote: string | undefined;
   if (aiMode && modelCfg && tool !== "tools" && tool !== "help") {
     try {
-      const summary = await chatComplete(modelCfg, buildSummaryMessages(prompt, tool, JSON.stringify(data), modelCfg.systemPrompt));
+      const summary = await chatComplete(modelCfg, buildSummaryMessages(prompt, tool, JSON.stringify(data), modelCfg.systemPrompt, contextBlock || undefined));
       aiAnswer = summary.text; aiUsage = summary.usage;
     } catch (e: any) { console.error("AI answer failed, returning tool result only", e); aiNote = `AI unavailable (${e?.message || e}) — showing MCP result.`; }
   }
+  if (aiAnswer || aiNote) rememberConversation(conversationId, { prompt, tool, resultJson: JSON.stringify(data), aiAnswer });
   return { prompt, tool, args, result: data, psTrace, ...(aiAnswer ? { aiAnswer, aiUsage } : aiNote ? { aiNote } : {}) };
 });
 

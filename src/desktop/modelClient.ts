@@ -179,19 +179,35 @@ export async function chatComplete(
 
 // --- Tool-picker (model interprets unknown prompts into MCP tool calls) ---
 
-export function buildToolPickerMessages(prompt: string, toolNames: string[], customSystemPrompt?: string): ChatMessage[] {
-  const systemContent = customSystemPrompt || [
+export function buildToolPickerMessages(prompt: string, toolNames: string[], customSystemPrompt?: string, context?: string): ChatMessage[] {
+  const lines = customSystemPrompt ? [customSystemPrompt] : [
     "You route an Exchange admin request to exactly one MCP tool.",
     "Reply with ONLY a JSON object, no markdown fences, no prose:",
     '{"tool": "<exact tool name from the list>", "args": {}}',
+    'Example: {"tool": "exchange_get_queue", "args": {}}',
     "Use {} for args unless the request names values (identity, mailbox, server, domain, code, subject).",
+    "Resolve pronouns and names (it, that database, DB03) from the conversation context when present.",
+    'If the request is a follow-up answerable from the conversation context WITHOUT any tool (e.g. "why?", "explain that"), reply {"tool": "__no_tool", "args": {}}.',
     "Available tools:",
     ...toolNames.map((n) => `- ${n}`),
-  ].join("\n");
+  ];
+  if (context) lines.push("Conversation context:\n" + context);
   return [
-    { role: "system", content: systemContent },
+    { role: "system", content: lines.join("\n") },
     { role: "user", content: prompt },
   ];
+}
+
+/** True when the model answered a follow-up from context instead of a tool. */
+export function parseNoToolVerdict(text: string): boolean {
+  const m = String(text ?? "").match(/\{[\s\S]*\}/);
+  if (!m) return false;
+  try {
+    const obj = JSON.parse(m[0]);
+    return obj?.tool === "__no_tool";
+  } catch {
+    return false;
+  }
 }
 
 export function parseToolSelection(
@@ -214,7 +230,7 @@ export function parseToolSelection(
 
 export const SUMMARY_JSON_BUDGET = 12000;
 
-export function buildSummaryMessages(prompt: string, tool: string, resultJson: string, customSystemPrompt?: string): ChatMessage[] {
+export function buildSummaryMessages(prompt: string, tool: string, resultJson: string, customSystemPrompt?: string, historyContext?: string): ChatMessage[] {
   const clipped = resultJson.length > SUMMARY_JSON_BUDGET
     ? resultJson.slice(0, SUMMARY_JSON_BUDGET) + '\n...[truncated]'
     : resultJson;
@@ -230,12 +246,14 @@ export function buildSummaryMessages(prompt: string, tool: string, resultJson: s
     "Do not dump raw JSON, field names, or cmdlet syntax unless the user asked how to check it.",
     "Do not bold entire sentences; use bold only for 1-3 key terms or values per response.",
     "End with one clear recommended next step when action is needed, otherwise end without filler.",
+    "If the request is a follow-up (e.g. why, what about it), resolve pronouns and names from the conversation context; if the context lacks the facts, say so and suggest the check to run.",
   ].join(" ");
+  const contextPrefix = historyContext ? `${historyContext}\n\n` : "";
   return [
     { role: "system", content: systemContent },
     {
       role: "user",
-      content: `Request: ${prompt}\nTool used: ${tool}\nResult JSON:\n${clipped}`,
+      content: `${contextPrefix}Request: ${prompt}\nTool used: ${tool}\nResult JSON:\n${clipped}`,
     },
   ];
 }

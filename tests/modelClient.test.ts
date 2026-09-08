@@ -6,6 +6,7 @@ import {
   chatUrlFor,
   isAiProvider,
   nativeBaseFor,
+  parseNoToolVerdict,
   parseToolSelection,
   SUMMARY_JSON_BUDGET,
 } from "../src/desktop/modelClient.js";
@@ -65,6 +66,25 @@ describe("buildToolPickerMessages", () => {
     expect(msgs[0].content).toContain("ONLY a JSON object");
     expect(msgs[1].content).toBe("find spam");
   });
+  it("includes conversation context and the no-tool verdict when provided", () => {
+    const msgs = buildToolPickerMessages("why?", ["a.tool"], undefined, "Earlier: show queues");
+    expect(msgs[0].content).toContain("Earlier: show queues");
+    expect(msgs[0].content).toContain("__no_tool");
+  });
+  it("carries catalog description lines through verbatim", () => {
+    const msgs = buildToolPickerMessages("remove it", ["a.tool — Remove a thing"]);
+    expect(msgs[0].content).toContain("a.tool — Remove a thing");
+  });
+});
+
+describe("parseNoToolVerdict", () => {
+  it("accepts a fenced no-tool verdict", () => {
+    expect(parseNoToolVerdict('```json\n{"tool": "__no_tool", "args": {}}\n```')).toBe(true);
+  });
+  it("rejects real tool picks and garbage", () => {
+    expect(parseNoToolVerdict('{"tool": "a.tool", "args": {}}')).toBe(false);
+    expect(parseNoToolVerdict("just answer it")).toBe(false);
+  });
 });
 
 describe("buildSummaryMessages", () => {
@@ -77,6 +97,11 @@ describe("buildSummaryMessages", () => {
   it("leaves small results intact", () => {
     const msgs = buildSummaryMessages("q", "t.tool", '{"a":1}');
     expect(msgs[1].content).toContain('{"a":1}');
+  });
+  it("prepends conversation context when provided", () => {
+    const msgs = buildSummaryMessages("why?", "t.tool", '{"a":1}', undefined, "Earlier: queues");
+    expect(msgs[1].content).toContain("Earlier: queues");
+    expect(msgs[1].content.indexOf("Earlier: queues")).toBeLessThan(msgs[1].content.indexOf("why?"));
   });
 });
 

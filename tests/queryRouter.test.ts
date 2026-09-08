@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractIdentity, hasWriteIntent, normalizePrompt, routeQuery } from "../src/desktop/queryRouter.js";
+import { extractIdentity, hasWriteIntent, helpExamplesFor, normalizePrompt, routeQuery } from "../src/desktop/queryRouter.js";
 
 describe("extractIdentity", () => {
   it("pulls an email out of free text", () => {
@@ -607,6 +607,32 @@ describe("routeQuery", () => {
   });
   it("routes set send connector as a write", () => {
     expect(routeQuery("set send connector Outbound")).toEqual({ tool: "mailflow.set_send_connector", args: { identity: "Outbound" }, write: true });
+  });
+  it("routes bare update rule phrasing to the transport rule setter", () => {
+    expect(routeQuery('update "Block Executables" rule')).toEqual({ tool: "exchange_set_transport_rule", args: { identity: "Block Executables" }, write: true });
+  });
+  it("strips a trailing rule word from bare update phrasing", () => {
+    expect(routeQuery("update Block Executables rule")).toEqual({ tool: "exchange_set_transport_rule", args: { identity: "Block Executables" }, write: true });
+  });
+  it("routes bare delete rule phrasing to the transport rule remover", () => {
+    expect(routeQuery('delete "Old Rule" rule')).toEqual({ tool: "exchange_remove_transport_rule", args: { identity: "Old Rule" }, write: true });
+  });
+  it("routes bare disable rule phrasing to a state change", () => {
+    expect(routeQuery("disable Block Executables rule")).toEqual({ tool: "exchange_set_transport_rule", args: { identity: "Block Executables", state: "Disabled" }, write: true });
+  });
+  it("suggests rule examples for rule-flavored misses", () => {
+    const ex = helpExamplesFor("frobnicate the rule thing");
+    expect(ex).toContain("list transport rules");
+    expect(ex.some((e) => e.includes("delete transport rule"))).toBe(true);
+  });
+  it("suggests mailbox examples for mailbox-flavored misses", () => {
+    const ex = helpExamplesFor("alice@contoso.com frobnicate");
+    expect(ex.some((e) => e.includes("tell me everything"))).toBe(true);
+  });
+  it("falls back to generic examples with no signal", () => {
+    const ex = helpExamplesFor("hello there");
+    expect(ex).toContain("what version of exchange do i have");
+    expect(ex.length).toBeGreaterThan(0);
   });
   it("tolerates transport typos on delete", () => {
     expect(routeQuery('delete tranport rule "Block Executables"')).toEqual({ tool: "exchange_remove_transport_rule", args: { identity: "Block Executables" }, write: true });
