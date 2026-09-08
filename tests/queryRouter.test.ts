@@ -133,6 +133,13 @@ describe("routeQuery", () => {
     const r = routeQuery("permissions of alice@contoso.com");
     expect(r).toEqual({ tool: "exchange_get_mailbox_permissions", args: { identity: "alice@contoso.com" }, write: false });
   });
+  it("routes org-wide full access prompts to the audit report", () => {
+    expect(routeQuery("which mailboxes have full access enabled")).toEqual({ tool: "report.generate_fullaccess_audit_report", args: {}, write: false });
+  });
+  it("keeps per-mailbox full access prompts on the individual report", () => {
+    const r = routeQuery("full access for alice@contoso.com");
+    expect(r).toEqual({ tool: "exchange_get_mailbox_permissions", args: { identity: "alice@contoso.com" }, write: false });
+  });
   it("routes statistics prompts", () => {
     const r = routeQuery("mailbox statistics for alice@contoso.com");
     expect(r).toEqual({ tool: "exchange_get_mailbox_statistics", args: { identity: "alice@contoso.com" }, write: false });

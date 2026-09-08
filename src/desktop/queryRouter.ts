@@ -322,6 +322,7 @@ export function routeQuery(prompt: string): Route {
     return { tool: "exchange_remove_mailbox", args: { identity: email, ...(permanent ? { permanent: true } : {}) }, write: true };
   }
   if (has("permission", "access", "fullaccess", "sendas", "send as") && email) return { tool: "exchange_get_mailbox_permissions", args: { identity: email }, write: false };
+  if (has("fullaccess", "full access", "full_access") && !email) return { tool: "report.generate_fullaccess_audit_report", args: {}, write: false };
   if (has("statistic", "how big", "item count", "last logon") && email) return { tool: "exchange_get_mailbox_statistics", args: { identity: email }, write: false };
   // Write intents (need confirm — enforced by caller)
   if (has("dismount")) { const raw = afterWord(prompt, "dismount"); const id = raw?.replace(/^database\s+/i, "") || null; return { tool: "database.dismount", args: id ? { identity: id } : {}, write: true }; }

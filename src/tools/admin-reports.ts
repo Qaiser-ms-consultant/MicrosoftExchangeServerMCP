@@ -75,6 +75,28 @@ export function registerReportTools(server: McpServer, ps: PowerShellProvider) {
   );
 
   server.tool(
+    "report.generate_fullaccess_audit_report",
+    "FullAccess audit — mailboxes delegating FullAccess to non-owners (excludes SELF/system), with count",
+    { resultSize: z.number().optional() },
+    async ({ resultSize }) => {
+      const n = Math.min(resultSize ?? 100, 500);
+      const boxes = await ps.invokeJson(`Get-Mailbox -ResultSize ${n} | Select-Object DisplayName,PrimarySmtpAddress | Select-Object -First ${n}`);
+      const rows = Array.isArray(boxes) ? boxes.slice(0, n) : [];
+      const entries: Array<{ mailbox: string; displayName: string; grantedTo: string[] }> = [];
+      for (const b of rows) {
+        const id = b.PrimarySmtpAddress || b.DisplayName;
+        if (!id) continue;
+        const acl = await ps.invokeJson(`Get-MailboxPermission -Identity "${id}" | Select-Object Identity,User,AccessRights | Select-Object -First 50`).catch(() => []);
+        const grantedTo = (Array.isArray(acl) ? acl : [])
+          .filter((a: any) => !String(a.User ?? "").startsWith("NT AUTHORITY") && String(a.AccessRights ?? "").includes("FullAccess"))
+          .map((a: any) => String(a.User));
+        if (grantedTo.length && entries.length < 100) entries.push({ mailbox: String(id), displayName: String(b.DisplayName ?? ""), grantedTo });
+      }
+      return { content: [{ type: "text", text: JSON.stringify({ mailboxesChecked: rows.length, mailboxesWithDelegatedAccess: entries.length, entries }, null, 2) }] };
+    },
+  );
+
+  server.tool(
     "report.generate_archive_report",
     "Archive mailbox report — archive status, quota, database",
     { top: z.number().optional() },
