@@ -38,14 +38,33 @@ program
 program
   .command("doctor")
   .description("Test PowerShell + EWS connectivity (both)")
-  .option("--endpoint <url>", "Exchange endpoint", process.env.EXCHANGE_ENDPOINT ?? "https://mail.contoso.com")
+  .option("--endpoint <url>", "Exchange endpoint (default: config.yaml, then EXCHANGE_ENDPOINT)")
   .option("--insecure", "allow self-signed", process.env.EXCHANGE_INSECURE === "true")
   .action(async (opts) => {
-    const { testConnectivity } = await import("./doctor.js");
-    const endpoint = opts.endpoint;
-    const ps = process.env.EXCHANGE_POWERSHELL_URL ?? `${endpoint}/PowerShell`;
-    const r = await testConnectivity({ endpoint, powershellUri: ps, ewsPath: "/EWS/Exchange.asmx", insecure: !!opts.insecure });
-    console.log(JSON.stringify(r, null, 2));
+    const { testConnectivity, resolveDoctorTargets, hasRealConfigFile } = await import("./doctor.js");
+    const { loadConfig } = await import("../config.js");
+    let config = null;
+    const hasConfig = hasRealConfigFile();
+    if (hasConfig) {
+      try {
+        const cfg = loadConfig();
+        config = { endpoint: cfg.exchange.endpoint, powershellUri: cfg.exchange.powershellUri, ewsPath: cfg.exchange.ewsPath, insecure: cfg.exchange.insecure };
+      } catch (e: any) {
+        console.error(`Cannot load config: ${e?.message || e}`);
+        process.exit(1);
+      }
+    }
+    const resolved = resolveDoctorTargets({
+      config,
+      hasConfigFile: hasConfig,
+      env: { ...process.env, ...(opts.endpoint ? { EXCHANGE_ENDPOINT: opts.endpoint } : {}), ...(opts.insecure ? { EXCHANGE_INSECURE: "true" } : {}) },
+    });
+    if (!resolved.ok) {
+      console.error(resolved.error);
+      process.exit(1);
+    }
+    const r = await testConnectivity({ ...resolved.targets });
+    console.log(JSON.stringify({ source: resolved.source, ...r }, null, 2));
   });
 
 program.parseAsync(process.argv);

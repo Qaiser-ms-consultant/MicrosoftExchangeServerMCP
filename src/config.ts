@@ -64,16 +64,20 @@ const defaults: AppConfig = {
   logging: { level: "info", file: "" },
 };
 
-function expandEnv(value: string): string {
-  return value.replace(/\$\{([^}]+)\}/g, (_, name) => process.env[name] ?? "");
+function expandEnv(value: string, missing: Array<{ name: string; path: string }>, path: string): string {
+  return value.replace(/\$\{([^}]+)\}/g, (_, name) => {
+    const v = process.env[name];
+    if (v === undefined) missing.push({ name, path });
+    return v ?? "";
+  });
 }
 
-function deepExpandEnv(obj: any): any {
-  if (typeof obj === "string") return expandEnv(obj);
-  if (Array.isArray(obj)) return obj.map(deepExpandEnv);
+function deepExpandEnv(obj: any, missing: Array<{ name: string; path: string }>, path = ""): any {
+  if (typeof obj === "string") return expandEnv(obj, missing, path);
+  if (Array.isArray(obj)) return obj.map((v, i) => deepExpandEnv(v, missing, `${path}[${i}]`));
   if (obj && typeof obj === "object") {
     const out: any = {};
-    for (const [k, v] of Object.entries(obj)) out[k] = deepExpandEnv(v);
+    for (const [k, v] of Object.entries(obj)) out[k] = deepExpandEnv(v, missing, path ? `${path}.${k}` : k);
     return out;
   }
   return obj;
@@ -94,13 +98,14 @@ export function loadConfig(configPath?: string): AppConfig {
   const cfg: AppConfig = JSON.parse(JSON.stringify(defaults));
 
   const candidates = [configPath, "./config.yaml", "./config.yml", "./config.json", "./config.example.yaml"].filter(Boolean) as string[];
+  const missingEnv: Array<{ name: string; path: string }> = [];
   for (const p of candidates) {
     try {
       if (!existsSync(p)) continue;
       if (statSync(p).isDirectory()) continue;
       const raw = readFileSync(p, "utf-8");
       const parsed = p.endsWith(".json") ? JSON.parse(raw) : parseYaml(raw);
-      deepMerge(cfg, deepExpandEnv(parsed));
+      deepMerge(cfg, deepExpandEnv(parsed, missingEnv));
       break;
     } catch {
       continue;
@@ -142,6 +147,34 @@ export function loadConfig(configPath?: string): AppConfig {
   // normalize tls flag from insecure
   if (cfg.exchange.insecure) cfg.exchange.tls = { rejectUnauthorized: false, allowSelfSigned: true };
   else if (cfg.exchange.tls?.allowSelfSigned) cfg.exchange.tls.rejectUnauthorized = false;
+
+  // Fail fast on unresolvable ${VAR} references in the ACTIVE auth path only
+  // (e.g. a typo'd password var). Refs in unused sections (an optional
+  // certificate block while on basic auth) stay silent so optional setups
+  // keep working. A literal empty password still fails later at auth time.
+  const method = cfg.auth.method;
+  const section = method === "oauth" ? "auth.oauth" : method === "certificate" ? "auth.certificate" : "auth.basic";
+  const inSection = (p: string) => p === section || p.startsWith(section + ".") || p.startsWith(section + "[");
+  {
+    const bad = missingEnv.filter((m) => inSection(m.path));
+    const finalAt = (path: string) => {
+      let cur: any = cfg;
+      for (const part of path.replace(/\[(\d+)\]/g, ".$1").split(".")) cur = cur?.[part];
+      return cur;
+    };
+    const blocking = bad.filter((m) => {
+      const v = finalAt(m.path);
+      return v === undefined || v === null || v === "";
+    });
+    if (blocking.length) {
+      const names = [...new Set(blocking.map((m) => m.name))].join(", ");
+      throw new Error(
+        `config.yaml references unset environment variable(s): ${names}. ` +
+        `Set them persistently — Windows: setx VARNAME "value" (then reopen the terminal); ` +
+        `Linux/macOS: export VARNAME="value" (add to ~/.bashrc or ~/.zshrc). Then restart.`,
+      );
+    }
+  }
 
   // Normalize HA: if servers list provided, ensure endpoint/powershellUri are first in list for backward compat logging
   if (cfg.exchange.servers?.length) {

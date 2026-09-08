@@ -12,7 +12,7 @@ async function main() {
     { name: "fqdn", message: "Exchange FQDN (e.g. mail.contoso.com or exchange.lab.local):", default: "mail.contoso.com", validate: (v: string) => !!v || "required" },
     { name: "username", message: "Username (e.g. admin@contoso.com):", default: "admin@contoso.com" },
     { name: "domain", message: "Domain (e.g. CONTOSO, leave empty if UPN):", default: "CONTOSO" },
-    { name: "passwordEnv", message: "Password env var name (file-based, e.g. EXCHANGE_PASSWORD):", default: "EXCHANGE_PASSWORD" },
+    { name: "passwordEnv", message: "Password env var name (file-based, e.g. EXCHANGE_PASSWORD):", default: "EXCHANGE_PASSWORD", validate: (v: string) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(v || "") || "Use letters, numbers and underscore only, e.g. EXCHANGE_PASSWORD" },
     { name: "insecure", type: "confirm", message: "Self-signed cert (lab) — set insecure:true? (Production: No)", default: false },
   ]);
 
@@ -59,7 +59,14 @@ async function main() {
 
   writeFileSync(configPath, yamlDump(merged), "utf-8");
   console.log(`\nWrote ${configPath}`);
-  console.log(`Set env: export ${answers.passwordEnv}='yourPassword'  (or $env:${answers.passwordEnv}='...' on Windows)`);
+  if (!process.env[answers.passwordEnv]) {
+    console.log(`\n⚠ WARNING: ${answers.passwordEnv} is not set in THIS terminal, so the password in config.yaml currently resolves to empty and auth will fail.`);
+    console.log(`Make it permanent, then reopen the terminal (setx never affects the current one):`);
+    console.log(`  Windows:     setx ${answers.passwordEnv} "yourPassword"`);
+    console.log(`  Linux/macOS: echo 'export ${answers.passwordEnv}="yourPassword"' >> ~/.bashrc  (or ~/.zshrc)`);
+  } else {
+    console.log(`\nUsing ${answers.passwordEnv} from this terminal's environment.`);
+  }
   console.log(`\nTesting connectivity — PowerShell + EWS (production insecure:${answers.insecure})...`);
 
   // Test both endpoints via doctor logic (import to avoid duplication)
