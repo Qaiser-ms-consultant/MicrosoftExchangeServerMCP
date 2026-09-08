@@ -1,5 +1,27 @@
-import { readFileSync, existsSync, statSync } from "node:fs";
+import { readFileSync, existsSync, statSync, writeFileSync } from "node:fs";
 import { parse as parseYaml } from "yaml";
+
+function loadDotEnv() {
+  const candidates = [".env", ".env.local"].filter(p => existsSync(p));
+  for (const p of candidates) {
+    try {
+      const raw = readFileSync(p, "utf-8");
+      for (const line of raw.split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) continue;
+        const m = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+        if (m) {
+          const key = m[1];
+          let val = m[2];
+          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+            val = val.slice(1, -1);
+          }
+          if (process.env[key] === undefined) process.env[key] = val;
+        }
+      }
+    } catch {}
+  }
+}
 
 export type ExchangeVersion = "2013" | "2016" | "2019" | "auto";
 export type ProviderType = "ews" | "rest" | "powershell" | "auto";
@@ -95,6 +117,7 @@ function deepMerge(target: any, source: any): any {
 }
 
 export function loadConfig(configPath?: string): AppConfig {
+  loadDotEnv();
   const cfg: AppConfig = JSON.parse(JSON.stringify(defaults));
 
   const candidates = [configPath, "./config.yaml", "./config.yml", "./config.json", "./config.example.yaml"].filter(Boolean) as string[];
