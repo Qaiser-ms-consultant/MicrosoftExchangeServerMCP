@@ -310,7 +310,7 @@
   <div id="aiCoachFindings" class="space-y-1"></div>
 </div>
 <div id="aiEnhancePreview" class="hidden mt-2 p-2.5 rounded-lg bg-violet-500/5 border border-violet-500/25 text-[11px]">
-  <div class="text-[10px] uppercase tracking-wider text-violet-300 mb-1">Enhanced prompt</div>
+  <div class="text-[10px] uppercase tracking-wider text-violet-300 mb-1">Enhanced prompt <span id="aiEnhanceSource" class="normal-case font-mono text-slate-500"></span></div>
   <div id="aiEnhancePreviewText" class="text-slate-300 leading-relaxed whitespace-pre-wrap"></div>
   <div class="flex gap-2 mt-2">
     <button id="aiEnhanceUse" class="px-2.5 py-1 rounded-md bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[11px] font-medium">Use enhanced</button>
@@ -1655,6 +1655,7 @@ function aiRenderConversationList() {
 }
 
 function aiClearChat() {
+  window.__pendingChatConfirm = null;
   const container = document.getElementById('aiMessagesContainer');
   const emptyState = document.getElementById('aiEmptyState');
   const title = document.getElementById('aiConversationTitle');
@@ -1723,6 +1724,47 @@ function aiSetInputEnabled(enabled) {
 
 async function aiSendMessage(text) {
   if (!text.trim() || window.__aiGenerating) return;
+  // Typed continuation for a pending write confirmation in this chat flow:
+  // "yes/ok/proceed/confirm" runs it, "no/cancel/stop" abandons it. Any
+  // other prompt drops the stale pending op so a later "yes" can never
+  // confirm an unrelated earlier request (mirrors the Run Agent flow).
+  const affirmRe = /^(yes|y|yeah|yep|ok|okay|proceed|confirm|confirmed|go ahead|do it|approved|approve|sure|please proceed)\W*$/i;
+  const denyRe = /^(no|nope|cancel|cancelled|canceled|stop|abort|don'?t|never mind)\W*$/i;
+  const pendingChat = window.__pendingChatConfirm;
+  if (pendingChat && (affirmRe.test(text.trim()) || denyRe.test(text.trim()))) {
+    window.__pendingChatConfirm = null;
+    let conv0 = aiGetCurrentConversation();
+    if (!conv0) conv0 = aiCreateNewConversation();
+    conv0.messages.push({ role: 'user', content: text.trim() });
+    aiRenderMessage({ role: 'user', content: text.trim() });
+    if (denyRe.test(text.trim())) {
+      conv0.messages.push({ role: 'assistant', content: 'Action cancelled. Nothing was changed.' });
+      aiRenderMessage({ role: 'assistant', content: 'Action cancelled. Nothing was changed.' });
+    } else {
+      const thinking = { role: 'assistant', content: '', toolActivity: '<div class="thinking-animation"><span class="text-slate-400">Running...</span></div>' };
+      conv0.messages.push(thinking);
+      aiRenderMessage(thinking);
+      try {
+        const res2 = await window.exchangeDesktop.askExchange({ prompt: pendingChat.prompt, confirmed: true, tool: pendingChat.tool, args: pendingChat.args, conversationId: window.__aiCurrentConversationId || undefined });
+        conv0.messages.pop();
+        const done = res2?.aiAnswer || res2?.result?.message || 'Action completed.';
+        conv0.messages.push({ role: 'assistant', content: done });
+        aiRenderMessage({ role: 'assistant', content: done });
+        const chatBox2 = document.getElementById('aiMessagesContainer');
+        const lastBubble2 = chatBox2?.lastElementChild?.querySelector('.ai-msg-content');
+        if (lastBubble2) aiRenderNextActions(res2.nextActions, lastBubble2.parentElement);
+      } catch (err) {
+        conv0.messages.pop();
+        conv0.messages.push({ role: 'assistant', content: '', error: err?.message || 'An error occurred' });
+        aiRenderMessage({ role: 'assistant', content: '', error: err?.message || 'An error occurred' });
+      }
+    }
+    conv0.updatedAt = new Date().toISOString();
+    aiSaveConversations();
+    aiRenderConversationList();
+    return;
+  }
+  window.__pendingChatConfirm = null;
   let conv = aiGetCurrentConversation();
   if (!conv) {
     conv = aiCreateNewConversation();
@@ -1764,8 +1806,11 @@ async function aiSendMessage(text) {
       </div>`;
       conv.messages.push({ role: 'assistant', content: res.result?.message || 'Confirmation required', toolActivity: confirmHtml });
       aiRenderMessage({ role: 'assistant', content: res.result?.message || 'Confirmation required', toolActivity: confirmHtml });
+      // Remember for typed "yes"/"no" continuations in this chat flow.
+      window.__pendingChatConfirm = { tool: res.tool, args: res.args, prompt: text.trim() };
       setTimeout(() => {
         document.querySelector('.ai-confirm-btn')?.addEventListener('click', async () => {
+          window.__pendingChatConfirm = null;
           const confirmRes = await window.exchangeDesktop.askExchange({ prompt: text.trim(), confirmed: true, tool: res.tool, args: res.args, conversationId: window.__aiCurrentConversationId || undefined });
           conv.messages.push({ role: 'assistant', content: confirmRes.aiAnswer || confirmRes.result?.message || 'Action completed' });
           aiRenderMessage({ role: 'assistant', content: confirmRes.aiAnswer || confirmRes.result?.message || 'Action completed' });
@@ -1775,6 +1820,7 @@ async function aiSendMessage(text) {
           aiSaveConversations();
         });
         document.querySelector('.ai-cancel-btn')?.addEventListener('click', () => {
+          window.__pendingChatConfirm = null;
           conv.messages.push({ role: 'assistant', content: 'Action cancelled.' });
           aiRenderMessage({ role: 'assistant', content: 'Action cancelled.' });
           aiSaveConversations();
@@ -2013,9 +2059,11 @@ function aiCoachRender(findings){
   const list = document.getElementById('aiCoachFindings');
   if (!wrap || !panel || !list) return;
   const hasFindings = !!(findings && findings.length);
+  // Respect a manual collapse: the score pill still updates, but typing
+  // must not force the panel back open.
   wrap.classList.toggle('hidden', !hasFindings);
-  panel.classList.toggle('hidden', !hasFindings);
-  if (!hasFindings){ list.innerHTML = ''; return; }
+  if (!hasFindings){ list.innerHTML = ''; panel.classList.add('hidden'); return; }
+  if (!window.__coachCollapsed) panel.classList.remove('hidden');
   const sevIcon = { error: '⛔', warn: '⚠', info: 'ℹ' };
   list.innerHTML = findings.map((f)=> {
     const fix = f.fix ? `<div class="text-slate-500 mt-0.5">→ ${esc(f.fix)}</div>` : '';
@@ -2024,35 +2072,58 @@ function aiCoachRender(findings){
 }
 function aiCoachValidate(){
   const input = document.getElementById('aiChatInput');
-  if (!input) return;
+  if (!input || !window.exchangeDesktop?.promptValidate) return;
   const v = input.value.trim();
   const pill = document.getElementById('aiScorePill');
-  if (!v){ if (pill) pill.textContent = '—'; aiCoachRender([]); return; }
-  window.exchangeDesktop.promptValidate(v).then((r)=>{
-    if (pill){ pill.textContent = r.score; pill.className = 'px-1.5 py-0.5 rounded text-[10px] font-mono bg-[#141c2e] border ' + aiCoachColor(r.score); }
-    aiCoachRender(r.findings || []);
-  }).catch(()=>{});
+  if (!v){ window.__coachLastReq = ''; if (pill) pill.textContent = '—'; aiCoachRender([]); return; }
+  // Debounce + staleness guard: rapid keystrokes must not flood IPC, and a
+  // slow response for an older prefix must never overwrite newer results
+  // (the "coach dies after 2-3 words" glitch).
+  if (v === window.__coachLastReq) return;
+  window.__coachLastReq = v;
+  clearTimeout(window.__coachTimer);
+  window.__coachTimer = setTimeout(() => {
+    const seq = (window.__coachSeq = (window.__coachSeq || 0) + 1);
+    window.exchangeDesktop.promptValidate(v).then((r)=>{
+      if (seq !== window.__coachSeq) return; // stale — a newer request is in flight
+      if (pill){ pill.textContent = r.score; pill.className = 'px-1.5 py-0.5 rounded text-[10px] font-mono bg-[#141c2e] border ' + aiCoachColor(r.score); }
+      aiCoachRender(r.findings || []);
+    }).catch(()=>{});
+  }, 250);
 }
 async function aiCoachEnhance(useModel){
   const input = document.getElementById('aiChatInput');
-  if (!input) return;
+  if (!input || !window.exchangeDesktop?.promptEnhance) return;
   const v = input.value.trim();
   if (!v){ aiCoachValidate(); return; }
   const preview = document.getElementById('aiEnhancePreview');
   const previewText = document.getElementById('aiEnhancePreviewText');
+  const sourceEl = document.getElementById('aiEnhanceSource');
   const modelBtn = document.getElementById('aiEnhanceModel');
+  const enhanceBtn = document.getElementById('aiEnhanceBtn');
+  if (!preview || !previewText) return;
   if (previewText) previewText.textContent = 'Rewriting…';
+  if (sourceEl) sourceEl.textContent = '';
   preview.classList.remove('hidden');
   if (modelBtn) modelBtn.disabled = true;
+  if (enhanceBtn) enhanceBtn.disabled = true;
   try {
     const r = await window.exchangeDesktop.promptEnhance(v, !!useModel);
-    if (previewText) previewText.textContent = r.enhanced || v;
+    if (input.value.trim() !== v){
+      if (previewText) previewText.textContent = 'Input changed while rewriting — click Enhance again.';
+      if (sourceEl) sourceEl.textContent = '';
+      return;
+    }
+    if (previewText) previewText.textContent = (r && r.enhanced) || v;
+    if (sourceEl) sourceEl.textContent = r && r.source === 'model' ? '· AI rewrite' : '· rule-based draft';
+    if (sourceEl && r && r.note) sourceEl.textContent += ' — ' + r.note;
     window.__aiEnhancedOriginal = v;
-    window.__aiEnhancedScore = r.scoreAfter;
+    window.__aiEnhancedScore = r && r.scoreAfter;
   } catch (e) {
     if (previewText) previewText.textContent = v;
   } finally {
     if (modelBtn) modelBtn.disabled = false;
+    if (enhanceBtn) enhanceBtn.disabled = false;
   }
 }
 document.getElementById('aiEnhanceBtn')?.addEventListener('click', () => aiCoachEnhance(false));
@@ -2074,6 +2145,7 @@ document.getElementById('aiCoachToggle')?.addEventListener('click', () => {
   const panel = document.getElementById('aiCoachPanel');
   if (!panel) return;
   const hidden = panel.classList.toggle('hidden');
+  window.__coachCollapsed = hidden;
   document.getElementById('aiCoachWrap')?.classList.toggle('hidden', hidden);
   if (!hidden) aiCoachValidate();
 });

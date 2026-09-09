@@ -81,6 +81,23 @@ describe("enhancePrompt", () => {
     const twice = enhancePrompt(once);
     expect(twice).toContain("queue");
   });
+
+  it("lists detected identities in a Context line", () => {
+    const e = enhancePrompt("mailbox statistics for alice@contoso.com on DB01");
+    expect(e).toMatch(/context:/i);
+    expect(e).toContain("alice@contoso.com");
+    expect(e).toContain("DB01");
+  });
+
+  it("adds a write constraint for write actions", () => {
+    expect(enhancePrompt("dismount database DB01")).toMatch(/constraint:/i);
+    expect(enhancePrompt("show delayed queues")).not.toMatch(/constraint:/i);
+  });
+
+  it("stays idempotent with the new Context/Constraint labels", () => {
+    const once = enhancePrompt("dismount database DB01");
+    expect(enhancePrompt(once)).toBe(once);
+  });
 });
 
 describe("enhancePromptWithModel", () => {

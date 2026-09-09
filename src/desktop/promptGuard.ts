@@ -98,10 +98,29 @@ const FORMAT = "Output: a concise plain-language summary first, then at most 3 s
 const SCOPE_RULE = "Use only facts present in the tool results — never invent mailboxes, servers, numbers, or states. If the data is empty, say so plainly and suggest one next check.";
 const NOFILL = "If a value is missing from the data, say so instead of guessing.";
 
+const STRUCTURED_RE = /(\brole\b|\btask\b|\bscope\b|\bcontext\b|\bconstraint\b|\boutput\b|\bformat\b)\s*:/i;
+
+function extractIdentities(p: string): string[] {
+  const found: string[] = [];
+  const push = (v: string) => {
+    const t = v.trim();
+    if (t && !found.some((x) => x.toLowerCase() === t.toLowerCase()) && found.length < 5) found.push(t);
+  };
+  for (const m of p.matchAll(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g)) push(m[0]);
+  for (const m of p.matchAll(/\b(EXCH\d+|EX0\d+|MBX\d+|DB\d+|SRV\d+)\b/g)) push(m[0]);
+  const win = p.match(/\b(in the last \d+ \w+|last \d+ \w+|past \d+ \w+|today|yesterday)\b/i);
+  if (win) push(`window: ${win[0]}`);
+  return found;
+}
+
+function hasWriteVerb(p: string): boolean {
+  return WRITE_VERBS.some((w) => new RegExp(`\\b${w}\\b`, "i").test(p));
+}
+
 export function enhancePrompt(prompt: string): string {
   const p = (prompt || "").trim();
   if (!p) return p;
-  if (/(\brole\b|\btask\b|\tscope\b|\boutput\b|\bformat\b)\s*:/i.test(p)) return p;
+  if (STRUCTURED_RE.test(p)) return p;
   const scope = inferScope(p);
   const lines: string[] = [
     ROLE,
@@ -109,10 +128,11 @@ export function enhancePrompt(prompt: string): string {
     `Task: ${p}`,
     "",
     `Scope: ${scope}.`,
-    SCOPE_RULE,
-    NOFILL,
-    FORMAT,
   ];
+  const ids = extractIdentities(p);
+  if (ids.length) lines.push(`Context: ${ids.join(", ")}.`);
+  if (hasWriteVerb(p)) lines.push("Constraint: this is a write action — confirm the exact target before running.");
+  lines.push(SCOPE_RULE, NOFILL, FORMAT);
   return lines.join("\n");
 }
 

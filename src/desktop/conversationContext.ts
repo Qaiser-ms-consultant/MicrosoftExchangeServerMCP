@@ -79,6 +79,73 @@ export function narrowCatalog(catalog: string[], recentTools: string[]): string[
   return narrowed.length >= 2 ? narrowed : catalog;
 }
 
+export interface RecalledIdentities {
+  email: string | null;
+  db: string | null;
+}
+
+const EMAIL_RECALL_RE = /[\w.+-]+@[\w-]+\.[\w.]+/;
+const DB_RECALL_RE = /\b([A-Z]{2,}\d+)\b/;
+const DB_WORD_RE = /database\s+([A-Za-z0-9_\-]+)/i;
+// Words that follow "database" in generic phrases — never identities.
+const NON_IDENTITY_WORDS = new Set([
+  "whitespace", "growth", "status", "list", "lists", "report", "reports",
+  "health", "size", "backup", "capacity", "copy", "copies", "trend",
+  "distribution", "mailbox", "mailboxes", "databases",
+]);
+
+/**
+ * Recall the most recent mailbox/database identities mentioned in this
+ * conversation (newest exchange wins). Used to resolve follow-ups like
+ * "dismount the database" after talking about DB01, without a model.
+ */
+export function recallIdentities(exchanges: ExchangeRecord[]): RecalledIdentities {
+  let email: string | null = null;
+  let db: string | null = null;
+  for (let i = exchanges.length - 1; i >= 0; i--) {
+    const text = `${exchanges[i]?.prompt ?? ""} ${exchanges[i]?.aiAnswer ?? ""}`;
+    if (!email) email = text.match(EMAIL_RECALL_RE)?.[0] ?? null;
+    if (!db) {
+      db = text.match(DB_RECALL_RE)?.[1] ?? null;
+      if (!db) {
+        const word = text.match(DB_WORD_RE)?.[1];
+        if (word && !NON_IDENTITY_WORDS.has(word.toLowerCase())) db = word;
+      }
+    }
+    if (email && db) break;
+  }
+  return { email, db };
+}
+
+const DB_TOOLS_RE = /^(database\.|dag\.|exchange_get_database_copy_status|database\.get_copy_status)/;
+
+/**
+ * Fill missing required write args from recalled conversation identities.
+ * Never overwrites values already present; unknown keys are left alone.
+ */
+export function fillMissingArgs(
+  tool: string,
+  args: Record<string, unknown>,
+  missing: string[],
+  identities: RecalledIdentities,
+): Record<string, unknown> {
+  const filled: Record<string, unknown> = { ...args };
+  const isDbTool = DB_TOOLS_RE.test(tool);
+  for (const key of missing) {
+    if (filled[key] !== undefined && filled[key] !== "") continue;
+    if (key === "database" || key === "targetDatabase") {
+      if (identities.db) filled[key] = identities.db;
+    } else if (key === "user" || key === "member") {
+      if (identities.email) filled[key] = identities.email;
+    } else if (key === "identity") {
+      if (isDbTool && identities.db) filled[key] = identities.db;
+      else if (!isDbTool && identities.email) filled[key] = identities.email;
+      else if (identities.db) filled[key] = identities.db;
+    }
+  }
+  return filled;
+}
+
 /** Render prior exchanges oldest-first for model context. Empty when none. */
 export function buildContextBlocks(exchanges: ExchangeRecord[], cfg: ContextBudgets = {}): string {
   if (!exchanges.length) return "";

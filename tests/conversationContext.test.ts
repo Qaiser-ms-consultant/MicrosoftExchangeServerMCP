@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendExchange, buildContextBlocks, clipText, narrowCatalog } from "../src/desktop/conversationContext.js";
+import { appendExchange, buildContextBlocks, clipText, fillMissingArgs, narrowCatalog, recallIdentities } from "../src/desktop/conversationContext.js";
 
 describe("clipText", () => {
   it("leaves short text intact", () => {
@@ -40,6 +40,48 @@ describe("buildContextBlocks", () => {
     const out = buildContextBlocks([{ prompt: "q", tool: "t", resultJson: big }], { totalBudget: 100 });
     expect(out.length).toBeLessThan(big.length);
     expect(out).toContain("[truncated]");
+  });
+});
+
+describe("recallIdentities", () => {
+  it("returns nulls with no history", () => {
+    expect(recallIdentities([])).toEqual({ email: null, db: null });
+  });
+  it("recalls the newest email and DB identity", () => {
+    const out = recallIdentities([
+      { prompt: "tell me everything about alice@contoso.com", tool: "ai.tell_me_everything", resultJson: "{}" },
+      { prompt: "check database copy status for DB01", tool: "exchange_get_database_copy_status", resultJson: "{}" },
+    ]);
+    expect(out).toEqual({ email: "alice@contoso.com", db: "DB01" });
+  });
+  it("ignores generic words after 'database'", () => {
+    const out = recallIdentities([
+      { prompt: "database whitespace and growth", tool: "database.get_whitespace_and_growth", resultJson: "{}" },
+    ]);
+    expect(out.db).toBeNull();
+  });
+});
+
+describe("fillMissingArgs", () => {
+  it("fills a database identity for DB tools", () => {
+    const out = fillMissingArgs("database.dismount", {}, ["identity"], { email: null, db: "DB01" });
+    expect(out).toEqual({ identity: "DB01" });
+  });
+  it("fills a mailbox identity for mailbox tools", () => {
+    const out = fillMissingArgs("mailbox.set_quota", {}, ["identity"], { email: "alice@contoso.com", db: "DB01" });
+    expect(out).toEqual({ identity: "alice@contoso.com" });
+  });
+  it("fills user/member keys from the recalled email", () => {
+    const out = fillMissingArgs("mailbox.add_permission", { identity: "alice@contoso.com" }, ["user"], { email: "bob@contoso.com", db: null });
+    expect(out).toEqual({ identity: "alice@contoso.com", user: "bob@contoso.com" });
+  });
+  it("never overwrites values already present", () => {
+    const out = fillMissingArgs("database.dismount", { identity: "DB02" }, ["identity"], { email: null, db: "DB01" });
+    expect(out).toEqual({ identity: "DB02" });
+  });
+  it("leaves unresolvable keys alone", () => {
+    const out = fillMissingArgs("group.new", {}, ["name"], { email: "alice@contoso.com", db: "DB01" });
+    expect(out).toEqual({});
   });
 });
 

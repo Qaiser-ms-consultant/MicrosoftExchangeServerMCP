@@ -10,7 +10,7 @@ import type { RouteResult } from "./queryRouter.js";
 import { loadConfig } from "../config.js";
 import { parse as parseYaml } from "yaml";
 import { buildSummaryMessages, buildToolPickerMessages, chatComplete, isAiProvider, parseNoToolVerdict, parseToolSelection } from "./modelClient.js";
-import { appendExchange, buildContextBlocks, narrowCatalog, type ExchangeRecord } from "./conversationContext.js";
+import { appendExchange, buildContextBlocks, clipText, fillMissingArgs, narrowCatalog, recallIdentities, type ExchangeRecord } from "./conversationContext.js";
 import { checkForUpdates, checkZipUpdate, isGitCheckout, performUpdate, performZipUpdate } from "./updater.js";
 import { enhancePrompt, enhancePromptWithModel, guardResult } from "./promptGuard.js";
 import { getFollowUps } from "./followUps.js";
@@ -122,7 +122,7 @@ ipcMain.handle("prompt:validate", async (_e, { prompt }: { prompt: string }) => 
 });
 ipcMain.handle("prompt:enhance", async (_e, { prompt, useModel }: { prompt: string; useModel?: boolean }) => {
   const p = (prompt || "").trim();
-  if (!p) return { enhanced: "", changed: false, scoreBefore: 0, scoreAfter: 0, findings: [] };
+  if (!p) return { enhanced: "", changed: false, scoreBefore: 0, scoreAfter: 0, findings: [], source: "rules" as const };
   if (useModel) {
     const modelCfg = readModelConfig();
     if (modelCfg && isAiProvider(modelCfg.provider)) {
@@ -135,13 +135,20 @@ ipcMain.handle("prompt:enhance", async (_e, { prompt, useModel }: { prompt: stri
           return r.text;
         });
         const before = guardResult(p);
-        return { enhanced, changed: enhanced !== p, scoreBefore: before.score, scoreAfter: guardResult(enhanced).score, findings: before.findings };
-      } catch {}
+        return { enhanced, changed: enhanced !== p, scoreBefore: before.score, scoreAfter: guardResult(enhanced).score, findings: before.findings, source: "model" as const };
+      } catch (e: any) {
+        const before = guardResult(p);
+        const enhanced = enhancePrompt(p);
+        return { enhanced, changed: enhanced !== p, scoreBefore: before.score, scoreAfter: guardResult(enhanced).score, findings: before.findings, source: "rules" as const, note: `AI rewrite failed (${e?.message || "model unavailable"}) — showing rule-based draft.` };
+      }
     }
+    const before = guardResult(p);
+    const enhanced = enhancePrompt(p);
+    return { enhanced, changed: enhanced !== p, scoreBefore: before.score, scoreAfter: guardResult(enhanced).score, findings: before.findings, source: "rules" as const, note: "No AI-compatible model configured — showing rule-based draft. Save a provider + model to enable AI rewrites." };
   }
   const enhanced = enhancePrompt(p);
   const before = guardResult(p);
-  return { enhanced, changed: enhanced !== p, scoreBefore: before.score, scoreAfter: guardResult(enhanced).score, findings: before.findings };
+  return { enhanced, changed: enhanced !== p, scoreBefore: before.score, scoreAfter: guardResult(enhanced).score, findings: before.findings, source: "rules" as const };
 });
 // IPC: backend Exchange identity — resolved with the same loader the MCP
 // server uses (./config.yaml + env), so labels always match the live backend.
@@ -407,11 +414,20 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
     else { const r = route as RouteResult; tool = r.tool; args = r.args; write = r.write; }
   }
 
-  // Safety gate for writes
+  // Safety gate for writes. Missing args are first resolved from the
+  // conversation (e.g. "dismount the database" after talking about DB01),
+  // so a follow-up "yes" confirms the intended target instead of stalling.
   if(write && !payload.confirmed){
-    const missing = (WRITE_REQUIRED_ARGS[tool] ?? []).filter((k) => args[k] === undefined || args[k] === "");
+    const required = WRITE_REQUIRED_ARGS[tool] ?? [];
+    const unfilled = required.filter((k) => args[k] === undefined || args[k] === "");
+    const remembered = conversationMemory.get(conversationId ?? "") ?? [];
+    const filled = fillMissingArgs(tool, args, unfilled, recallIdentities(remembered));
+    const assumed = Object.keys(filled).filter((k) => (args[k] === undefined || args[k] === "") && filled[k] !== undefined && filled[k] !== "");
+    args = filled;
+    const missing = required.filter((k) => args[k] === undefined || args[k] === "");
     if(missing.length) return { prompt, tool, args, needsInfo: true, missing, result: { message: `To run ${tool} I still need: ${missing.join(", ")}. Add it to your prompt and run again.` } };
-    return { prompt, tool, args, needsConfirm: true, result: { message: `Ready to run ${tool}`, parameters: args } };
+    const assumedNote = assumed.length ? ` (assuming ${assumed.map((k) => `${k} = ${args[k]}`).join(", ")} from earlier in this conversation — say no to cancel)` : "";
+    return { prompt, tool, args, needsConfirm: true, result: { message: `Ready to run ${tool}${assumedNote}`, parameters: args } };
   }
   if(write) args = { ...args, confirm: true };
 
@@ -451,7 +467,13 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
     toolError = e?.message || String(e);
   }
   const psTrace = await readPsTrace();
-  if(toolError) return { prompt, tool, error: toolError, psTrace };
+  // Remember every exchange (success or failure) so follow-ups like "why?"
+  // or a bare "yes" resolve against what just happened — even with no AI
+  // provider configured. Clipped so a long session stays bounded.
+  if(toolError) {
+    rememberConversation(conversationId, { prompt, tool, resultJson: clipText(toolError, 2000) });
+    return { prompt, tool, error: toolError, psTrace };
+  }
   const text = (result as any)?.content?.[0]?.text;
   if(!text) return { prompt, tool, args, result, psTrace };
   let data: any;
@@ -465,7 +487,7 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
       aiAnswer = summary.text; aiUsage = summary.usage;
     } catch (e: any) { console.error("AI answer failed, returning tool result only", e); aiNote = `AI unavailable (${e?.message || e}) — showing MCP result.`; }
   }
-  if (aiAnswer || aiNote) rememberConversation(conversationId, { prompt, tool, resultJson: JSON.stringify(data), aiAnswer });
+  rememberConversation(conversationId, { prompt, tool, resultJson: clipText(JSON.stringify(data), 2000), aiAnswer });
   const nextActions = getFollowUps(tool, args ?? {}, prompt);
   return { prompt, tool, args, result: data, psTrace, nextActions, ...(aiAnswer ? { aiAnswer, aiUsage } : aiNote ? { aiNote } : {}) };
 });
