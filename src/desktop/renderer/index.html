@@ -103,6 +103,28 @@
     --bg-sidebar: #0e1424;
     --text-primary-inverse: #090d16;
   }
+  /* Notion theme (light with Notion design tokens) */
+  .notion {
+    --bg-base: #f6f5f4;
+    --bg-card: #ffffff;
+    --bg-elevated: #fafaf9;
+    --border: #e5e3df;
+    --border-light: #ede9e4;
+    --text-primary: #1a1a1a;
+    --text-secondary: #37352f;
+    --text-muted: #5d5b54;
+    --bg-header: #ffffff;
+    --bg-input: #ffffff;
+    --text-input: #1a1a1a;
+    --bg-sidebar: #f6f5f4;
+    --text-primary-inverse: #ffffff;
+    --brand: #5645d4;
+    --brand-active: #4534b3;
+    --tl-thinking: #dd5b00;
+    --tl-read: #2a9d99;
+    --tl-edit: #7b3ff2;
+    --tl-done: #1aae39;
+  }
   /* The console uses a small, legacy set of fixed Tailwind colors. Keep dark
      mode untouched while mapping that vocabulary onto the light token set. */
   html:not(.dark) body { background-color: var(--bg-base) !important; color: var(--text-primary) !important; }
@@ -576,13 +598,32 @@ $$('[data-tab]').forEach(function(b){ b.addEventListener('click',function(){
 // Ensure Home visible on load
 document.querySelectorAll('section[data-view]').forEach(function(v){ var isHome=v.getAttribute('data-view')==="home"; v.style.display=isHome?'flex':'none'; });
 
-// Theme toggle
+// Theme toggle — cycles through: dark → light → notion
 var savedTheme = localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-document.documentElement.classList.toggle("dark", savedTheme==="dark");
-var themeBtn=document.getElementById("themeToggle");
+if (savedTheme === "dark") document.documentElement.classList.add("dark");
+else if (savedTheme === "notion") document.documentElement.classList.add("notion");
+var themeBtn = document.getElementById("themeToggle");
+function updateThemeIcon(theme) {
+  var svg = themeBtn.querySelector("svg");
+  if (!svg) return;
+  if (theme === "dark") {
+    svg.innerHTML = '<path d="M20.354 15.354A9 9 0 018.646 3.646A9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>';
+  } else if (theme === "light") {
+    svg.innerHTML = '<path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>';
+  } else if (theme === "notion") {
+    svg.innerHTML = '<path d="M9 11l3 3L22 4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>';
+  }
+}
+updateThemeIcon(savedTheme);
 if(themeBtn) themeBtn.addEventListener("click", function(){
-  var isDark=document.documentElement.classList.toggle("dark");
-  localStorage.setItem("theme", isDark?"dark":"light");
+  var html = document.documentElement;
+  var current = html.classList.contains("dark") ? "dark" : (html.classList.contains("notion") ? "notion" : "light");
+  var next = current === "dark" ? "light" : (current === "light" ? "notion" : "dark");
+  html.classList.remove("dark", "notion");
+  if (next === "dark") html.classList.add("dark");
+  else if (next === "notion") html.classList.add("notion");
+  localStorage.setItem("theme", next);
+  updateThemeIcon(next);
 });
 var settingsBtn=document.getElementById("openSettings");
 if(settingsBtn) settingsBtn.addEventListener('click',()=>{ var tab=document.querySelector('[data-tab="logs"]'); if(tab) tab.click(); });
