@@ -176,6 +176,8 @@
   .thinking-animation .tdot:nth-child(2){ animation-delay:.2s; }
   .thinking-animation .tdot:nth-child(3){ animation-delay:.4s; }
   @keyframes ai-blink{ 0%,100%{ opacity:.25 } 50%{ opacity:1 } }
+  /* Enable text selection for AI response output (overrides body select-none) */
+  #aiResultOutput { user-select: text; -webkit-user-select: text; }
 </style>
 </head>
 <body class="h-full antialiased font-sans select-none overflow-hidden flex flex-col">
@@ -326,7 +328,7 @@
  <span class="text-[10px] font-mono text-slate-500" id="aiUsage">—</span>
 </div>
 </div>
-<div class="text-sm text-slate-200 leading-relaxed space-y-2" id="aiResultOutput">Run a prompt to see the AI response here.</div>
+<div class="text-sm text-slate-200 leading-relaxed space-y-2 select-text" id="aiResultOutput">Run a prompt to see the AI response here.</div>
 </div>
 </div>
 </div>
