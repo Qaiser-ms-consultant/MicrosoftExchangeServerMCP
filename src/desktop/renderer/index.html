@@ -127,17 +127,28 @@
   }
   /* The console uses a small, legacy set of fixed Tailwind colors. Keep dark
      mode untouched while mapping that vocabulary onto the light token set. */
-  html:not(.dark) body { background-color: var(--bg-base) !important; color: var(--text-primary) !important; }
-  html:not(.dark) [class*="bg-[#0b0f19]"] { background-color: var(--bg-base) !important; }
-  html:not(.dark) [class*="bg-[#0a0e17]"] { background-color: var(--bg-base) !important; }
+  html:not(.dark) body,
+  html.notion body { background-color: var(--bg-base) !important; color: var(--text-primary) !important; }
+  html:not(.dark) [class*="bg-[#0b0f19]"],
+  html.notion [class*="bg-[#0b0f19]"] { background-color: var(--bg-base) !important; }
+  html:not(.dark) [class*="bg-[#0a0e17]"],
+  html.notion [class*="bg-[#0a0e17]"] { background-color: var(--bg-base) !important; }
   html:not(.dark) [class*="bg-[#0e1320]"],
   html:not(.dark) [class*="bg-[#0e1424]"],
   html:not(.dark) [class*="bg-[#0e1423]"],
   html:not(.dark) [class*="bg-[#0d121f]"],
-  html:not(.dark) [class*="bg-[#0c111e]"] { background-color: var(--bg-header) !important; }
+  html:not(.dark) [class*="bg-[#0c111e]"],
+  html.notion [class*="bg-[#0e1320]"],
+  html.notion [class*="bg-[#0e1424]"],
+  html.notion [class*="bg-[#0e1423]"],
+  html.notion [class*="bg-[#0d121f]"],
+  html.notion [class*="bg-[#0c111e]"] { background-color: var(--bg-header) !important; }
   html:not(.dark) [class*="bg-[#121829]"],
   html:not(.dark) [class*="bg-[#151c30]"],
-  html:not(.dark) [class*="bg-[#111726]"] { background-color: var(--bg-card) !important; }
+  html:not(.dark) [class*="bg-[#111726]"],
+  html.notion [class*="bg-[#121829]"],
+  html.notion [class*="bg-[#151c30]"],
+  html.notion [class*="bg-[#111726]"] { background-color: var(--bg-card) !important; }
   html:not(.dark) [class*="bg-[#141d30]"],
   html:not(.dark) [class*="bg-[#141b2e]"],
   html:not(.dark) [class*="bg-[#141d2f]"],
@@ -147,15 +158,33 @@
   html:not(.dark) [class*="bg-[#1b253c]"],
   html:not(.dark) [class*="bg-[#1b2740]"],
   html:not(.dark) [class*="bg-[#1c273e]"],
-  html:not(.dark) [class*="bg-[#1e2d4a]"] { background-color: var(--bg-elevated) !important; }
-  html:not(.dark) [class*="border-[#1"]:not([class*="border-[#1aab29]"]) { border-color: var(--border) !important; }
-  html:not(.dark) [class*="border-[#2"] { border-color: var(--border-light) !important; }
+  html:not(.dark) [class*="bg-[#1e2d4a]"],
+  html.notion [class*="bg-[#141d30]"],
+  html.notion [class*="bg-[#141b2e]"],
+  html.notion [class*="bg-[#141d2f]"],
+  html.notion [class*="bg-[#141c2e]"],
+  html.notion [class*="bg-[#1a2336]"],
+  html.notion [class*="bg-[#1a2338]"],
+  html.notion [class*="bg-[#1b253c]"],
+  html.notion [class*="bg-[#1b2740]"],
+  html.notion [class*="bg-[#1c273e]"],
+  html.notion [class*="bg-[#1e2d4a]"] { background-color: var(--bg-elevated) !important; }
+  html:not(.dark) [class*="border-[#1"]:not([class*="border-[#1aab29]"]),
+  html.notion [class*="border-[#1"]:not([class*="border-[#1aab29]"]) { border-color: var(--border) !important; }
+  html:not(.dark) [class*="border-[#2"],
+  html.notion [class*="border-[#2"] { border-color: var(--border-light) !important; }
   html:not(.dark) [class*="text-slate-100"],
-  html:not(.dark) [class*="text-slate-200"] { color: var(--text-primary) !important; }
+  html:not(.dark) [class*="text-slate-200"],
+  html.notion [class*="text-slate-100"],
+  html.notion [class*="text-slate-200"] { color: var(--text-primary) !important; }
   html:not(.dark) [class*="text-slate-300"],
-  html:not(.dark) [class*="text-slate-400"] { color: var(--text-secondary) !important; }
-  html:not(.dark) [class*="text-slate-500"] { color: var(--text-muted) !important; }
-  html:not(.dark) :not(button)[class*="text-white"] { color: var(--text-primary) !important; }
+  html:not(.dark) [class*="text-slate-400"],
+  html.notion [class*="text-slate-300"],
+  html.notion [class*="text-slate-400"] { color: var(--text-secondary) !important; }
+  html:not(.dark) [class*="text-slate-500"],
+  html.notion [class*="text-slate-500"] { color: var(--text-muted) !important; }
+  html:not(.dark) :not(button)[class*="text-white"],
+  html.notion :not(button)[class*="text-white"] { color: var(--text-primary) !important; }
   ::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:9999px}::-webkit-scrollbar-thumb:hover{background:var(--border-light)}
   html, body { background-color: var(--bg-base) !important; color: var(--text-primary); }
   html:not(.dark) main[class*="bg-gradient-to-b"] { background: var(--bg-base) !important; background-image: none !important; }
