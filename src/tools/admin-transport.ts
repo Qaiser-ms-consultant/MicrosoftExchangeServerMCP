@@ -48,18 +48,19 @@ export function registerTransportAdminTools(server: McpServer, ps: PowerShellPro
     let cmd = "Get-Queue";
     if (server) cmd += ` -Server "${server}"`;
     if (filter) cmd += ` -Filter {${filter}}`;
-    // NOTE: Sort-Object is blocked on constrained endpoints — sort client-side
-    const data = await ps.invokeJson(`${cmd} | Select-Object Identity,Status,MessageCount,NextHopDomain,DeliveryType | Select-Object -First 50`);
+    // NOTE: Sort-Object is blocked on constrained endpoints — sort client-side.
+    // Queue sets are small; return all rows sorted heaviest-first, no truncation.
+    const data = await ps.invokeJson(`${cmd} | Select-Object Identity,Status,MessageCount,NextHopDomain,DeliveryType`);
     data.sort((a: any, b: any) => Number(b.MessageCount ?? 0) - Number(a.MessageCount ?? 0));
-    return { content: [{ type: "text", text: JSON.stringify(data.slice(0, 20), null, 2) }] };
+    return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
   });
 
   server.tool("exchange_get_queue_digest", "Get queue digest across DAG (Get-QueueDigest) — DAG-wide, may timeout if no DAG; falls back to Get-Queue", { dag: z.string().optional() }, async ({ dag }) => {
     try {
-      const data = await ps.invokeJson(dag ? `Get-QueueDigest -Dag "${dag}" | Select-Object -First 10` : `Get-QueueDigest | Select-Object -First 10`);
+      const data = await ps.invokeJson(dag ? `Get-QueueDigest -Dag "${dag}"` : `Get-QueueDigest`);
       return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
     } catch {
-      const fallback = await ps.invokeJson(`Get-Queue | Select-Object Identity,MessageCount | Select-Object -First 10`);
+      const fallback = await ps.invokeJson(`Get-Queue | Select-Object Identity,MessageCount`);
       return { content: [{ type: "text", text: JSON.stringify({ note: "Get-QueueDigest not available (no DAG) — fallback to Get-Queue", data: fallback }, null, 2) }] };
     }
   });

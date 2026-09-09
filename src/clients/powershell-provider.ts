@@ -259,22 +259,24 @@ try {
       const escPattern = escapePsSingle(pattern);
       const filterCmd = `Get-Mailbox -Filter "Name -like '${escPattern}'"`;
       const base = recipientType ? `${filterCmd} -RecipientTypeDetails ${recipientType}` : filterCmd;
-      const cmd = `${base} | Select-Object DisplayName,PrimarySmtpAddress,RecipientType,Name,Identity | Select-Object -First ${resultSize}`;
+      // No client-side -First: -Filter narrows server-side; the UI pages full sets.
+      const cmd = `${base} | Select-Object DisplayName,PrimarySmtpAddress,RecipientType,Name,Identity`;
       const result = await this.invokeJson(cmd);
       if (result.length > 0) return result;
       // Fallback 1: ANR (handles Ali* prefix well)
       const anrPattern = escapePsSingle(raw.replace(/\*/g, ""));
       if (anrPattern) {
-        const anr = await this.invokeJson(`Get-Mailbox -Anr "${anrPattern}" | Select-Object DisplayName,PrimarySmtpAddress,RecipientType,Name,Identity | Select-Object -First ${resultSize}`).catch(() => []);
+        const anr = await this.invokeJson(`Get-Mailbox -Anr "${anrPattern}" | Select-Object DisplayName,PrimarySmtpAddress,RecipientType,Name,Identity`).catch(() => []);
         if (anr.length > 0) return anr;
       }
       // Fallback 2: client-side Where-Object
       const wherePattern = escapePsSingle(pattern);
-      return this.invokeJson(`Get-Mailbox -ResultSize 100 | Where-Object { $_.Name -like '${wherePattern}' } | Select-Object DisplayName,PrimarySmtpAddress,RecipientType,Name,Identity | Select-Object -First ${resultSize}`);
+      return this.invokeJson(`Get-Mailbox -ResultSize 100 | Where-Object { $_.Name -like '${wherePattern}' } | Select-Object DisplayName,PrimarySmtpAddress,RecipientType,Name,Identity`);
     }
     let cmd = "Get-Mailbox";
     if (recipientType) cmd += ` -RecipientTypeDetails ${recipientType}`;
-    cmd += ` | Select-Object DisplayName,PrimarySmtpAddress,RecipientType,Name,Identity | Select-Object -First ${resultSize}`;
+    // -ResultSize bounds the scan server-side; no client-side truncation.
+    cmd += ` | Select-Object DisplayName,PrimarySmtpAddress,RecipientType,Name,Identity`;
     return this.invokeJson(cmd);
   }
 
@@ -293,11 +295,12 @@ try {
   async listDistributionGroups(filter?: string, resultSize: number = 100): Promise<any[]> {
     // Project light columns: full group objects are huge and break WinRM JSON parsing (empty results).
     const cols = "DisplayName,PrimarySmtpAddress,RecipientType,GroupType,ManagedBy,RequireSenderAuthenticationEnabled";
-    return this.invokeJson(filter ? `Get-DistributionGroup -Filter {Name -like "*${filter}*"} | Select-Object ${cols} | Select-Object -First ${resultSize}` : `Get-DistributionGroup -ResultSize ${resultSize} | Select-Object ${cols} | Select-Object -First ${resultSize}`);
+    return this.invokeJson(filter ? `Get-DistributionGroup -Filter {Name -like "*${filter}*"} | Select-Object ${cols}` : `Get-DistributionGroup -ResultSize ${resultSize} | Select-Object ${cols}`);
   }
 
   async getTransportRules(): Promise<any[]> {
-    return this.invokeJson("Get-TransportRule | Select-Object Name,Priority,State,Mode | Select-Object -First 100");
+    // Transport rule sets are small; return the full inventory, no truncation.
+    return this.invokeJson("Get-TransportRule | Select-Object Name,Priority,State,Mode");
   }
 
   // Generic passthrough for new tools

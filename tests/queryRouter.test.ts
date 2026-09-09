@@ -400,6 +400,11 @@ describe("routeQuery", () => {
     expect(routeQuery("full config for devlabadmin")).toEqual({ tool: "report.mailbox_full_config", args: { identity: "devlabadmin" }, write: false });
     expect(routeQuery("show full configuration")).toEqual({ help: true });
   });
+  it("routes plain 'get details' mailbox prompts instead of help", () => {
+    expect(routeQuery("get details of devlabadmin mailbox")).toEqual({ tool: "report.mailbox_full_config", args: { identity: "devlabadmin" }, write: false });
+    expect(routeQuery("get details of alice@contoso.com mailbox")).toEqual({ tool: "report.mailbox_detail", args: { identity: "alice@contoso.com" }, write: false });
+    expect(routeQuery("get details of devlabadmin")).toEqual({ tool: "report.mailbox_full_config", args: { identity: "devlabadmin" }, write: false });
+  });
   it("routes mailbox health prompts", () => {
     const r = routeQuery("mailbox health for alice@contoso.com");
     expect(r).toEqual({ tool: "report.mailbox_health_individual", args: { identity: "alice@contoso.com" }, write: false });

@@ -8,7 +8,8 @@ export function registerMonitoringTools(server: McpServer, ps: PowerShellProvide
     server: z.string().describe("Server FQDN"), healthSet: z.string().optional(),
   }, async ({ server, healthSet }) => {
     const base = healthSet ? `Get-ServerHealth -Identity "${server}" -HealthSet "${healthSet}"` : `Get-ServerHealth -Identity "${server}"`;
-    const cmd = `${base} | Select-Object -First 10`;
+    // Scoped to one server (and optionally one health set) — return the full set.
+    const cmd = base;
     const data = await ps.invokeJson(cmd);
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
   });
@@ -21,7 +22,6 @@ export function registerMonitoringTools(server: McpServer, ps: PowerShellProvide
     const target = server ?? ps.haServers.map((u) => u.replace(/^https?:\/\//i, "").split("/")[0]).find(Boolean);
     let cmd = target ? `Get-HealthReport -Identity "${target}"` : "Get-HealthReport";
     if (healthSet) cmd += ` -HealthSet "${healthSet}"`;
-    cmd += ` | Select-Object -First 10`;
     const data = await ps.invokeJson(cmd);
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
   });
@@ -37,12 +37,12 @@ export function registerMonitoringTools(server: McpServer, ps: PowerShellProvide
   });
 
   server.tool("exchange_get_server_component_state", "Get server component states (ServerWideOffline, etc.) — scoped to avoid DAG fan-out timeout", { server: z.string() }, async ({ server }) => {
-    const data = await ps.invokeJson(`Get-ServerComponentState -Identity "${server}" | Select-Object -First 20`);
+    const data = await ps.invokeJson(`Get-ServerComponentState -Identity "${server}"`);
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
   });
 
   server.tool("exchange_get_monitoring_item", "Get monitoring items (probes/monitors/responders) for a health set (paged)", { server: z.string(), healthSet: z.string().optional() }, async ({ server, healthSet }) => {
-    const cmd = healthSet ? `Get-MonitoringItemIdentity -Server "${server}" -HealthSet "${healthSet}" | Select-Object -First 10` : `Get-MonitoringItemIdentity -Server "${server}" | Select-Object -First 10`;
+    const cmd = healthSet ? `Get-MonitoringItemIdentity -Server "${server}" -HealthSet "${healthSet}"` : `Get-MonitoringItemIdentity -Server "${server}"`;
     const data = await ps.invokeJson(cmd);
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
   });

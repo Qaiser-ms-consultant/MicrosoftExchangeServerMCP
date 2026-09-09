@@ -30,14 +30,14 @@ export function registerTellMeEverything(server: McpServer, ps: PowerShellProvid
         ps.invokeJson(`Get-MailboxStatistics -Identity '${id}' | Select-Object DisplayName,ItemCount,TotalItemSize,TotalDeletedItemSize,LastLogonTime,Database,ServerName | Select-Object -First 1`).catch(() => []),
         ps.invokeJson(`Get-Mailbox -Identity '${id}' | Select-Object ProhibitSendQuota,ProhibitSendReceiveQuota,IssueWarningQuota,UseDatabaseQuotaDefaults,RetentionPolicy,LitigationHoldEnabled | Select-Object -First 1`).catch(() => []),
         ps.invokeJson(`Get-MailboxAutoReplyConfiguration -Identity '${id}' | Select-Object AutoReplyState | Select-Object -First 1`).catch(() => []),
-        ps.invokeJson(`Get-MailboxPermission -Identity '${id}' | Select-Object User,AccessRights | Select-Object -First 20`).then((rows: any[]) => rows.filter((r: any) => !/NT AUTHORITY/i.test(String(r.User ?? ""))).slice(0, 5)).catch(() => []),
+        ps.invokeJson(`Get-MailboxPermission -Identity '${id}' | Select-Object User,AccessRights`).then((rows: any[]) => rows.filter((r: any) => !/NT AUTHORITY/i.test(String(r.User ?? "")))).catch(() => []),
         ps.invokeJson(`Get-Mailbox -Identity '${id}' | Select-Object ForwardingSmtpAddress,ForwardingAddress,DeliverToMailboxAndForward | Select-Object -First 1`).catch(() => []),
-        ps.invokeJson(`Get-InboxRule -Mailbox '${id}' | Select-Object Name,Enabled,ForwardTo,RedirectTo | Select-Object -First 5`).catch(() => []),
+        ps.invokeJson(`Get-InboxRule -Mailbox '${id}' | Select-Object Name,Enabled,ForwardTo,RedirectTo`).catch(() => []),
         ps.invokeJson(`Get-CASMailbox -Identity '${id}' | Select-Object OWAEnabled,MAPIEnabled,ActiveSyncEnabled,PopEnabled,ImapEnabled | Select-Object -First 1`).catch(() => []),
         serverFilter
-          ? ps.invokeJson(`Get-ServerHealth${serverFilter} | Select-Object HealthSet,AlertValue | Select-Object -First 50`).then((rows: any[]) => rows.filter((r: any) => String(r.AlertValue ?? "") !== "Healthy").slice(0, 3)).catch(() => [])
+          ? ps.invokeJson(`Get-ServerHealth${serverFilter} | Select-Object HealthSet,AlertValue`).then((rows: any[]) => rows.filter((r: any) => String(r.AlertValue ?? "") !== "Healthy")).catch(() => [])
           : Promise.resolve([]),
-        ps.invokeJson(`Get-ExchangeCertificate | Select-Object Subject,NotAfter | Select-Object -First 20`).then((rows: any[]) => { const cutoff = Date.now() + 30 * 86400 * 1000; return rows.filter((r: any) => { const t = Date.parse(String(r.NotAfter ?? "")); return !isNaN(t) && t < cutoff; }).slice(0, 1); }).catch(() => []),
+        ps.invokeJson(`Get-ExchangeCertificate | Select-Object Subject,NotAfter`).then((rows: any[]) => { const cutoff = Date.now() + 30 * 86400 * 1000; return rows.filter((r: any) => { const t = Date.parse(String(r.NotAfter ?? "")); return !isNaN(t) && t < cutoff; }); }).catch(() => []),
       ]);
       const st = (stats as any[])[0] ?? {};
       const parseBytes = (s: string): number => {

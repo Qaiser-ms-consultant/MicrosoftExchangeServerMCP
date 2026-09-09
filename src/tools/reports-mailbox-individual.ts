@@ -31,7 +31,7 @@ export function registerIndividualMailboxReports(server: McpServer, ps: PowerShe
         ps.invokeJson(`Get-MailboxStatistics -Identity '${canonical}' | Select-Object DisplayName,ItemCount,TotalItemSize,TotalDeletedItemSize,LastLogonTime,Database | Select-Object -First 1`).catch(() => []),
         ps.invokeJson(`Get-MailboxAutoReplyConfiguration -Identity '${canonical}' | Select-Object AutoReplyState,StartTime,EndTime | Select-Object -First 1`).catch(() => []),
         ps.invokeJson(`Get-Mailbox -Identity '${canonical}' | Select-Object LitigationHoldEnabled,InPlaceHolds,RetentionHoldEnabled | Select-Object -First 1`).catch(() => []),
-        ps.invokeJson(`Get-MailboxPermission -Identity '${canonical}' | Where-Object { $_.User -notlike "NT AUTHORITY*" } | Select-Object User,AccessRights | Select-Object -First 5`).catch(() => []),
+        ps.invokeJson(`Get-MailboxPermission -Identity '${canonical}' | Where-Object { $_.User -notlike "NT AUTHORITY*" } | Select-Object User,AccessRights`).catch(() => []),
       ]);
       return { content: [{ type: "text", text: JSON.stringify({ found: true, searchedAs: raw, resolvedAs: resolved.PrimarySmtpAddress || resolved.Name, mailbox: (mbx as any[])[0] ?? null, statistics: (stats as any[])[0] ?? null, oof: (oof as any[])[0] ?? null, hold: (hold as any[])[0] ?? null, permissions: perms }, null, 2) }] };
     },
@@ -47,7 +47,7 @@ export function registerIndividualMailboxReports(server: McpServer, ps: PowerShe
         ps.invokeJson(`Get-MailboxStatistics -Identity '${id}' | Select-Object DisplayName,ItemCount,TotalItemSize,TotalDeletedItemSize,LastLogonTime,Database | Select-Object -First 1`).catch(() => []),
         ps.invokeJson(`Get-MailboxAutoReplyConfiguration -Identity '${id}' | Select-Object AutoReplyState,StartTime,EndTime | Select-Object -First 1`).catch(() => []),
         ps.invokeJson(`Get-Mailbox -Identity '${id}' | Select-Object LitigationHoldEnabled,InPlaceHolds,RetentionHoldEnabled | Select-Object -First 1`).catch(() => []),
-        ps.invokeJson(`Get-MailboxPermission -Identity '${id}' | Where-Object { $_.User -notlike "NT AUTHORITY*" } | Select-Object User,AccessRights | Select-Object -First 5`).catch(() => []),
+        ps.invokeJson(`Get-MailboxPermission -Identity '${id}' | Where-Object { $_.User -notlike "NT AUTHORITY*" } | Select-Object User,AccessRights`).catch(() => []),
       ]);
       return { content: [{ type: "text", text: JSON.stringify({ mailbox: (mbx as any[])[0] ?? null, statistics: (stats as any[])[0] ?? null, oof: (oof as any[])[0] ?? null, hold: (hold as any[])[0] ?? null, permissions: perms }, null, 2) }] };
     },
@@ -61,7 +61,7 @@ export function registerIndividualMailboxReports(server: McpServer, ps: PowerShe
       const id = identity.replace(/'/g, "''");
       const [quota, rules, health] = await Promise.all([
         ps.invokeJson(`Get-Mailbox -Identity '${id}' | Select-Object ProhibitSendQuota,IssueWarningQuota,UseDatabaseQuotaDefaults | Select-Object -First 1`).catch(() => []),
-        ps.invokeJson(`Get-InboxRule -Mailbox '${id}' | Select-Object Name,Enabled | Select-Object -First 5`).catch(() => []),
+        ps.invokeJson(`Get-InboxRule -Mailbox '${id}' | Select-Object Name,Enabled`).catch(() => []),
         ps.invokeJson(`Get-MailboxStatistics -Identity '${id}' | Select-Object StorageLimitStatus,TotalItemSize | Select-Object -First 1`).catch(() => []),
       ]);
       return { content: [{ type: "text", text: JSON.stringify({ quota: (quota as any[])[0], rules, health: (health as any[])[0] }, null, 2) }] };
@@ -77,7 +77,7 @@ export function registerIndividualMailboxReports(server: McpServer, ps: PowerShe
       const [hold, retention, audit] = await Promise.all([
         ps.invokeJson(`Get-Mailbox -Identity '${id}' | Select-Object LitigationHoldEnabled,InPlaceHolds | Select-Object -First 1`).catch(() => []),
         ps.invokeJson(`Get-Mailbox -Identity '${id}' | Select-Object RetentionPolicy,RetentionHoldEnabled | Select-Object -First 1`).catch(() => []),
-        ps.invokeJson(`Search-MailboxAuditLog -Identity '${id}' -ShowDetails -ResultSize 5 | Select-Object Operation,LogonType | Select-Object -First 5`).catch(() => []),
+        ps.invokeJson(`Search-MailboxAuditLog -Identity '${id}' -ShowDetails -ResultSize 5 | Select-Object Operation,LogonType`).catch(() => []),
       ]);
       return { content: [{ type: "text", text: JSON.stringify({ hold: (hold as any[])[0], retention: (retention as any[])[0], recentAudit: audit }, null, 2) }] };
     },
@@ -91,7 +91,7 @@ export function registerIndividualMailboxReports(server: McpServer, ps: PowerShe
       const id = identity.replace(/'/g, "''");
       const [fwd, rules] = await Promise.all([
         ps.invokeJson(`Get-Mailbox -Identity '${id}' | Select-Object ForwardingAddress,ForwardingSmtpAddress,DeliverToMailboxAndForward | Select-Object -First 1`).catch(() => []),
-        ps.invokeJson(`Get-InboxRule -Mailbox '${id}' | Where-Object { $_.ForwardTo -ne $null -or $_.RedirectTo -ne $null } | Select-Object Name,ForwardTo,RedirectTo | Select-Object -First 5`).catch(() => []),
+        ps.invokeJson(`Get-InboxRule -Mailbox '${id}' | Where-Object { $_.ForwardTo -ne $null -or $_.RedirectTo -ne $null } | Select-Object Name,ForwardTo,RedirectTo`).catch(() => []),
       ]);
       return { content: [{ type: "text", text: JSON.stringify({ forwarding: (fwd as any[])[0], inboxForwardingRules: rules }, null, 2) }] };
     },
@@ -104,9 +104,9 @@ export function registerIndividualMailboxReports(server: McpServer, ps: PowerShe
     async ({ identity }) => {
       const id = identity.replace(/'/g, "''");
       const [full, sendAs, folder] = await Promise.all([
-        ps.invokeJson(`Get-MailboxPermission -Identity '${id}' | Where-Object { $_.AccessRights -like "*FullAccess*" } | Select-Object User,AccessRights | Select-Object -First 10`).catch(() => []),
-        ps.invokeJson(`Get-RecipientPermission -Identity '${id}' | Select-Object Trustee,AccessRights | Select-Object -First 10`).catch(() => []),
-        ps.invokeJson(`Get-MailboxFolderPermission -Identity '${id}:\\Calendar' -ErrorAction SilentlyContinue | Select-Object User,AccessRights | Select-Object -First 10`).catch(() => []),
+        ps.invokeJson(`Get-MailboxPermission -Identity '${id}' | Where-Object { $_.AccessRights -like "*FullAccess*" } | Select-Object User,AccessRights`).catch(() => []),
+        ps.invokeJson(`Get-RecipientPermission -Identity '${id}' | Select-Object Trustee,AccessRights`).catch(() => []),
+        ps.invokeJson(`Get-MailboxFolderPermission -Identity '${id}:\\Calendar' -ErrorAction SilentlyContinue | Select-Object User,AccessRights`).catch(() => []),
       ]);
       return { content: [{ type: "text", text: JSON.stringify({ fullAccess: full, sendAs, calendar: folder }, null, 2) }] };
     },
@@ -121,7 +121,7 @@ export function registerIndividualMailboxReports(server: McpServer, ps: PowerShe
       const [cas, oof, devices] = await Promise.all([
         ps.invokeJson(`Get-CASMailbox -Identity '${id}' | Select-Object OWAEnabled,MAPIEnabled,ActiveSyncEnabled,PopEnabled,ImapEnabled,EwsEnabled | Select-Object -First 1`).catch(() => []),
         ps.invokeJson(`Get-MailboxAutoReplyConfiguration -Identity '${id}' | Select-Object AutoReplyState | Select-Object -First 1`).catch(() => []),
-        ps.invokeJson(`Get-MobileDevice -Mailbox '${id}' | Select-Object FriendlyName,DeviceType,LastSuccessSync | Select-Object -First 5`).catch(() => []),
+        ps.invokeJson(`Get-MobileDevice -Mailbox '${id}' | Select-Object FriendlyName,DeviceType,LastSuccessSync`).catch(() => []),
       ]);
       return { content: [{ type: "text", text: JSON.stringify({ cas: (cas as any[])[0], oof: (oof as any[])[0], devices }, null, 2) }] };
     },

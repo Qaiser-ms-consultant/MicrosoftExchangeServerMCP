@@ -110,7 +110,7 @@ export function registerRecipientAdminTools(server: McpServer, ps: PowerShellPro
   });
 
   server.tool("exchange_list_dynamic_distribution_groups", "List dynamic distribution groups", {}, async () => {
-    const data = await ps.invokeJson("Get-DynamicDistributionGroup -ResultSize 100 | Select-Object DisplayName,PrimarySmtpAddress,RecipientContainer | Select-Object -First 100");
+    const data = await ps.invokeJson("Get-DynamicDistributionGroup -ResultSize 100 | Select-Object DisplayName,PrimarySmtpAddress,RecipientContainer");
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
   });
 

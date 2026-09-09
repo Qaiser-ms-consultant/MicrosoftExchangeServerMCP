@@ -9,7 +9,7 @@ export function registerSpecMissingTools(server: McpServer, ps: PowerShellProvid
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
   server.tool("server.get_info", "Get Exchange server info (Get-ExchangeServer version/CU/edition)", { identity: z.string().optional() }, async ({ identity }) => {
-    const d = await ps.invokeJson(identity ? `Get-ExchangeServer -Identity "${identity}" | Select-Object Name,Fqdn,AdminDisplayVersion,ExchangeVersion,ServerRole` : `Get-ExchangeServer | Select-Object Name,Fqdn,AdminDisplayVersion | Select-Object -First 10`);
+    const d = await ps.invokeJson(identity ? `Get-ExchangeServer -Identity "${identity}" | Select-Object Name,Fqdn,AdminDisplayVersion,ExchangeVersion,ServerRole` : `Get-ExchangeServer | Select-Object Name,Fqdn,AdminDisplayVersion`);
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
   server.tool("server.get_services_status", "Status of MSExchange* services (Get-Service filtered)", { server: z.string().optional() }, async ({ server }) => {
@@ -27,7 +27,7 @@ export function registerSpecMissingTools(server: McpServer, ps: PowerShellProvid
   });
   server.tool("server.get_event_log_errors", "Pull recent Application/System event log errors filtered to Exchange sources", { logName: z.string().optional(), count: z.number().optional(), server: z.string().optional() }, async ({ logName, count, server }) => {
     const c = count ?? 20;
-    const base = `Get-WinEvent -FilterHashtable @{LogName='${logName ?? "Application"}'; Level=2,1; StartTime=(Get-Date).AddDays(-1)} -MaxEvents ${c} | Where-Object { $_.ProviderName -like "*Exchange*" -or $_.ProviderName -like "*MSExchange*" } | Select-Object TimeCreated,Id,LevelDisplayName,ProviderName,Message | Select-Object -First ${c}`;
+    const base = `Get-WinEvent -FilterHashtable @{LogName='${logName ?? "Application"}'; Level=2,1; StartTime=(Get-Date).AddDays(-1)} -MaxEvents ${c} | Where-Object { $_.ProviderName -like "*Exchange*" -or $_.ProviderName -like "*MSExchange*" } | Select-Object TimeCreated,Id,LevelDisplayName,ProviderName,Message`;
     const cmd = server ? `Invoke-Command -ComputerName "${server}" -ScriptBlock { ${base} }` : base;
     const d = await ps.invokeJson(cmd);
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
@@ -86,7 +86,7 @@ export function registerSpecMissingTools(server: McpServer, ps: PowerShellProvid
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
   server.tool("mailflow.get_transport_rules", "Alias for transport rules (mailflow.get_transport_rules)", {}, async () => {
-    const d = await ps.invokeJson("Get-TransportRule | Select-Object Name,Priority,State,Mode | Select-Object -First 20");
+    const d = await ps.invokeJson("Get-TransportRule | Select-Object Name,Priority,State,Mode");
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
   server.tool("mailflow.set_receive_connector", "Set Receive connector (e.g. Banner, MaxMessageSize)", { identity: z.string(), banner: z.string().optional(), maxMessageSize: z.string().optional() }, async ({ identity, banner, maxMessageSize }) => {
@@ -105,11 +105,11 @@ export function registerSpecMissingTools(server: McpServer, ps: PowerShellProvid
 
   // 6.3 database.*
   server.tool("database.list", "List mailbox databases with size/mount", {}, async () => {
-    const d = await ps.invokeJson("Get-MailboxDatabase | Select-Object Name,Server,Mounted,DatabaseSize,AvailableNewMailboxSpace | Select-Object -First 20");
+    const d = await ps.invokeJson("Get-MailboxDatabase | Select-Object Name,Server,Mounted,DatabaseSize,AvailableNewMailboxSpace");
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
   server.tool("database.get_copy_status", "Alias for get_copy_status", { identity: z.string().optional() }, async ({ identity }) => {
-    const d = await ps.invokeJson(identity ? `Get-MailboxDatabaseCopyStatus -Identity "${identity}" | Select-Object Identity,Status,CopyQueueLength,ReplayQueueLength` : `Get-MailboxDatabaseCopyStatus | Select-Object Identity,Status,CopyQueueLength | Select-Object -First 20`);
+    const d = await ps.invokeJson(identity ? `Get-MailboxDatabaseCopyStatus -Identity "${identity}" | Select-Object Identity,Status,CopyQueueLength,ReplayQueueLength` : `Get-MailboxDatabaseCopyStatus | Select-Object Identity,Status,CopyQueueLength`);
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
   server.tool("database.mount", "Mount database (Mount-Database) — confirm required", { identity: z.string(), confirm: z.boolean().optional() }, async ({ identity, confirm }) => {
@@ -153,17 +153,17 @@ export function registerSpecMissingTools(server: McpServer, ps: PowerShellProvid
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
   server.tool("database.get_backup_status", "Last backup timestamp (Get-MailboxDatabase | Select Last*Backup)", {}, async () => {
-    const d = await ps.invokeJson("Get-MailboxDatabase | Select-Object Name,LastFullBackup,LastIncrementalBackup,BackupInProgress | Select-Object -First 20");
+    const d = await ps.invokeJson("Get-MailboxDatabase | Select-Object Name,LastFullBackup,LastIncrementalBackup,BackupInProgress");
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
   server.tool("database.get_whitespace_and_growth", "Whitespace and growth (AvailableNewMailboxSpace)", {}, async () => {
-    const d = await ps.invokeJson("Get-MailboxDatabase | Select-Object Name,DatabaseSize,AvailableNewMailboxSpace | Select-Object -First 20");
+    const d = await ps.invokeJson("Get-MailboxDatabase | Select-Object Name,DatabaseSize,AvailableNewMailboxSpace");
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
 
   // 6.4 dag.*
   server.tool("dag.list", "List DAGs", {}, async () => {
-    const d = await ps.invokeJson("Get-DatabaseAvailabilityGroup | Select-Object Name,WitnessServer,WitnessDirectory,OperationalServers | Select-Object -First 10");
+    const d = await ps.invokeJson("Get-DatabaseAvailabilityGroup | Select-Object Name,WitnessServer,WitnessDirectory,OperationalServers");
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
   server.tool("dag.get_info", "Get DAG info", { identity: z.string() }, async ({ identity }) => {
@@ -171,7 +171,7 @@ export function registerSpecMissingTools(server: McpServer, ps: PowerShellProvid
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
   server.tool("dag.get_witness_status", "Get witness status", { identity: z.string().optional() }, async ({ identity }) => {
-    const d = await ps.invokeJson(identity ? `Get-DatabaseAvailabilityGroup -Identity "${identity}" -Status | Select-Object WitnessShareInUse` : `Get-DatabaseAvailabilityGroup -Status | Select-Object Name,WitnessShareInUse | Select-Object -First 10`);
+    const d = await ps.invokeJson(identity ? `Get-DatabaseAvailabilityGroup -Identity "${identity}" -Status | Select-Object WitnessShareInUse` : `Get-DatabaseAvailabilityGroup -Status | Select-Object Name,WitnessShareInUse`);
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
   server.tool("dag.set_activation_policy", "Set activation preference (Set-MailboxDatabaseCopy)", { identity: z.string(), activationPreference: z.number() }, async ({ identity, activationPreference }) => {
@@ -180,8 +180,8 @@ export function registerSpecMissingTools(server: McpServer, ps: PowerShellProvid
   });
   server.tool("dag.simulate_failover_check", "Pre-flight failover checks without failing over", { server: z.string().optional() }, async ({ server }) => {
     const cmds = [
-      server ? `Test-ReplicationHealth -Identity "${server}" | Select-Object Server,Check,Result` : `Test-ReplicationHealth | Select-Object Server,Check,Result | Select-Object -First 20`,
-      `Get-MailboxDatabaseCopyStatus | Where-Object { $_.Status -ne "Mounted" } | Select-Object Identity,Status,CopyQueueLength | Select-Object -First 10`,
+      server ? `Test-ReplicationHealth -Identity "${server}" | Select-Object Server,Check,Result` : `Test-ReplicationHealth | Select-Object Server,Check,Result`,
+      `Get-MailboxDatabaseCopyStatus | Where-Object { $_.Status -ne "Mounted" } | Select-Object Identity,Status,CopyQueueLength`,
       `Get-ServerComponentState -Identity "${server ?? "DEVEX02"}" | Select-Object Component,State`,
     ];
     const results: Record<string, unknown> = {};
@@ -191,7 +191,7 @@ export function registerSpecMissingTools(server: McpServer, ps: PowerShellProvid
 
   // 6.5 mailbox.* extended
   server.tool("mailbox.get_folder_statistics", "Get folder statistics (Get-MailboxFolderStatistics)", { identity: z.string() }, async ({ identity }) => {
-    const d = await ps.invokeJson(`Get-MailboxFolderStatistics -Identity "${identity}" | Select-Object Name,FolderSize,ItemsInFolder | Select-Object -First 20`);
+    const d = await ps.invokeJson(`Get-MailboxFolderStatistics -Identity "${identity}" | Select-Object Name,FolderSize,ItemsInFolder`);
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
   server.tool("mailbox.set_quota", "Set mailbox quota", { identity: z.string(), prohibitSendQuota: z.string().optional(), issueWarningQuota: z.string().optional() }, async ({ identity, prohibitSendQuota, issueWarningQuota }) => {
@@ -206,7 +206,7 @@ export function registerSpecMissingTools(server: McpServer, ps: PowerShellProvid
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
   server.tool("mailbox.get_move_request_status", "Get move request status", { identity: z.string().optional() }, async ({ identity }) => {
-    const d = await ps.invokeJson(identity ? `Get-MoveRequest -Identity "${identity}" | Select-Object Identity,Status,PercentComplete` : `Get-MoveRequest | Select-Object Identity,Status,PercentComplete | Select-Object -First 20`);
+    const d = await ps.invokeJson(identity ? `Get-MoveRequest -Identity "${identity}" | Select-Object Identity,Status,PercentComplete` : `Get-MoveRequest | Select-Object Identity,Status,PercentComplete`);
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
   server.tool("mailbox.add_permission", "Add mailbox permission (Add-MailboxPermission)", { identity: z.string(), user: z.string(), accessRights: z.string().describe("FullAccess, SendAs, etc.") }, async ({ identity, user, accessRights }) => {
@@ -228,13 +228,13 @@ export function registerSpecMissingTools(server: McpServer, ps: PowerShellProvid
     return { content: [{ type: "text", text: `Added ${member} to ${identity}` }] };
   });
   server.tool("contact.list", "List contacts (alias)", {}, async () => {
-    const d = await ps.invokeJson(`Get-MailContact | Select-Object Name,ExternalEmailAddress | Select-Object -First 20`);
+    const d = await ps.invokeJson(`Get-MailContact | Select-Object Name,ExternalEmailAddress`);
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
 
   // 6.7 clientaccess.*
   server.tool("clientaccess.get_virtual_directories", "Get virtual directories (clientaccess.get_virtual_directories)", { server: z.string().optional() }, async ({ server }) => {
-    const d = await ps.invokeJson(server ? `Get-OwaVirtualDirectory -Server "${server}" | Select-Object Name,InternalUrl,ExternalUrl` : `Get-OwaVirtualDirectory | Select-Object Name,Server,InternalUrl | Select-Object -First 10`);
+    const d = await ps.invokeJson(server ? `Get-OwaVirtualDirectory -Server "${server}" | Select-Object Name,InternalUrl,ExternalUrl` : `Get-OwaVirtualDirectory | Select-Object Name,Server,InternalUrl`);
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
   server.tool("clientaccess.test_owa", "Test OWA connectivity (Test-OwaConnectivity)", { mailboxServer: z.string().optional() }, async ({ mailboxServer }) => {
@@ -250,7 +250,7 @@ export function registerSpecMissingTools(server: McpServer, ps: PowerShellProvid
   // 6.8 certificate.* extended
   server.tool("certificate.get_expiring", "Certs expiring within N days", { days: z.number().optional() }, async ({ days }) => {
     const n = days ?? 30;
-    const d = await ps.invokeJson(`Get-ExchangeCertificate | Where-Object { $_.NotAfter -lt (Get-Date).AddDays(${n}) } | Select-Object Thumbprint,Subject,NotAfter,Services | Select-Object -First 20`);
+    const d = await ps.invokeJson(`Get-ExchangeCertificate | Where-Object { $_.NotAfter -lt (Get-Date).AddDays(${n}) } | Select-Object Thumbprint,Subject,NotAfter,Services`);
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
   server.tool("certificate.enable_services", "Enable cert services (Enable-ExchangeCertificate)", { thumbprint: z.string(), services: z.string().describe("IIS,SMTP,UM, etc.") }, async ({ thumbprint, services }) => {
@@ -260,21 +260,21 @@ export function registerSpecMissingTools(server: McpServer, ps: PowerShellProvid
 
   // 6.9 security.*
   server.tool("security.get_role_group_members", "Get role group members", { identity: z.string().optional() }, async ({ identity }) => {
-    const d = await ps.invokeJson(identity ? `Get-RoleGroupMember -Identity "${identity}" | Select-Object Name` : `Get-RoleGroup | Select-Object Name,ManagedBy | Select-Object -First 20`);
+    const d = await ps.invokeJson(identity ? `Get-RoleGroupMember -Identity "${identity}" | Select-Object Name` : `Get-RoleGroup | Select-Object Name,ManagedBy`);
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
   server.tool("security.get_mailbox_audit_log", "Get mailbox audit log (Search-MailboxAuditLog)", { identity: z.string(), startDate: z.string().optional(), endDate: z.string().optional() }, async ({ identity, startDate, endDate }) => {
     let cmd = `Search-MailboxAuditLog -Identity "${identity}" -ShowDetails`;
     if (startDate) cmd += ` -StartDate "${startDate}"`;
     if (endDate) cmd += ` -EndDate "${endDate}"`;
-    cmd += ` | Select-Object LogonType,Operation,ItemSubject | Select-Object -First 20`;
+      cmd += ` | Select-Object LogonType,Operation,ItemSubject`;
     const d = await ps.invokeJson(cmd);
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
 
   // 6.10 publicfolder
   server.tool("publicfolder.get_statistics", "Get public folder statistics", { identity: z.string().optional() }, async ({ identity }) => {
-    const d = await ps.invokeJson(identity ? `Get-PublicFolderStatistics -Identity "${identity}" | Select-Object Name,ItemCount,TotalItemSize` : `Get-PublicFolderStatistics -Identity "\\" | Select-Object Name,ItemCount | Select-Object -First 20`);
+    const d = await ps.invokeJson(identity ? `Get-PublicFolderStatistics -Identity "${identity}" | Select-Object Name,ItemCount,TotalItemSize` : `Get-PublicFolderStatistics -Identity "\\" | Select-Object Name,ItemCount`);
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
 
@@ -292,9 +292,9 @@ export function registerSpecMissingTools(server: McpServer, ps: PowerShellProvid
   server.tool("report.generate_health_summary", "Rolled-up health narrative across server/db/dag/mailflow", { server: z.string().optional() }, async ({ server }) => {
     const s = server ?? "DEVEX02";
     const checks = {
-      health: await ps.invokeJson(`Get-HealthReport -Identity "${s}" | Select-Object HealthSet,AlertValue | Select-Object -First 5`).catch(() => []),
-      db: await ps.invokeJson(`Get-MailboxDatabaseCopyStatus -Server "${s}" | Select-Object Name,Status | Select-Object -First 5`).catch(() => []),
-      queue: await ps.invokeJson(`Get-Queue -Server "${s}" | Select-Object Identity,MessageCount | Select-Object -First 5`).catch(() => []),
+      health: await ps.invokeJson(`Get-HealthReport -Identity "${s}" | Select-Object HealthSet,AlertValue`).catch(() => []),
+      db: await ps.invokeJson(`Get-MailboxDatabaseCopyStatus -Server "${s}" | Select-Object Name,Status`).catch(() => []),
+      queue: await ps.invokeJson(`Get-Queue -Server "${s}" | Select-Object Identity,MessageCount`).catch(() => []),
     };
     return { content: [{ type: "text", text: JSON.stringify(checks, null, 2) }] };
   });
@@ -304,7 +304,7 @@ export function registerSpecMissingTools(server: McpServer, ps: PowerShellProvid
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
   server.tool("report.generate_certificate_expiry_report", "Cert expiry report (all certs sorted by NotAfter)", {}, async () => {
-    const d = await ps.invokeJson(`Get-ExchangeCertificate | Select-Object Thumbprint,Subject,NotAfter,Services | Sort-Object NotAfter | Select-Object -First 20`);
+    const d = await ps.invokeJson(`Get-ExchangeCertificate | Select-Object Thumbprint,Subject,NotAfter,Services | Sort-Object NotAfter`);
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
 }

@@ -43,7 +43,7 @@ export function registerMailboxFeatureTools(server: McpServer, ps: PowerShellPro
     "Get inbox rules for a mailbox — Get-InboxRule",
     { mailbox: z.string().describe("Mailbox identity") },
     async ({ mailbox }) => {
-      const data = await ps.invokeJson(`Get-InboxRule -Mailbox "${mailbox}" | Select-Object Name,Enabled,Priority,ForwardTo,ForwardAsAttachmentTo,RedirectTo,MoveToFolder,Description | Select-Object -First 20`);
+      const data = await ps.invokeJson(`Get-InboxRule -Mailbox "${mailbox}" | Select-Object Name,Enabled,Priority,ForwardTo,ForwardAsAttachmentTo,RedirectTo,MoveToFolder,Description`);
       return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
     },
   );
@@ -63,7 +63,7 @@ export function registerMailboxFeatureTools(server: McpServer, ps: PowerShellPro
     "Alias: Get mailbox permissions (already in recipients, exposed for completeness)",
     { identity: z.string() },
     async ({ identity }) => {
-      const data = await ps.invokeJson(`Get-MailboxPermission -Identity "${identity}" | Select-Object User,AccessRights,Deny | Select-Object -First 20`);
+      const data = await ps.invokeJson(`Get-MailboxPermission -Identity "${identity}" | Select-Object User,AccessRights,Deny`);
       return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
     },
   );
@@ -75,7 +75,7 @@ export function registerMailboxFeatureTools(server: McpServer, ps: PowerShellPro
     async ({ identity }) => {
       const cmd = identity
         ? `Get-Mailbox -Identity "${identity}" | Select-Object DisplayName,ArchiveStatus,ArchiveDatabase,ArchiveName,ArchiveQuota,ArchiveWarningQuota`
-        : `Get-Mailbox -ResultSize 20 | Select-Object DisplayName,ArchiveStatus,ArchiveDatabase | Select-Object -First 20`;
+        : `Get-Mailbox -ResultSize 20 | Select-Object DisplayName,ArchiveStatus,ArchiveDatabase`;
       const data = await ps.invokeJson(cmd);
       return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
     },
@@ -96,7 +96,7 @@ export function registerMailboxFeatureTools(server: McpServer, ps: PowerShellPro
     "Get mobile devices for a mailbox — Get-MobileDevice (ActiveSync)",
     { mailbox: z.string().optional().describe("Mailbox identity, omit for all") },
     async ({ mailbox }) => {
-      const cmd = mailbox ? `Get-MobileDevice -Mailbox "${mailbox}" | Select-Object FriendlyName,DeviceType,DeviceModel,LastSuccessSync` : `Get-MobileDevice -ResultSize 20 | Select-Object FriendlyName,DeviceType,Mailbox | Select-Object -First 20`;
+      const cmd = mailbox ? `Get-MobileDevice -Mailbox "${mailbox}" | Select-Object FriendlyName,DeviceType,DeviceModel,LastSuccessSync` : `Get-MobileDevice -ResultSize 20 | Select-Object FriendlyName,DeviceType,Mailbox`;
       const data = await ps.invokeJson(cmd);
       return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
     },
@@ -107,7 +107,7 @@ export function registerMailboxFeatureTools(server: McpServer, ps: PowerShellPro
     "Get public folders — Get-PublicFolder (hierarchy)",
     { identity: z.string().optional().describe("PF identity, e.g. \\ or \\Marketing") },
     async ({ identity }) => {
-      const cmd = identity ? `Get-PublicFolder -Identity "${identity}" | Select-Object Name,Identity,MailEnabled` : `Get-PublicFolder -Identity "\\" -Recurse | Select-Object Name,Identity | Select-Object -First 20`;
+      const cmd = identity ? `Get-PublicFolder -Identity "${identity}" | Select-Object Name,Identity,MailEnabled` : `Get-PublicFolder -Identity "\\" -Recurse | Select-Object Name,Identity`;
       const data = await ps.invokeJson(cmd);
       return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
     },

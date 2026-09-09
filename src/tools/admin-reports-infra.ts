@@ -5,28 +5,28 @@ import type { PowerShellProvider } from "../clients/powershell-provider.js";
 export function registerInfraReports(server: McpServer, ps: PowerShellProvider) {
   server.tool("report.exchange_environment_overview", "Exchange Environment Overview — servers, roles, versions, CUs, DAGs, DBs, connectors (high-level)", {}, async () => {
     const [servers, dags, dbs, send] = await Promise.all([
-      ps.invokeJson(`Get-ExchangeServer | Select-Object Name,Fqdn,ServerRole,Edition,AdminDisplayVersion | Select-Object -First 10`).catch(() => []),
-      ps.invokeJson(`Get-DatabaseAvailabilityGroup | Select-Object Name,WitnessServer,OperationalServers | Select-Object -First 5`).catch(() => []),
-      ps.invokeJson(`Get-MailboxDatabase | Select-Object Name,Server,Mounted,DatabaseSize | Select-Object -First 10`).catch(() => []),
-      ps.invokeJson(`Get-SendConnector | Select-Object Name,AddressSpaces | Select-Object -First 5`).catch(() => []),
+      ps.invokeJson(`Get-ExchangeServer | Select-Object Name,Fqdn,ServerRole,Edition,AdminDisplayVersion`).catch(() => []),
+      ps.invokeJson(`Get-DatabaseAvailabilityGroup | Select-Object Name,WitnessServer,OperationalServers`).catch(() => []),
+      ps.invokeJson(`Get-MailboxDatabase | Select-Object Name,Server,Mounted,DatabaseSize`).catch(() => []),
+      ps.invokeJson(`Get-SendConnector | Select-Object Name,AddressSpaces`).catch(() => []),
     ]);
     return { content: [{ type: "text", text: JSON.stringify({ servers, dags, databases: dbs, sendConnectors: send, generatedAt: new Date().toISOString() }, null, 2) }] };
   });
 
   server.tool("report.exchange_server_inventory", "Exchange Server Inventory — all servers and configuration", {}, async () => {
-    const d = await ps.invokeJson(`Get-ExchangeServer | Select-Object Name,Fqdn,ServerRole,Site,Edition,AdminDisplayVersion,ExchangeVersion | Select-Object -First 20`);
+    const d = await ps.invokeJson(`Get-ExchangeServer | Select-Object Name,Fqdn,ServerRole,Site,Edition,AdminDisplayVersion,ExchangeVersion`);
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
 
   server.tool("report.exchange_version_and_cu", "Exchange Version & CU Report — server versions and cumulative updates", {}, async () => {
     // NOTE: Sort-Object is blocked on constrained endpoints — sort client-side
-    const d = await ps.invokeJson(`Get-ExchangeServer | Select-Object Name,AdminDisplayVersion,ExchangeVersion | Select-Object -First 20`);
+    const d = await ps.invokeJson(`Get-ExchangeServer | Select-Object Name,AdminDisplayVersion,ExchangeVersion`);
     d.sort((a: any, b: any) => String(b.AdminDisplayVersion ?? "").localeCompare(String(a.AdminDisplayVersion ?? "")));
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
 
   server.tool("report.exchange_build_compliance", "Build Compliance — compare servers against required CU/security baseline", { requiredCU: z.string().optional().describe("e.g. 15.2.1748.10, default checks for oldest vs newest") }, async ({ requiredCU }) => {
-    const servers = await ps.invokeJson(`Get-ExchangeServer | Select-Object Name,AdminDisplayVersion | Select-Object -First 20`);
+    const servers = await ps.invokeJson(`Get-ExchangeServer | Select-Object Name,AdminDisplayVersion`);
     const versions = servers.map((s: any) => String(s.AdminDisplayVersion ?? "")).filter(Boolean);
     const unique = [...new Set(versions)];
     const compliant = requiredCU ? servers.map((s: any) => ({ ...s, _compliant: String(s.AdminDisplayVersion).includes(requiredCU!) })) : servers;
@@ -34,16 +34,16 @@ export function registerInfraReports(server: McpServer, ps: PowerShellProvider) 
   });
 
   server.tool("report.server_role_report", "Server Role Report — Mailbox, Edge, Client Access config", {}, async () => {
-    const d = await ps.invokeJson(`Get-ExchangeServer | Select-Object Name,ServerRole,IsMailboxServer,IsClientAccessServer,IsHubTransportServer,IsUnifiedMessagingServer | Select-Object -First 20`);
+    const d = await ps.invokeJson(`Get-ExchangeServer | Select-Object Name,ServerRole,IsMailboxServer,IsClientAccessServer,IsHubTransportServer,IsUnifiedMessagingServer`);
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
 
   server.tool("report.exchange_topology", "Exchange Topology — servers, sites, DAGs, databases and relationships", {}, async () => {
     const [servers, sites, dags, dbs] = await Promise.all([
-      ps.invokeJson(`Get-ExchangeServer | Select-Object Name,Site,ServerRole | Select-Object -First 20`).catch(() => []),
-      ps.invokeJson(`Get-AdSite | Select-Object Name,HubSiteEnabled | Select-Object -First 10`).catch(() => []),
-      ps.invokeJson(`Get-DatabaseAvailabilityGroup | Select-Object Name,Servers | Select-Object -First 10`).catch(() => []),
-      ps.invokeJson(`Get-MailboxDatabase | Select-Object Name,Server,MasterServerOrAvailabilityGroup,EcpUrl | Select-Object -First 10`).catch(() => []),
+      ps.invokeJson(`Get-ExchangeServer | Select-Object Name,Site,ServerRole`).catch(() => []),
+      ps.invokeJson(`Get-AdSite | Select-Object Name,HubSiteEnabled`).catch(() => []),
+      ps.invokeJson(`Get-DatabaseAvailabilityGroup | Select-Object Name,Servers`).catch(() => []),
+      ps.invokeJson(`Get-MailboxDatabase | Select-Object Name,Server,MasterServerOrAvailabilityGroup,EcpUrl`).catch(() => []),
     ]);
     return { content: [{ type: "text", text: JSON.stringify({ servers, adSites: sites, dags, databases: dbs }, null, 2) }] };
   });
@@ -54,8 +54,8 @@ export function registerInfraReports(server: McpServer, ps: PowerShellProvider) 
   });
 
   server.tool("report.ad_site_exchange_mapping", "AD Site / Exchange Mapping — servers mapped to AD sites", {}, async () => {
-    const d = await ps.invokeJson(`Get-ExchangeServer | Select-Object Name,Fqdn,Site | Select-Object -First 20`);
-    const sites = await ps.invokeJson(`Get-AdSite | Select-Object Name,AssociatedHubSite | Select-Object -First 10`).catch(() => []);
+    const d = await ps.invokeJson(`Get-ExchangeServer | Select-Object Name,Fqdn,Site`);
+    const sites = await ps.invokeJson(`Get-AdSite | Select-Object Name,AssociatedHubSite`).catch(() => []);
     return { content: [{ type: "text", text: JSON.stringify({ exchangeServersBySite: d, adSites: sites }, null, 2) }] };
   });
 
@@ -88,7 +88,7 @@ $nics = Get-CimInstance Win32_NetworkAdapterConfiguration | Where-Object { $_.IP
   });
 
   server.tool("report.exchange_server_uptime", "Server uptime and reboot history (Win32_OperatingSystem LastBootUpTime + System event 1074)", { server: z.string().optional() }, async ({ server }) => {
-    const base = `Get-CimInstance Win32_OperatingSystem | Select-Object CSName,LastBootUpTime,@{N='UptimeDays';E={((Get-Date)-$_.LastBootUpTime).Days}}; Get-WinEvent -FilterHashtable @{LogName='System'; Id=1074} -MaxEvents 5 -ErrorAction SilentlyContinue | Select-Object TimeCreated,Message | Select-Object -First 5`;
+    const base = `Get-CimInstance Win32_OperatingSystem | Select-Object CSName,LastBootUpTime,@{N='UptimeDays';E={((Get-Date)-$_.LastBootUpTime).Days}}; Get-WinEvent -FilterHashtable @{LogName='System'; Id=1074} -MaxEvents 5 -ErrorAction SilentlyContinue | Select-Object TimeCreated,Message`;
     const cmd = server ? `Invoke-Command -ComputerName "${server}" -ScriptBlock { ${base} }` : base;
     const d = await ps.invokeJson(cmd);
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
@@ -103,9 +103,9 @@ $nics = Get-CimInstance Win32_NetworkAdapterConfiguration | Where-Object { $_.IP
 
   server.tool("report.exchange_dependency", "AD/DNS/certificate/network dependencies", { server: z.string().optional() }, async ({ server }) => {
     const deps = await Promise.all([
-      ps.invokeJson(`Get-ExchangeServer | Select-Object -First 1 | Select-Object Name | ForEach-Object { Test-ServiceHealth | Select-Object Server,Role,RequiredServicesRunning | Select-Object -First 5 }`).catch(() => []),
-      ps.invokeJson(`Get-ExchangeCertificate | Where-Object { $_.NotAfter -lt (Get-Date).AddDays(30) } | Select-Object Subject,NotAfter,Services | Select-Object -First 5`).catch(() => []),
-      ps.invokeJson(`Resolve-DnsName -Name ${server ?? "mail.contoso.com"} -ErrorAction SilentlyContinue | Select-Object Name,IPAddress | Select-Object -First 5`).catch(() => []),
+      ps.invokeJson(`Get-ExchangeServer | Select-Object -First 1 | Select-Object Name | ForEach-Object { Test-ServiceHealth | Select-Object Server,Role,RequiredServicesRunning }`).catch(() => []),
+      ps.invokeJson(`Get-ExchangeCertificate | Where-Object { $_.NotAfter -lt (Get-Date).AddDays(30) } | Select-Object Subject,NotAfter,Services`).catch(() => []),
+      (server ? ps.invokeJson(`Resolve-DnsName -Name ${server} -ErrorAction SilentlyContinue | Select-Object Name,IPAddress`).catch(() => []) : Promise.resolve({ skipped: "pass server to probe DNS" })),
     ]);
     return { content: [{ type: "text", text: JSON.stringify({ serviceHealth: deps[0], expiringCerts: deps[1], dns: deps[2] }, null, 2) }] };
   });

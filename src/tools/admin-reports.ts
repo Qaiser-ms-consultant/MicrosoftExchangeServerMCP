@@ -9,7 +9,8 @@ export function registerReportTools(server: McpServer, ps: PowerShellProvider) {
     { top: z.number().optional() },
     async ({ top }) => {
       const n = top ?? 20;
-      const dbs = await ps.invokeJson(`Get-MailboxDatabase | Select-Object Name,DatabaseSize,AvailableNewMailboxSpace,LastFullBackup,LastIncrementalBackup | Select-Object -First ${n}`);
+      // Databases per org are few; return all, no truncation.
+      const dbs = await ps.invokeJson(`Get-MailboxDatabase | Select-Object Name,DatabaseSize,AvailableNewMailboxSpace,LastFullBackup,LastIncrementalBackup`);
       const enriched = dbs.map((db: any) => {
         const sizeStr = String(db.DatabaseSize ?? "");
         const availStr = String(db.AvailableNewMailboxSpace ?? "");
@@ -24,10 +25,10 @@ export function registerReportTools(server: McpServer, ps: PowerShellProvider) {
     "Transport queue health report — queues by server with MessageCount, Status, NextHop, plus tracking log summary last hour",
     { server: z.string().optional() },
     async ({ server }) => {
-      const qr = await ps.invokeJson(server ? `Get-Queue -Server "${server}" | Select-Object Identity,Status,MessageCount,NextHopDomain,DeliveryType | Select-Object -First 50` : `Get-Queue | Select-Object Identity,Status,MessageCount,NextHopDomain | Select-Object -First 50`);
+      const qr = await ps.invokeJson(server ? `Get-Queue -Server "${server}" | Select-Object Identity,Status,MessageCount,NextHopDomain,DeliveryType` : `Get-Queue | Select-Object Identity,Status,MessageCount,NextHopDomain`);
       // NOTE: Sort-Object is blocked on constrained endpoints — sort client-side
       qr.sort((a: any, b: any) => Number(b.MessageCount ?? 0) - Number(a.MessageCount ?? 0));
-      const q = qr.slice(0, 20);
+      const q = qr;
       const tracking = await ps.invokeJson(`Get-MessageTrackingLog -ResultSize 10 -Start (Get-Date).AddHours(-1) | Group-Object EventId | Select-Object Name,Count`).catch(() => []);
       return { content: [{ type: "text", text: JSON.stringify({ queues: q, trackingSummaryLastHour: tracking }, null, 2) }] };
     },
@@ -39,7 +40,7 @@ export function registerReportTools(server: McpServer, ps: PowerShellProvider) {
     { filter: z.string().optional() },
     async ({ filter }) => {
       const f = filter ? ` -Filter {${filter}}` : "";
-      const d = await ps.invokeJson(`Get-Mailbox -ResultSize 50${f} | Select-Object DisplayName,PrimarySmtpAddress,LitigationHoldEnabled,LitigationHoldDuration,InPlaceHolds,RetentionHoldEnabled | Select-Object -First 50`);
+      const d = await ps.invokeJson(`Get-Mailbox -ResultSize 50${f} | Select-Object DisplayName,PrimarySmtpAddress,LitigationHoldEnabled,LitigationHoldDuration,InPlaceHolds,RetentionHoldEnabled`);
       const summary = {
         total: d.length,
         litigationHoldEnabled: d.filter((x: any) => x.LitigationHoldEnabled).length,
@@ -57,7 +58,7 @@ export function registerReportTools(server: McpServer, ps: PowerShellProvider) {
     async ({ resultSize }) => {
       const n = resultSize ?? 50;
       // Get mailboxes then query OOF per mailbox (batch via pipeline)
-      const d = await ps.invokeJson(`Get-Mailbox -ResultSize ${n} | Get-MailboxAutoReplyConfiguration | Where-Object { $_.AutoReplyState -ne "Disabled" } | Select-Object Identity,AutoReplyState,StartTime,EndTime,ExternalAudience | Select-Object -First ${n}`);
+      const d = await ps.invokeJson(`Get-Mailbox -ResultSize ${n} | Get-MailboxAutoReplyConfiguration | Where-Object { $_.AutoReplyState -ne "Disabled" } | Select-Object Identity,AutoReplyState,StartTime,EndTime,ExternalAudience`);
       return { content: [{ type: "text", text: JSON.stringify({ count: d.length, oofEnabled: d }, null, 2) }] };
     },
   );
@@ -68,7 +69,7 @@ export function registerReportTools(server: McpServer, ps: PowerShellProvider) {
     { resultSize: z.number().optional() },
     async ({ resultSize }) => {
       const n = Math.min(resultSize ?? 500, 1000);
-      const all = await ps.invokeJson(`Get-Mailbox -ResultSize ${n} | Select-Object DisplayName,PrimarySmtpAddress,ForwardingAddress,ForwardingSmtpAddress,DeliverToMailboxAndForward | Select-Object -First ${n}`);
+      const all = await ps.invokeJson(`Get-Mailbox -ResultSize ${n} | Select-Object DisplayName,PrimarySmtpAddress,ForwardingAddress,ForwardingSmtpAddress,DeliverToMailboxAndForward`);
       const rows = (Array.isArray(all) ? all : []).filter((x: any) => x && (x.ForwardingAddress || x.ForwardingSmtpAddress));
       return { content: [{ type: "text", text: JSON.stringify({ count: rows.length, forwardingEnabled: rows }, null, 2) }] };
     },
@@ -80,13 +81,13 @@ export function registerReportTools(server: McpServer, ps: PowerShellProvider) {
     { resultSize: z.number().optional() },
     async ({ resultSize }) => {
       const n = Math.min(resultSize ?? 100, 500);
-      const boxes = await ps.invokeJson(`Get-Mailbox -ResultSize ${n} | Select-Object DisplayName,PrimarySmtpAddress | Select-Object -First ${n}`);
+      const boxes = await ps.invokeJson(`Get-Mailbox -ResultSize ${n} | Select-Object DisplayName,PrimarySmtpAddress`);
       const rows = Array.isArray(boxes) ? boxes.slice(0, n) : [];
       const entries: Array<{ mailbox: string; displayName: string; grantedTo: string[] }> = [];
       for (const b of rows) {
         const id = b.PrimarySmtpAddress || b.DisplayName;
         if (!id) continue;
-        const acl = await ps.invokeJson(`Get-MailboxPermission -Identity "${id}" | Select-Object Identity,User,AccessRights | Select-Object -First 50`).catch(() => []);
+        const acl = await ps.invokeJson(`Get-MailboxPermission -Identity "${id}" | Select-Object Identity,User,AccessRights`).catch(() => []);
         const grantedTo = (Array.isArray(acl) ? acl : [])
           .filter((a: any) => !String(a.User ?? "").startsWith("NT AUTHORITY") && String(a.AccessRights ?? "").includes("FullAccess"))
           .map((a: any) => String(a.User));
@@ -102,7 +103,7 @@ export function registerReportTools(server: McpServer, ps: PowerShellProvider) {
     { top: z.number().optional() },
     async ({ top }) => {
       const n = top ?? 20;
-      const d = await ps.invokeJson(`Get-Mailbox -ResultSize ${n} | Select-Object DisplayName,ArchiveStatus,ArchiveDatabase,ArchiveQuota,ArchiveWarningQuota | Select-Object -First ${n}`);
+      const d = await ps.invokeJson(`Get-Mailbox -ResultSize ${n} | Select-Object DisplayName,ArchiveStatus,ArchiveDatabase,ArchiveQuota,ArchiveWarningQuota`);
       return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
     },
   );
@@ -110,10 +111,16 @@ export function registerReportTools(server: McpServer, ps: PowerShellProvider) {
   server.tool(
     "report.generate_inactive_mailbox_report",
     "Inactive / soft-deleted mailbox report — for compliance cleanup",
-    {},
-    async () => {
-      const soft = await ps.invokeJson(`Get-Mailbox -SoftDeletedMailbox -ResultSize 20 | Select-Object DisplayName,WhenSoftDeleted,ExchangeGuid | Select-Object -First 20`).catch(() => []);
-      const disc = await ps.invokeJson(`Get-MailboxStatistics -Server DEVEX02 | Where-Object { $_.DisconnectReason -ne $null } | Select-Object DisplayName,DisconnectReason,DisconnectDate | Select-Object -First 20`).catch(() => []);
+    { server: z.string().optional().describe("Scope disconnected-mailbox stats to this server (auto-discovers a mailbox server when omitted)") },
+    async ({ server }) => {
+      const soft = await ps.invokeJson(`Get-Mailbox -SoftDeletedMailbox -ResultSize 20 | Select-Object DisplayName,WhenSoftDeleted,ExchangeGuid`).catch(() => []);
+      // Disconnected stats need a server scope: use the caller's server, else
+      // discover a live mailbox server instead of a hardcoded environment name.
+      const scope = server
+        ?? (await ps.invokeJson(`Get-ExchangeServer | Where-Object { $_.IsMailboxServer } | Select-Object Name`).then((a: any) => a[0]?.Name).catch(() => null));
+      const disc = scope
+        ? await ps.invokeJson(`Get-MailboxStatistics -Server "${scope}" | Where-Object { $_.DisconnectReason -ne $null } | Select-Object DisplayName,DisconnectReason,DisconnectDate`).catch(() => [])
+        : [];
       return { content: [{ type: "text", text: JSON.stringify({ softDeleted: soft, disconnected: disc }, null, 2) }] };
     },
   );
@@ -124,7 +131,7 @@ export function registerReportTools(server: McpServer, ps: PowerShellProvider) {
     { top: z.number().optional() },
     async ({ top }) => {
       const n = top ?? 20;
-      const d = await ps.invokeJson(`Get-MobileDevice -ResultSize ${n} | Select-Object FriendlyName,DeviceType,DeviceModel,DeviceOS,LastSuccessSync,Mailbox | Select-Object -First ${n}`);
+      const d = await ps.invokeJson(`Get-MobileDevice -ResultSize ${n} | Select-Object FriendlyName,DeviceType,DeviceModel,DeviceOS,LastSuccessSync,Mailbox`);
       return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
     },
   );
@@ -135,9 +142,9 @@ export function registerReportTools(server: McpServer, ps: PowerShellProvider) {
     { dag: z.string().optional() },
     async ({ dag }) => {
       const dagName = dag ?? (await ps.invokeJson(`Get-DatabaseAvailabilityGroup | Select-Object -First 1 | Select-Object -ExpandProperty Name`).then((a: any) => a[0]?.Name ?? "DAG").catch(() => "DAG"));
-      const health = await ps.invokeJson(`Test-ReplicationHealth | Select-Object Server,Check,Result | Select-Object -First 10`).catch(() => []);
-      const copies = await ps.invokeJson(`Get-MailboxDatabaseCopyStatus | Select-Object Identity,Status,CopyQueueLength,ReplayQueueLength | Select-Object -First 10`).catch(() => []);
-      const db = await ps.invokeJson(`Get-DatabaseAvailabilityGroup -Identity "${dagName}" -Status | Select-Object Name,WitnessShareInUse,OperationalServers | Select-Object -First 5`).catch(() => []);
+      const health = await ps.invokeJson(`Test-ReplicationHealth | Select-Object Server,Check,Result`).catch(() => []);
+      const copies = await ps.invokeJson(`Get-MailboxDatabaseCopyStatus | Select-Object Identity,Status,CopyQueueLength,ReplayQueueLength`).catch(() => []);
+      const db = await ps.invokeJson(`Get-DatabaseAvailabilityGroup -Identity "${dagName}" -Status | Select-Object Name,WitnessShareInUse,OperationalServers`).catch(() => []);
       return { content: [{ type: "text", text: JSON.stringify({ dag: dagName, replicationHealth: health, copyStatus: copies, witness: db }, null, 2) }] };
     },
   );
@@ -147,10 +154,10 @@ export function registerReportTools(server: McpServer, ps: PowerShellProvider) {
     "Full compliance snapshot — holds, retention policies, journal rules, DLP (summary)",
     {},
     async () => {
-      const holds = await ps.invokeJson(`Get-Mailbox -ResultSize 20 | Select-Object DisplayName,LitigationHoldEnabled,InPlaceHolds | Select-Object -First 10`).catch(() => []);
-      const retention = await ps.invokeJson(`Get-RetentionPolicy | Select-Object Name | Select-Object -First 10`).catch(() => []);
-      const journal = await ps.invokeJson(`Get-JournalRule | Select-Object Name,Enabled,Scope | Select-Object -First 10`).catch(() => []);
-      const dlp = await ps.invokeJson(`Get-DlpPolicy | Select-Object Name,Mode | Select-Object -First 10`).catch(() => []);
+      const holds = await ps.invokeJson(`Get-Mailbox -ResultSize 20 | Select-Object DisplayName,LitigationHoldEnabled,InPlaceHolds`).catch(() => []);
+      const retention = await ps.invokeJson(`Get-RetentionPolicy | Select-Object Name`).catch(() => []);
+      const journal = await ps.invokeJson(`Get-JournalRule | Select-Object Name,Enabled,Scope`).catch(() => []);
+      const dlp = await ps.invokeJson(`Get-DlpPolicy | Select-Object Name,Mode`).catch(() => []);
       return { content: [{ type: "text", text: JSON.stringify({ holdsSample: holds, retentionPolicies: retention, journalRules: journal, dlpPolicies: dlp }, null, 2) }] };
     },
   );
@@ -160,13 +167,13 @@ export function registerReportTools(server: McpServer, ps: PowerShellProvider) {
     "Full Exchange summary — servers, DBs, DAG, queues, certs, holds (one-call executive report)",
     {},
     async () => {
-      const servers = await ps.invokeJson(`Get-ExchangeServer | Select-Object Name,Fqdn,AdminDisplayVersion | Select-Object -First 5`).catch(() => []);
-      const dbs = await ps.invokeJson(`Get-MailboxDatabase | Select-Object Name,Mounted,DatabaseSize | Select-Object -First 5`).catch(() => []);
+      const servers = await ps.invokeJson(`Get-ExchangeServer | Select-Object Name,Fqdn,AdminDisplayVersion`).catch(() => []);
+      const dbs = await ps.invokeJson(`Get-MailboxDatabase | Select-Object Name,Mounted,DatabaseSize`).catch(() => []);
       // NOTE: Where-Object/Sort-Object blocked on constrained endpoints — filter client-side
-      const allCerts = await ps.invokeJson(`Get-ExchangeCertificate | Select-Object Subject,NotAfter | Select-Object -First 20`).catch(() => []);
+      const allCerts = await ps.invokeJson(`Get-ExchangeCertificate | Select-Object Subject,NotAfter`).catch(() => []);
       const cutoff60 = Date.now() + 60 * 86400 * 1000;
-      const certs = allCerts.filter((c: any) => { const t = Date.parse(String(c.NotAfter ?? "")); return !isNaN(t) && t < cutoff60; }).slice(0, 5);
-      const allQueues = await ps.invokeJson(`Get-Queue | Select-Object Identity,MessageCount,Status | Select-Object -First 20`).catch(() => []);
+      const certs = allCerts.filter((c: any) => { const t = Date.parse(String(c.NotAfter ?? "")); return !isNaN(t) && t < cutoff60; });
+      const allQueues = await ps.invokeJson(`Get-Queue | Select-Object Identity,MessageCount,Status`).catch(() => []);
       allQueues.sort((a: any, b: any) => Number(b.MessageCount ?? 0) - Number(a.MessageCount ?? 0));
       const queues = allQueues.slice(0, 5);
       return { content: [{ type: "text", text: JSON.stringify({ servers, databases: dbs, expiringCertsNext60Days: certs, topQueues: queues, generatedAt: new Date().toISOString() }, null, 2) }] };
@@ -193,8 +200,8 @@ export function registerReportTools(server: McpServer, ps: PowerShellProvider) {
     { resultSize: z.number().optional() },
     async ({ resultSize }) => {
       const n = Math.min(resultSize ?? 200, 1000);
-      const boxes = await ps.invokeJson(`Get-Mailbox -ResultSize ${n} | Select-Object DisplayName,PrimarySmtpAddress,ProhibitSendQuota | Select-Object -First ${n}`);
-      const stats = await ps.invokeJson(`Get-Mailbox -ResultSize ${n} | Get-MailboxStatistics | Select-Object DisplayName,TotalItemSize | Select-Object -First ${n}`).catch(() => []);
+      const boxes = await ps.invokeJson(`Get-Mailbox -ResultSize ${n} | Select-Object DisplayName,PrimarySmtpAddress,ProhibitSendQuota`);
+      const stats = await ps.invokeJson(`Get-Mailbox -ResultSize ${n} | Get-MailboxStatistics | Select-Object DisplayName,TotalItemSize`).catch(() => []);
       const sizeByName = new Map((Array.isArray(stats) ? stats : []).map((s: any) => [String(s.DisplayName ?? ""), s.TotalItemSize]));
       const ranked = (Array.isArray(boxes) ? boxes : [])
         .map((b: any) => {
@@ -216,9 +223,9 @@ export function registerReportTools(server: McpServer, ps: PowerShellProvider) {
     { resultSize: z.number().optional() },
     async ({ resultSize }) => {
       const n = Math.min(resultSize ?? 500, 1000);
-      const d = await ps.invokeJson(`Get-CASMailbox -ResultSize ${n} | Select-Object DisplayName,PrimarySmtpAddress,OWAEnabled,MAPIEnabled,ActiveSyncEnabled,PopEnabled,ImapEnabled | Select-Object -First ${n}`);
+      const d = await ps.invokeJson(`Get-CASMailbox -ResultSize ${n} | Select-Object DisplayName,PrimarySmtpAddress,OWAEnabled,MAPIEnabled,ActiveSyncEnabled,PopEnabled,ImapEnabled`);
       const rows = Array.isArray(d) ? d : [];
-      const pick = (k: string) => rows.filter((x: any) => x[k] === true).map((x: any) => ({ DisplayName: x.DisplayName, PrimarySmtpAddress: x.PrimarySmtpAddress })).slice(0, 50);
+      const pick = (k: string) => rows.filter((x: any) => x[k] === true).map((x: any) => ({ DisplayName: x.DisplayName, PrimarySmtpAddress: x.PrimarySmtpAddress }));
       const popUsers = pick("PopEnabled");
       const imapUsers = pick("ImapEnabled");
       const summary = { popEnabled: popUsers.length, imapEnabled: imapUsers.length, mapiEnabled: rows.filter((x: any) => x.MAPIEnabled === true).length, activeSyncEnabled: rows.filter((x: any) => x.ActiveSyncEnabled === true).length };
@@ -231,8 +238,8 @@ export function registerReportTools(server: McpServer, ps: PowerShellProvider) {
     "Connector inventory — send and receive connectors with key settings in one view",
     {},
     async () => {
-      const send = await ps.invokeJson(`Get-SendConnector | Select-Object Name,Enabled,AddressSpaces | Select-Object -First 20`).catch(() => []);
-      const recv = await ps.invokeJson(`Get-ReceiveConnector | Select-Object Name,Enabled,Bindings | Select-Object -First 20`).catch(() => []);
+      const send = await ps.invokeJson(`Get-SendConnector | Select-Object Name,Enabled,AddressSpaces`).catch(() => []);
+      const recv = await ps.invokeJson(`Get-ReceiveConnector | Select-Object Name,Enabled,Bindings`).catch(() => []);
       return { content: [{ type: "text", text: JSON.stringify({ sendConnectors: send, receiveConnectors: recv }, null, 2) }] };
     },
   );
@@ -259,11 +266,11 @@ export function registerReportTools(server: McpServer, ps: PowerShellProvider) {
     { resultSize: z.number().optional() },
     async ({ resultSize }) => {
       const g = Math.min(resultSize ?? 50, 200);
-      const groups = await ps.invokeJson(`Get-DistributionGroup -ResultSize ${g} | Select-Object Name,PrimarySmtpAddress | Select-Object -First ${g}`);
+      const groups = await ps.invokeJson(`Get-DistributionGroup -ResultSize ${g} | Select-Object Name,PrimarySmtpAddress`);
       const rows = Array.isArray(groups) ? groups.slice(0, g) : [];
       const out: Array<{ name: string; primarySmtpAddress: string; memberCount: number }> = [];
       for (const grp of rows) {
-        const members = await ps.invokeJson(`Get-DistributionGroupMember -Identity "${grp.Name}" | Select-Object DisplayName | Select-Object -First 1000`).catch(() => []);
+        const members = await ps.invokeJson(`Get-DistributionGroupMember -Identity "${grp.Name}" -ResultSize 1000 | Select-Object DisplayName`).catch(() => []);
         out.push({ name: grp.Name, primarySmtpAddress: grp.PrimarySmtpAddress, memberCount: Array.isArray(members) ? members.length : 0 });
       }
       const empty = out.filter((x) => x.memberCount === 0);
@@ -277,7 +284,7 @@ export function registerReportTools(server: McpServer, ps: PowerShellProvider) {
     "Move request board — all move requests with status, progress and target database",
     {},
     async () => {
-      const d = await ps.invokeJson(`Get-MoveRequest -ResultSize 100 | Select-Object DisplayName,Status,PercentComplete,TargetDatabase | Select-Object -First 100`).catch(() => []);
+      const d = await ps.invokeJson(`Get-MoveRequest -ResultSize 100 | Select-Object DisplayName,Status,PercentComplete,TargetDatabase`).catch(() => []);
       const rows = Array.isArray(d) ? d : [];
       const byStatus: Record<string, number> = {};
       for (const r of rows) {
@@ -294,7 +301,7 @@ export function registerReportTools(server: McpServer, ps: PowerShellProvider) {
     { resultSize: z.number().optional() },
     async ({ resultSize }) => {
       const n = Math.min(resultSize ?? 1000, 1000);
-      const d = await ps.invokeJson(`Get-Mailbox -ResultSize ${n} | Select-Object DisplayName,Database | Select-Object -First ${n}`);
+      const d = await ps.invokeJson(`Get-Mailbox -ResultSize ${n} | Select-Object DisplayName,Database`);
       const counts = new Map<string, number>();
       for (const m of Array.isArray(d) ? d : []) {
         const db = String((m as any)?.Database ?? "Unknown");
@@ -312,8 +319,8 @@ export function registerReportTools(server: McpServer, ps: PowerShellProvider) {
     "Domain inventory — accepted and remote domains in one view",
     {},
     async () => {
-      const accepted = await ps.invokeJson(`Get-AcceptedDomain | Select-Object Name,DomainName,Default | Select-Object -First 50`).catch(() => []);
-      const remote = await ps.invokeJson(`Get-RemoteDomain | Select-Object Name,DomainName | Select-Object -First 50`).catch(() => []);
+      const accepted = await ps.invokeJson(`Get-AcceptedDomain | Select-Object Name,DomainName,Default`).catch(() => []);
+      const remote = await ps.invokeJson(`Get-RemoteDomain | Select-Object Name,DomainName`).catch(() => []);
       return { content: [{ type: "text", text: JSON.stringify({ acceptedDomains: accepted, remoteDomains: remote }, null, 2) }] };
     },
   );

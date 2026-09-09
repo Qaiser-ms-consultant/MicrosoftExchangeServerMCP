@@ -10,12 +10,12 @@ export function registerAICoreTools(server: McpServer, ps: PowerShellProvider) {
     {},
     async () => {
       const [copyStatus, certs, dbs, inactive, queues, health] = await Promise.all([
-        ps.invokeJson(`Get-MailboxDatabaseCopyStatus | Select-Object Identity,Status | Select-Object -First 20`).catch(() => []),
-        ps.invokeJson(`Get-ExchangeCertificate | Select-Object Subject,NotAfter,Services | Select-Object -First 20`).catch(() => []),
-        ps.invokeJson(`Get-MailboxDatabase | Select-Object Name,DatabaseSize,AvailableNewMailboxSpace | Select-Object -First 20`).catch(() => []),
-        ps.invokeJson(`Get-Mailbox -ResultSize 50 | Get-MailboxStatistics | Select-Object DisplayName,TotalItemSize | Select-Object -First 50`).catch(() => []),
-        ps.invokeJson(`Get-Queue | Select-Object Identity,MessageCount | Select-Object -First 10`).catch(() => []),
-        ps.invokeJson(`Get-HealthReport | Select-Object HealthSet,AlertValue | Select-Object -First 10`).catch(() => []),
+        ps.invokeJson(`Get-MailboxDatabaseCopyStatus | Select-Object Identity,Status`).catch(() => []),
+        ps.invokeJson(`Get-ExchangeCertificate | Select-Object Subject,NotAfter,Services`).catch(() => []),
+        ps.invokeJson(`Get-MailboxDatabase | Select-Object Name,DatabaseSize,AvailableNewMailboxSpace`).catch(() => []),
+        ps.invokeJson(`Get-Mailbox -ResultSize 50 | Get-MailboxStatistics | Select-Object DisplayName,TotalItemSize`).catch(() => []),
+        ps.invokeJson(`Get-Queue | Select-Object Identity,MessageCount`).catch(() => []),
+        ps.invokeJson(`Get-HealthReport | Select-Object HealthSet,AlertValue`).catch(() => []),
       ]);
       const unhealthyCopies = (copyStatus as any[]).filter((c) => c.Status && String(c.Status).toLowerCase() !== "mounted" && String(c.Status).toLowerCase() !== "healthy").length;
       const expiringCerts = (certs as any[]).filter((c) => {
@@ -68,14 +68,14 @@ export function registerAICoreTools(server: McpServer, ps: PowerShellProvider) {
     async ({ queueIdentity, domain }) => {
       const targetDomain = domain ?? "example.com";
       const steps: Record<string, unknown> = {};
-      steps.queue = await ps.invokeJson(`Get-Queue ${queueIdentity ? `-Identity "${queueIdentity}"` : ""} | Select-Object Identity,MessageCount,Status,LastError,NextHopDomain | Select-Object -First 5`).catch(() => []);
-      steps.smtpErrors = await ps.invokeJson(`Get-MessageTrackingLog -ResultSize 20 -EventId FAIL | Select-Object SourceContext,Recipients | Select-Object -First 5`).catch(() => []);
-      steps.connector = await ps.invokeJson(`Get-SendConnector | Select-Object Name,AddressSpaces,SourceTransportServers | Select-Object -First 5`).catch(() => []);
-      steps.dns = await ps.invokeJson(`Resolve-DnsName -Name ${targetDomain} -ErrorAction SilentlyContinue | Select-Object Name,IPAddress | Select-Object -First 5`).catch(() => []);
+      steps.queue = await ps.invokeJson(`Get-Queue ${queueIdentity ? `-Identity "${queueIdentity}"` : ""} | Select-Object Identity,MessageCount,Status,LastError,NextHopDomain`).catch(() => []);
+      steps.smtpErrors = await ps.invokeJson(`Get-MessageTrackingLog -ResultSize 20 -EventId FAIL | Select-Object SourceContext,Recipients`).catch(() => []);
+      steps.connector = await ps.invokeJson(`Get-SendConnector | Select-Object Name,AddressSpaces,SourceTransportServers`).catch(() => []);
+      steps.dns = await ps.invokeJson(`Resolve-DnsName -Name ${targetDomain} -ErrorAction SilentlyContinue | Select-Object Name,IPAddress`).catch(() => []);
       steps.cpu = await ps.invokeJson(`Get-Counter "\\Processor(_Total)\\% Processor Time" -SampleInterval 1 -MaxSamples 1 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty CounterSamples | Select-Object CookedValue`).catch(() => []);
-      steps.disk = await ps.invokeJson(`Get-WmiObject Win32_LogicalDisk -Filter "DriveType=3" | Select-Object DeviceID,FreeSpace | Select-Object -First 3`).catch(() => []);
-      steps.transport = await ps.invokeJson(`Get-TransportService | Select-Object Name,ExternalDNSAdapterEnabled | Select-Object -First 3`).catch(() => []);
-      steps.tracking = await ps.invokeJson(`Get-MessageTrackingLog -ResultSize 10 -Start (Get-Date).AddHours(-1) | Select-Object Timestamp,EventId,SourceContext | Select-Object -First 5`).catch(() => []);
+      steps.disk = await ps.invokeJson(`Get-WmiObject Win32_LogicalDisk -Filter "DriveType=3" | Select-Object DeviceID,FreeSpace`).catch(() => []);
+      steps.transport = await ps.invokeJson(`Get-TransportService | Select-Object Name,ExternalDNSAdapterEnabled`).catch(() => []);
+      steps.tracking = await ps.invokeJson(`Get-MessageTrackingLog -ResultSize 10 -Start (Get-Date).AddHours(-1) | Select-Object Timestamp,EventId,SourceContext`).catch(() => []);
 
       const queueArr = steps.queue as any[];
       const hasQueueGrowth = Array.isArray(queueArr) && queueArr.some((q: any) => q.MessageCount > 100);
@@ -104,7 +104,7 @@ export function registerAICoreTools(server: McpServer, ps: PowerShellProvider) {
     async ({ sender, daysBaseline }) => {
       const days = daysBaseline ?? 30;
       // Baseline: avg per day over last `days`
-      const history = await ps.invokeJson(`Get-MessageTrackingLog -ResultSize 500 -Start (Get-Date).AddDays(-${days}) -EventId SEND | Group-Object Sender | Select-Object Name,Count | Sort-Object Count -Descending | Select-Object -First 5`).catch(() => []);
+      const history = await ps.invokeJson(`Get-MessageTrackingLog -ResultSize 500 -Start (Get-Date).AddDays(-${days}) -EventId SEND | Group-Object Sender | Select-Object Name,Count | Sort-Object Count -Descending`).catch(() => []);
       const today = await ps.invokeJson(`Get-MessageTrackingLog -ResultSize 500 -Start (Get-Date).AddDays(-1) -EventId SEND | Group-Object Sender | Sort-Object Count -Descending | Select-Object Name,Count -First 5`).catch(() => []);
       const histMap = new Map<string, number>((history as any[]).map((h: any) => [h.Name, Math.round(h.Count / days)]));
       const anomalies: any[] = [];
@@ -114,7 +114,7 @@ export function registerAICoreTools(server: McpServer, ps: PowerShellProvider) {
         if (ratio >= 10) anomalies.push({ user: t.Name, normally: `~${base}/day`, today: t.Count, ratio: `${Math.round(ratio)}×`, note: ratio >= 50 ? "71× normal activity — potential compromised account" : "10× normal volume" });
       }
       // Queue spike
-      const queues = await ps.invokeJson(`Get-Queue | Select-Object Identity,MessageCount | Select-Object -First 5`).catch(() => []);
+      const queues = await ps.invokeJson(`Get-Queue | Select-Object Identity,MessageCount`).catch(() => []);
       const queueSpike = (queues as any[]).find((q: any) => q.MessageCount > 1000);
       if (queueSpike) anomalies.push({ type: "queue", queue: queueSpike.Identity, count: queueSpike.MessageCount, note: "Queue suddenly increases" });
       if (!anomalies.length) anomalies.push({ note: "No anomalies detected — all senders within 2× baseline" });

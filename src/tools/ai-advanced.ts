@@ -9,8 +9,8 @@ export function registerAIAdvancedTools(server: McpServer, ps: PowerShellProvide
     "AI Capacity Forecast — predicts DB 90% in 67d, mailbox quota in ~5mo, CPU constrained (uses linear trend on DatabaseSize/TotalItemSize)",
     {},
     async () => {
-      const dbs = await ps.invokeJson(`Get-MailboxDatabase | Select-Object Name,DatabaseSize,AvailableNewMailboxSpace | Select-Object -First 10`).catch(() => []);
-      const mbs = await ps.invokeJson(`Get-Mailbox -ResultSize 20 | Get-MailboxStatistics | Select-Object DisplayName,TotalItemSize | Select-Object -First 20`).catch(() => []);
+      const dbs = await ps.invokeJson(`Get-MailboxDatabase | Select-Object Name,DatabaseSize,AvailableNewMailboxSpace`).catch(() => []);
+      const mbs = await ps.invokeJson(`Get-Mailbox -ResultSize 20 | Get-MailboxStatistics | Select-Object DisplayName,TotalItemSize`).catch(() => []);
       // Heuristic: parse DatabaseSize like "500 GB (536,870,912,000 bytes)" -> rough
       const forecasts = (dbs as any[]).slice(0, 3).map((db: any, i: number) => ({
         database: db.Name,
@@ -39,9 +39,9 @@ export function registerAIAdvancedTools(server: McpServer, ps: PowerShellProvide
     "AI Cleanup Recommendation — categorizes 143 inactive mailboxes into 74 >180d, 31 disabled AD, 18 departed, 12 shared, 8 system — estimates 680GB recoverable",
     {},
     async () => {
-      const inactive = await ps.invokeJson(`Get-Mailbox -ResultSize 50 | Get-MailboxStatistics | Where-Object { $_.LastLogonTime -lt (Get-Date).AddDays(-90) } | Select-Object DisplayName | Select-Object -First 50`).catch(() => []);
-      const soft = await ps.invokeJson(`Get-Mailbox -SoftDeletedMailbox -ResultSize 20 | Select-Object DisplayName | Select-Object -First 20`).catch(() => []);
-      const shared = await ps.invokeJson(`Get-Mailbox -RecipientTypeDetails SharedMailbox -ResultSize 20 | Get-MailboxStatistics | Where-Object { $_.LastLogonTime -lt (Get-Date).AddDays(-90) } | Select-Object DisplayName | Select-Object -First 20`).catch(() => []);
+      const inactive = await ps.invokeJson(`Get-Mailbox -ResultSize 50 | Get-MailboxStatistics | Where-Object { $_.LastLogonTime -lt (Get-Date).AddDays(-90) } | Select-Object DisplayName`).catch(() => []);
+      const soft = await ps.invokeJson(`Get-Mailbox -SoftDeletedMailbox -ResultSize 20 | Select-Object DisplayName`).catch(() => []);
+      const shared = await ps.invokeJson(`Get-Mailbox -RecipientTypeDetails SharedMailbox -ResultSize 20 | Get-MailboxStatistics | Where-Object { $_.LastLogonTime -lt (Get-Date).AddDays(-90) } | Select-Object DisplayName`).catch(() => []);
       const total = (inactive as any[]).length || 143;
       return {
         content: [
@@ -79,10 +79,10 @@ export function registerAIAdvancedTools(server: McpServer, ps: PowerShellProvide
     {},
     async () => {
       const [fwd, auth, relay, legacy] = await Promise.all([
-        ps.invokeJson(`Get-Mailbox -ResultSize 20 | Where-Object { $_.ForwardingSmtpAddress -ne $null } | Select-Object DisplayName | Select-Object -First 5`).catch(() => []),
+        ps.invokeJson(`Get-Mailbox -ResultSize 20 | Where-Object { $_.ForwardingSmtpAddress -ne $null } | Select-Object DisplayName`).catch(() => []),
         ps.invokeJson(`Get-CASMailbox -ResultSize 50 | Where-Object { $_.SmtpClientAuthenticationDisabled -eq $false } | Measure-Object | Select-Object -ExpandProperty Count`).catch(() => 0),
-        ps.invokeJson(`Get-ReceiveConnector | Where-Object { $_.PermissionGroups -like "*AnonymousUsers*" } | Select-Object Name | Select-Object -First 5`).catch(() => []),
-        ps.invokeJson(`Get-CASMailbox -ResultSize 20 | Where-Object { $_.PopEnabled -or $_.ImapEnabled } | Select-Object Identity | Select-Object -First 5`).catch(() => []),
+        ps.invokeJson(`Get-ReceiveConnector | Where-Object { $_.PermissionGroups -like "*AnonymousUsers*" } | Select-Object Name`).catch(() => []),
+        ps.invokeJson(`Get-CASMailbox -ResultSize 20 | Where-Object { $_.PopEnabled -or $_.ImapEnabled } | Select-Object Identity`).catch(() => []),
       ]);
       const reasons: string[] = [];
       if ((fwd as any[]).length) reasons.push(`${(fwd as any[]).length} accounts have external forwarding`);
@@ -107,7 +107,7 @@ export function registerAIAdvancedTools(server: McpServer, ps: PowerShellProvide
     "AI Permission Risk — who has more access than needed (FullAccess >20, SendAs sensitive, external, former employees)",
     {},
     async () => {
-      const perms = await ps.invokeJson(`Get-Mailbox -ResultSize 10 | ForEach-Object { Get-MailboxPermission -Identity $_.Identity | Where-Object { $_.AccessRights -like "*FullAccess*" -and $_.User -notlike "NT*" } | Select-Object Identity,User } | Group-Object User | Select-Object Name,Count | Sort-Object Count -Descending | Select-Object -First 10`).catch(() => []);
+      const perms = await ps.invokeJson(`Get-Mailbox -ResultSize 10 | ForEach-Object { Get-MailboxPermission -Identity $_.Identity | Where-Object { $_.AccessRights -like "*FullAccess*" -and $_.User -notlike "NT*" } | Select-Object Identity,User } | Group-Object User | Select-Object Name,Count | Sort-Object Count -Descending`).catch(() => []);
       const excessive = (perms as any[]).filter((p: any) => p.Count > 5);
       return {
         content: [
@@ -176,7 +176,7 @@ export function registerAIAdvancedTools(server: McpServer, ps: PowerShellProvide
     "AI NDR Intelligence — groups 550 5.1.1 etc into Invalid recipient 842, Blocked 421, Unavailable 311, Policy 182",
     {},
     async () => {
-      const fails = await ps.invokeJson(`Get-MessageTrackingLog -ResultSize 200 -EventId FAIL | Select-Object SourceContext | Select-Object -First 50`).catch(() => []);
+      const fails = await ps.invokeJson(`Get-MessageTrackingLog -ResultSize 200 -EventId FAIL | Select-Object SourceContext`).catch(() => []);
       const groups: Record<string, number> = { "Invalid recipient": 0, "Recipient blocked": 0, "Remote server unavailable": 0, "Policy rejection": 0 };
       for (const f of fails as any[]) {
         const s = String(f.SourceContext ?? "");

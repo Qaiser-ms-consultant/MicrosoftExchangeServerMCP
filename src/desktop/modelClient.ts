@@ -266,6 +266,7 @@ export function buildSummaryMessages(prompt: string, tool: string, resultJson: s
     "Do not bold entire sentences; use bold only for 1-3 key terms or values per response.",
     "Do not propose commands or next steps in prose — the UI offers follow-up actions separately; end with at most one plain-language recommendation when action is needed, otherwise end without filler.",
     "If the request is a follow-up (e.g. why, what about it), resolve pronouns and names from the conversation context; if the context lacks the facts, say so and suggest the check to run.",
+    "Use conversation context ONLY to resolve omitted identities — never re-report earlier exchanges. A standalone request gets an answer drawn solely from the current tool result.",
   ].join(" ");
   const contextPrefix = historyContext ? `${historyContext}\n\n` : "";
   return [

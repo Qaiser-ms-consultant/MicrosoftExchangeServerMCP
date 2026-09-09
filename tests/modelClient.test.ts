@@ -105,6 +105,11 @@ describe("buildSummaryMessages", () => {
     expect(msgs[1].content).toContain("Earlier: queues");
     expect(msgs[1].content.indexOf("Earlier: queues")).toBeLessThan(msgs[1].content.indexOf("why?"));
   });
+  it("scopes context to identity resolution, never re-reporting earlier exchanges", () => {
+    const msgs = buildSummaryMessages("get transport rules", "exchange_get_transport_rules", '{"rules":[]}');
+    expect(msgs[0].content).toMatch(/solely from the current tool result/i);
+    expect(msgs[0].content).toMatch(/never re-report earlier exchanges/i);
+  });
 });
 
 describe("isEmptyResult", () => {

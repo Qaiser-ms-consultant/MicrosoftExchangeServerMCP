@@ -14,7 +14,7 @@ export function registerComplianceTools(server: McpServer, ps: PowerShellProvide
     async ({ identity, filter }) => {
       let cmd = identity
         ? `Get-Mailbox -Identity "${identity}" | Select-Object DisplayName,PrimarySmtpAddress,LitigationHoldEnabled,LitigationHoldDuration,LitigationHoldOwner,InPlaceHolds,RetentionHoldEnabled,RetentionComment`
-        : `Get-Mailbox -ResultSize 20${filter ? ` -Filter {${filter}}` : ""} | Select-Object DisplayName,PrimarySmtpAddress,LitigationHoldEnabled,LitigationHoldDuration,InPlaceHolds | Select-Object -First 20`;
+        : `Get-Mailbox -ResultSize 20${filter ? ` -Filter {${filter}}` : ""} | Select-Object DisplayName,PrimarySmtpAddress,LitigationHoldEnabled,LitigationHoldDuration,InPlaceHolds`;
       const data = await ps.invokeJson(cmd);
       return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
     },
@@ -49,10 +49,10 @@ export function registerComplianceTools(server: McpServer, ps: PowerShellProvide
       }
       // List all mailbox searches that represent holds (Exchange 2013 style)
       try {
-        const data = await ps.invokeJson(`Get-MailboxSearch | Select-Object Name,Source,Status,InPlaceHoldEnabled,CreatedBy | Select-Object -First 20`);
+        const data = await ps.invokeJson(`Get-MailboxSearch | Select-Object Name,Source,Status,InPlaceHoldEnabled,CreatedBy`);
         return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
       } catch {
-        const data = await ps.invokeJson(`Get-Mailbox -ResultSize 20 | Where-Object { $_.InPlaceHolds -ne $null } | Select-Object DisplayName,InPlaceHolds | Select-Object -First 20`);
+        const data = await ps.invokeJson(`Get-Mailbox -ResultSize 20 | Where-Object { $_.InPlaceHolds -ne $null } | Select-Object DisplayName,InPlaceHolds`);
         return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
       }
     },
@@ -63,7 +63,7 @@ export function registerComplianceTools(server: McpServer, ps: PowerShellProvide
     "Get retention policies and tags (MRM) — Get-RetentionPolicy / Get-RetentionPolicyTag",
     { identity: z.string().optional() },
     async ({ identity }) => {
-      const cmd = identity ? `Get-RetentionPolicy -Identity "${identity}"` : `Get-RetentionPolicy | Select-Object Name,RetentionPolicyTagLinks | Select-Object -First 20`;
+      const cmd = identity ? `Get-RetentionPolicy -Identity "${identity}"` : `Get-RetentionPolicy | Select-Object Name,RetentionPolicyTagLinks`;
       const data = await ps.invokeJson(cmd);
       return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
     },
@@ -74,7 +74,7 @@ export function registerComplianceTools(server: McpServer, ps: PowerShellProvide
     "Get retention policy tags (Get-RetentionPolicyTag)",
     {},
     async () => {
-      const data = await ps.invokeJson(`Get-RetentionPolicyTag | Select-Object Name,Type,RetentionEnabled,AgeLimitForRetention,RetentionAction | Select-Object -First 20`);
+      const data = await ps.invokeJson(`Get-RetentionPolicyTag | Select-Object Name,Type,RetentionEnabled,AgeLimitForRetention,RetentionAction`);
       return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
     },
   );
@@ -84,7 +84,7 @@ export function registerComplianceTools(server: McpServer, ps: PowerShellProvide
     "Get journal rules (Get-JournalRule) — compliance journaling",
     {},
     async () => {
-      const data = await ps.invokeJson(`Get-JournalRule | Select-Object Name,JournalEmailAddress,Scope,Enabled | Select-Object -First 20`);
+      const data = await ps.invokeJson(`Get-JournalRule | Select-Object Name,JournalEmailAddress,Scope,Enabled`);
       return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
     },
   );

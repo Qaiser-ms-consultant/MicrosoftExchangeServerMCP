@@ -55,7 +55,7 @@ export function registerMailboxRecoveryTools(server: McpServer, ps: PowerShellPr
       let cmd = `Get-Mailbox -SoftDeletedMailbox -ResultSize 20`;
       if (filter) cmd += ` -Filter {Name -like "*${filter}*"} `;
       if (database) cmd += ` -Database "${database}"`;
-      cmd += ` | Select-Object DisplayName,PrimarySmtpAddress,ExchangeGuid,WhenSoftDeleted | Select-Object -First 20`;
+      cmd += ` | Select-Object DisplayName,PrimarySmtpAddress,ExchangeGuid,WhenSoftDeleted`;
       const d = await ps.invokeJson(cmd);
       return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
     },
@@ -105,7 +105,7 @@ export function registerMailboxRecoveryTools(server: McpServer, ps: PowerShellPr
     "Get restore request status (Get-MailboxRestoreRequest)",
     { identity: z.string().optional() },
     async ({ identity }) => {
-      const d = await ps.invokeJson(identity ? `Get-MailboxRestoreRequest -Identity "${identity}" | Select-Object Identity,Status,PercentComplete` : `Get-MailboxRestoreRequest | Select-Object Identity,Status,PercentComplete | Select-Object -First 20`);
+      const d = await ps.invokeJson(identity ? `Get-MailboxRestoreRequest -Identity "${identity}" | Select-Object Identity,Status,PercentComplete` : `Get-MailboxRestoreRequest | Select-Object Identity,Status,PercentComplete`);
       return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
     },
   );
@@ -137,8 +137,8 @@ export function registerMailboxRecoveryTools(server: McpServer, ps: PowerShellPr
     async ({ identity, mailbox }) => {
       let cmd: string;
       if (identity) cmd = `Get-MailboxImportRequest -Identity "${identity}" | Select-Object Identity,Mailbox,Status,PercentComplete,FilePath`;
-      else if (mailbox) cmd = `Get-MailboxImportRequest -Mailbox "${mailbox}" | Select-Object Identity,Status,PercentComplete,FilePath | Select-Object -First 20`;
-      else cmd = `Get-MailboxImportRequest | Select-Object Identity,Mailbox,Status,PercentComplete | Select-Object -First 20`;
+      else if (mailbox) cmd = `Get-MailboxImportRequest -Mailbox "${mailbox}" | Select-Object Identity,Status,PercentComplete,FilePath`;
+      else cmd = `Get-MailboxImportRequest | Select-Object Identity,Mailbox,Status,PercentComplete`;
       const d = await ps.invokeJson(cmd);
       return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
     },

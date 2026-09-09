@@ -12,7 +12,7 @@ export function registerDiagnosticsExtended(server: McpServer, ps: PowerShellPro
       if (mailbox) cmd += ` -MailboxDatabase "${database ?? ""}"`;
       if (mailbox) cmd = `Test-ExchangeSearch -Identity "${mailbox}"`;
       else if (database) cmd = `Test-ExchangeSearch -MailboxDatabase "${database}"`;
-      const d = await ps.invokeJson(`${cmd} | Select-Object Identity,ResultFound,SearchTime | Select-Object -First 5`);
+      const d = await ps.invokeJson(`${cmd} | Select-Object Identity,ResultFound,SearchTime`);
       return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
     },
   );
@@ -22,9 +22,9 @@ export function registerDiagnosticsExtended(server: McpServer, ps: PowerShellPro
     "Get MoveRequest statistics with polling (Get-MoveRequestStatistics) — for migration ETA and content index (poll until PercentComplete)",
     { identity: z.string().optional().describe("MoveRequest identity, e.g. alias\\MoveRequest"), poll: z.boolean().optional() },
     async ({ identity, poll }) => {
-      const base = identity ? `Get-MoveRequestStatistics -Identity "${identity}"` : `Get-MoveRequestStatistics | Select-Object Identity,Status,PercentComplete,BytesTransferred | Select-Object -First 10`;
-      const select = ` | Select-Object Identity,Status,PercentComplete,BytesTransferred,Message,FailureType | Select-Object -First 10`;
-      const cmd = identity ? `${base} | Select-Object Identity,Status,PercentComplete,BytesTransferred,Message | Select-Object -First 1` : `${base} | Select-Object Identity,Status,PercentComplete | Select-Object -First 10`;
+      const base = identity ? `Get-MoveRequestStatistics -Identity "${identity}"` : `Get-MoveRequestStatistics | Select-Object Identity,Status,PercentComplete,BytesTransferred`;
+      const select = ` | Select-Object Identity,Status,PercentComplete,BytesTransferred,Message,FailureType`;
+      const cmd = identity ? `${base} | Select-Object Identity,Status,PercentComplete,BytesTransferred,Message | Select-Object -First 1` : `${base} | Select-Object Identity,Status,PercentComplete`;
       // If poll, loop 3 times with 2s delay (simple)
       if (poll && identity) {
         for (let i = 0; i < 3; i++) {

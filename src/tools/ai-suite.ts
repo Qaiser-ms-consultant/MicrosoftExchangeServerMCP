@@ -6,11 +6,11 @@ export function registerAISuiteTools(server: McpServer, ps: PowerShellProvider) 
   // 26. Configuration Risk
   server.tool("ai.configuration_risk", "AI Configuration Risk — scans for risky config (broad receive connector, anonymous relay, weak TLS, legacy auth, excessive perms, external forwarding)", {}, async () => {
     const [recv, tls, perms, fwd, rules] = await Promise.all([
-      ps.invokeJson(`Get-ReceiveConnector | Select-Object Name,PermissionGroups,Bindings | Select-Object -First 10`).catch(() => []),
+      ps.invokeJson(`Get-ReceiveConnector | Select-Object Name,PermissionGroups,Bindings`).catch(() => []),
       ps.invokeJson(`Get-TransportConfig | Select-Object TLSReceiveDomainSecureList | Select-Object -First 1`).catch(() => []),
-      ps.invokeJson(`Get-Mailbox -ResultSize 10 | ForEach-Object { Get-MailboxPermission -Identity $_.Identity | Measure-Object | Select-Object Count } | Select-Object -First 5`).catch(() => []),
-      ps.invokeJson(`Get-Mailbox -ResultSize 20 | Where-Object { $_.ForwardingSmtpAddress -ne $null } | Select-Object DisplayName | Select-Object -First 5`).catch(() => []),
-      ps.invokeJson(`Get-TransportRule | Select-Object Name | Select-Object -First 5`).catch(() => []),
+      ps.invokeJson(`Get-Mailbox -ResultSize 10 | ForEach-Object { Get-MailboxPermission -Identity $_.Identity | Measure-Object | Select-Object Count }`).catch(() => []),
+      ps.invokeJson(`Get-Mailbox -ResultSize 20 | Where-Object { $_.ForwardingSmtpAddress -ne $null } | Select-Object DisplayName`).catch(() => []),
+      ps.invokeJson(`Get-TransportRule | Select-Object Name`).catch(() => []),
     ]);
     const risks: string[] = [];
     if ((recv as any[]).some((r: any) => String(r.PermissionGroups).includes("AnonymousUsers"))) risks.push("Broad receive connector permissions");
@@ -27,8 +27,8 @@ export function registerAISuiteTools(server: McpServer, ps: PowerShellProvider) 
     "AI Migration Advisor — analyzes mailbox locations, types, DB health, size, litigation hold, archive, move restrictions, capacity for migration to target version",
     { targetVersion: z.string().optional().describe("e.g. Exchange 2019, Subscription Edition"), sourceVersion: z.string().optional() },
     async ({ targetVersion }) => {
-      const mbs = await ps.invokeJson(`Get-Mailbox -ResultSize 50 | Select-Object DisplayName,Database,RecipientTypeDetails,LitigationHoldEnabled,ArchiveStatus | Select-Object -First 50`).catch(() => []);
-      const dbs = await ps.invokeJson(`Get-MailboxDatabase | Select-Object Name,AvailableNewMailboxSpace | Select-Object -First 10`).catch(() => []);
+      const mbs = await ps.invokeJson(`Get-Mailbox -ResultSize 50 | Select-Object DisplayName,Database,RecipientTypeDetails,LitigationHoldEnabled,ArchiveStatus`).catch(() => []);
+      const dbs = await ps.invokeJson(`Get-MailboxDatabase | Select-Object Name,AvailableNewMailboxSpace`).catch(() => []);
       const total = (mbs as any[]).length || 1885;
       const blocked = 43;
       const ready = total - blocked;
@@ -57,7 +57,7 @@ export function registerAISuiteTools(server: McpServer, ps: PowerShellProvider) 
 
   // 28. Migration Prioritization — Batch 1-4
   server.tool("ai.migration_prioritization", "AI Migration Prioritization — recommended sequence Batch 1-4 by size/activity/health/importance", {}, async () => {
-    const mbs = await ps.invokeJson(`Get-Mailbox -ResultSize 20 | Get-MailboxStatistics | Select-Object DisplayName,TotalItemSize | Sort-Object TotalItemSize | Select-Object -First 20`).catch(() => []);
+    const mbs = await ps.invokeJson(`Get-Mailbox -ResultSize 20 | Get-MailboxStatistics | Select-Object DisplayName,TotalItemSize | Sort-Object TotalItemSize`).catch(() => []);
     return {
       content: [
         {
@@ -84,7 +84,7 @@ export function registerAISuiteTools(server: McpServer, ps: PowerShellProvider) 
   // 29. Migration ETA — 327 remaining, 38/h, 8h 35m
   server.tool("ai.migration_eta", "AI Migration ETA — estimates remaining, throughput, completion (dynamic)", {}, async () => {
     const reqs = await ps.invokeJson(`Get-MoveRequest | Group-Object Status | Select-Object Name,Count`).catch(() => []);
-    const stats = await ps.invokeJson(`Get-MoveRequestStatistics | Select-Object Status,PercentComplete | Select-Object -First 10`).catch(() => []);
+    const stats = await ps.invokeJson(`Get-MoveRequestStatistics | Select-Object Status,PercentComplete`).catch(() => []);
     const remaining = 327;
     const throughput = 38;
     const eta = "8h 35m";
@@ -101,19 +101,19 @@ export function registerAISuiteTools(server: McpServer, ps: PowerShellProvider) 
       let cmd = "";
       let hint = "";
       if (q.includes("over 50 gb") || q.includes("50 gb")) {
-        cmd = `Get-Mailbox -ResultSize 50 | Get-MailboxStatistics | Where-Object { $_.TotalItemSize.Value.ToBytes() -gt 50GB } | Select-Object DisplayName,TotalItemSize | Select-Object -First 20`;
+        cmd = `Get-Mailbox -ResultSize 50 | Get-MailboxStatistics | Where-Object { $_.TotalItemSize.Value.ToBytes() -gt 50GB } | Select-Object DisplayName,TotalItemSize`;
         hint = "Filter by TotalItemSize >50GB — see also report.largest_mailboxes / report.generate_mailbox_size_report";
       } else if (q.includes("whitespace") && q.includes("100")) {
-        cmd = `Get-MailboxDatabase | Where-Object { $_.AvailableNewMailboxSpace.ToBytes() -gt 100GB } | Select-Object Name,AvailableNewMailboxSpace | Select-Object -First 20`;
+        cmd = `Get-MailboxDatabase | Where-Object { $_.AvailableNewMailboxSpace.ToBytes() -gt 100GB } | Select-Object Name,AvailableNewMailboxSpace`;
         hint = "Whitespace >100GB — see report.database_whitespace";
       } else if (q.includes("why") && q.includes("unhealthy")) {
-        cmd = `Get-ServerHealth | Where-Object { $_.AlertValue -ne "Healthy" } | Select-Object HealthSet,AlertValue | Select-Object -First 10`;
+        cmd = `Get-ServerHealth | Where-Object { $_.AlertValue -ne "Healthy" } | Select-Object HealthSet,AlertValue`;
         hint = "Unhealthy HealthSets — see exchange_get_server_health / ai.root_cause_analysis";
       } else if (q.includes("send as") && q.includes("5")) {
-        cmd = `Get-Mailbox -ResultSize 20 | ForEach-Object { Get-RecipientPermission -Identity $_.Identity | Measure-Object | Select-Object Count } | Select-Object -First 10`;
+        cmd = `Get-Mailbox -ResultSize 20 | ForEach-Object { Get-RecipientPermission -Identity $_.Identity | Measure-Object | Select-Object Count }`;
         hint = "Send As >5 — see report.send_as";
       } else if (q.includes("not logged in") && q.includes("90")) {
-        cmd = `Get-Mailbox -ResultSize 50 | Get-MailboxStatistics | Where-Object { $_.LastLogonTime -lt (Get-Date).AddDays(-90) } | Select-Object DisplayName,LastLogonTime | Select-Object -First 20`;
+        cmd = `Get-Mailbox -ResultSize 50 | Get-MailboxStatistics | Where-Object { $_.LastLogonTime -lt (Get-Date).AddDays(-90) } | Select-Object DisplayName,LastLogonTime`;
         hint = "90d inactive — see report.mailbox_inactive";
       } else if (q.includes("organization") && (q.includes("config") || q.includes("settings"))) {
         cmd = `Get-OrganizationConfig | Select-Object Name,ActivityBasedAuthenticationTimeoutInterval,DefaultPublicFolderAgeLimit | Select-Object -First 1`;
@@ -122,19 +122,19 @@ export function registerAISuiteTools(server: McpServer, ps: PowerShellProvider) 
         cmd = `Test-ExchangeSearch -Identity "admin@contoso.com" | Select-Object ResultFound,SearchTime | Select-Object -First 1`;
         hint = "Content index health — using diagnostics.test_exchange_search";
       } else if (q.includes("move request") || q.includes("migration") && q.includes("eta")) {
-        cmd = `Get-MoveRequestStatistics | Select-Object Identity,Status,PercentComplete,BytesTransferred | Select-Object -First 5`;
+        cmd = `Get-MoveRequestStatistics | Select-Object Identity,Status,PercentComplete,BytesTransferred`;
         hint = "MoveRequest polling — using migration.get_moverequest_statistics";
       } else if (q.includes("migration") && q.includes("readiness")) {
-        cmd = `Get-Mailbox -ResultSize 20 | Select-Object DisplayName,ExchangeVersion | Select-Object -First 10`;
+        cmd = `Get-Mailbox -ResultSize 20 | Select-Object DisplayName,ExchangeVersion`;
         hint = "Migration readiness — see ai.migration_advisor";
       } else if (q.includes("dag") && q.includes("health")) {
-        cmd = `Test-ReplicationHealth | Select-Object Server,Check,Result | Select-Object -First 10`;
+        cmd = `Test-ReplicationHealth | Select-Object Server,Check,Result`;
         hint = "DAG health — see report.dag_health";
       } else if (q.includes("queue") && q.includes("health")) {
-        cmd = `Get-Queue | Select-Object Identity,MessageCount,Status | Sort-Object MessageCount -Descending | Select-Object -First 10`;
+        cmd = `Get-Queue | Select-Object Identity,MessageCount,Status | Sort-Object MessageCount -Descending`;
         hint = "Queue health — see report.queue_report";
       } else {
-        cmd = `Get-Mailbox -ResultSize 10 | Select-Object DisplayName | Select-Object -First 10`;
+        cmd = `Get-Mailbox -ResultSize 10 | Select-Object DisplayName`;
         hint = "Fallback: list mailboxes — try more specific: 'mailboxes over 50GB', 'organization config', 'test search', 'migration eta'";
       }
       const data = await ps.invokeJson(cmd).catch(() => []);
@@ -155,7 +155,7 @@ export function registerAISuiteTools(server: McpServer, ps: PowerShellProvider) 
         ]);
         return { content: [{ type: "text", text: JSON.stringify({ comparison: `${left} vs ${right}`, left: a, right: b }, null, 2) }] };
       }
-      const d = await ps.invokeJson(`Get-ExchangeServer | Select-Object Name,AdminDisplayVersion | Select-Object -First 5`).catch(() => []);
+      const d = await ps.invokeJson(`Get-ExchangeServer | Select-Object Name,AdminDisplayVersion`).catch(() => []);
       return { content: [{ type: "text", text: JSON.stringify({ type, note: `Comparative ${type}: left=${left} vs right=${right}`, sample: d }, null, 2) }] };
     },
   );
@@ -205,7 +205,7 @@ export function registerAISuiteTools(server: McpServer, ps: PowerShellProvider) 
     "AI Incident Report — auto-builds incident (Started, Affected, Root Cause, Impact ~18k delayed, Resolution, Duration, Recommendation)",
     { incident: z.string().optional().describe("e.g. Outbound mail delayed") },
     async ({ incident }) => {
-      const qs = await ps.invokeJson(`Get-Queue | Select-Object Identity,MessageCount,LastError | Where-Object { $_.MessageCount -gt 100 } | Select-Object -First 5`).catch(() => []);
+      const qs = await ps.invokeJson(`Get-Queue | Select-Object Identity,MessageCount,LastError | Where-Object { $_.MessageCount -gt 100 }`).catch(() => []);
       return {
         content: [
           {
@@ -264,7 +264,7 @@ export function registerAISuiteTools(server: McpServer, ps: PowerShellProvider) 
 
   // 36. Things You Should Know — proactive 3
   server.tool("ai.things_you_should_know", 'AI "Things You Should Know" — proactive 3 (DB03 +42%, cert 19d, NDR +63%)', {}, async () => {
-    const dbs = await ps.invokeJson(`Get-MailboxDatabase | Select-Object Name | Select-Object -First 3`).catch(() => []);
+    const dbs = await ps.invokeJson(`Get-MailboxDatabase | Select-Object Name`).catch(() => []);
     return {
       content: [
         {
@@ -289,7 +289,7 @@ export function registerAISuiteTools(server: McpServer, ps: PowerShellProvider) 
 
   // 37. Management / Executive Dashboard — for CTO
   server.tool("ai.management_report", "Management / Executive Reports — CTO dashboard (health, availability, mail volume, security, capacity, incidents, migration, risks, forecast)", {}, async () => {
-    const exec = await ps.invokeJson(`Get-HealthReport | Select-Object -First 1 | Select-Object AlertValue`).catch(() => []);
+    const exec = await ps.invokeJson(`Get-HealthReport | Select-Object HealthSet,AlertValue`).catch(() => []);
     const avail = await ps.invokeJson(`Get-MailboxDatabaseCopyStatus | Measure-Object | Select-Object -ExpandProperty Count`).catch(() => 0);
     return {
       content: [
@@ -298,7 +298,10 @@ export function registerAISuiteTools(server: McpServer, ps: PowerShellProvider) 
           text: JSON.stringify(
             {
               title: "Exchange Executive Dashboard",
-              health: (exec as any[])[0]?.AlertValue ?? "Healthy",
+              health: (() => {
+                const bad = (exec as any[]).find((h: any) => { const v = String(h?.AlertValue ?? ""); return v && !/healthy/i.test(v); });
+                return bad ? `${bad.HealthSet ?? "Health"}: ${bad.AlertValue}` : "Healthy";
+              })(),
               availability: `${avail} DB copies`,
               mailVolume: "1.2M/day (from tracking)",
               securityScore: "82/100 (see ai.exchange_executive_summary)",

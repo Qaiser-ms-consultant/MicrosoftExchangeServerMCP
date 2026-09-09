@@ -207,7 +207,12 @@ export function routeQuery(prompt: string): Route {
   if (has("compliance report", "compliance snapshot")) return { tool: "report.generate_compliance_report", args: {}, write: false };
   if (has("root cause") || (has("why") && has("delay", "queue", "slow", "fail"))) return { tool: "ai.root_cause_analysis", args: {}, write: false };
   // Aggregate reports (no-arg)
-  if (has("mailbox size report", "biggest mailbox", "largest mailbox", "top mailbox")) return { tool: "report.generate_mailbox_size_report", args: {}, write: false };
+  if (has("mailbox size report", "biggest mailbox", "largest mailbox", "top mailbox")) {
+    // Explicit top-N ("top 50 largest") is honored; otherwise the tool default applies.
+    const tm = prompt.match(/(?:top|first)\s+(\d+)|(\d+)\s*(?:largest|biggest|top)/i);
+    const top = tm ? Math.min(100, Math.max(1, parseInt(tm[1] || tm[2], 10))) : undefined;
+    return { tool: "report.generate_mailbox_size_report", args: top ? { top } : {}, write: false };
+  }
   if (has("growth trend")) return { tool: "report.generate_database_growth_trend", args: {}, write: false };
   if (has("transport queue report")) return { tool: "report.generate_transport_queue_report", args: {}, write: false };
   if (has("archive report")) return { tool: "report.generate_archive_report", args: {}, write: false };
@@ -273,18 +278,20 @@ export function routeQuery(prompt: string): Route {
   if (has("restore request")) return { tool: "exchange_get_mailbox_restore_request", args: {}, write: false };
   if (has("soft-deleted", "soft deleted", "disconnected mailbox")) return { tool: "exchange_get_softdeleted_mailbox", args: {}, write: false };
   // Per-mailbox deep reports (email-gated)
-  if (has("mailbox detail", "detailed mailbox report", "full configuration", "full details", "complete details", "configuration details", "full config") && has("mailbox") && email) return { tool: "report.mailbox_detail", args: { identity: email }, write: false };
+  if (has("mailbox detail", "detailed mailbox report", "full configuration", "full details", "complete details", "configuration details", "full config", "details of", "get details", "show details", "detail of") && has("mailbox") && email) return { tool: "report.mailbox_detail", args: { identity: email }, write: false };
   // Full-config phrasing with a bare name ("...of administrator mailbox"):
   // no email, so resolve + report in one call instead of dumping the org.
-  if (has("full configuration", "full details", "complete details", "configuration details", "full config") && has("mailbox") && !email) {
+  if (has("full configuration", "full details", "complete details", "configuration details", "full config", "details of", "get details", "show details", "detail of") && has("mailbox") && !email) {
     const nm = prompt.match(/(?:of|for|named?|called)\s+(?:the\s+)?([A-Za-z0-9_\-]+)\s+mailbox/i)?.[1]
       || prompt.match(/mailbox\s+(?:for|named?|called)\s+(?:the\s+)?([A-Za-z0-9_\-]+)/i)?.[1];
     if (nm) return { tool: "report.mailbox_full_config", args: { identity: nm }, write: false };
   }
   // Same intent without the word "mailbox" ("full config for devlabadmin"):
   // extract a name-like candidate so agents pick the single-call report
-  // instead of fanning out separate detail calls.
-  if (has("full configuration", "full details", "complete details", "configuration details", "full config") && !email) {
+  // instead of fanning out separate detail calls. Skipped when the prompt
+  // names another object family (queue, cert, dag, ...) with its own path.
+  if (has("full configuration", "full details", "complete details", "configuration details", "full config", "details of", "get details", "show details", "detail of") && !email
+      && !has("queue", "cert", "dag", "database", "server", "connector", "rule", "group")) {
     const stop = new Set(["the", "a", "an", "me", "my", "mailbox", "mailboxes", "user", "details", "detail", "configuration", "config", "full", "complete", "for", "of"]);
     const cand = QUOTED_RE.exec(prompt)?.[1]
       || afterWord(prompt, "for")?.replace(/^the\s+/i, "")
