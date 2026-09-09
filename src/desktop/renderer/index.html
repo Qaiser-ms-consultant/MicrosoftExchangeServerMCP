@@ -321,8 +321,9 @@
 <div class="flex items-center justify-between mb-2">
 <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">✦ AI Response</h3>
 <div class="flex items-center gap-2">
-<button id="aiCopyResponse" title="Copy response as plain text" class="px-2 py-0.5 rounded-md text-[11px] text-slate-400 hover:text-slate-100 hover:bg-[#1a2538] border border-transparent hover:border-[#2b3a58] transition">Copy</button>
-<span class="text-[10px] font-mono text-slate-500" id="aiUsage">—</span>
+ <button id="aiCopyResponse" title="Copy response as plain text" class="px-2 py-0.5 rounded-md text-[11px] text-slate-400 hover:text-slate-100 hover:bg-[#1a2538] border border-transparent hover:border-[#2b3a58] transition">Copy</button>
+ <button id="aiPastePrompt" title="Paste clipboard content into prompt" class="px-2 py-0.5 rounded-md text-[11px] text-slate-400 hover:text-slate-100 hover:bg-[#1a2538] border border-transparent hover:border-[#2b3a58] transition">Paste</button>
+ <span class="text-[10px] font-mono text-slate-500" id="aiUsage">—</span>
 </div>
 </div>
 <div class="text-sm text-slate-200 leading-relaxed space-y-2" id="aiResultOutput">Run a prompt to see the AI response here.</div>
@@ -1025,9 +1026,34 @@ function getOutputText(){
 document.getElementById("copyOut")?.addEventListener('click', ()=> navigator.clipboard.writeText(getOutputText()));
 document.getElementById("aiCopyResponse")?.addEventListener('click', function(){
   const el = document.getElementById("aiResultOutput");
-  if (el && el.innerText) navigator.clipboard.writeText(el.innerText);
+  // Check if user has selected text within the response
+  const selection = document.getSelection().toString();
+  if (selection) {
+    navigator.clipboard.writeText(selection);
+  } else if (el && el.innerText) {
+    navigator.clipboard.writeText(el.innerText);
+  }
   const b = this; const t = b.textContent; b.textContent = "Copied";
   setTimeout(()=>{ b.textContent = t; }, 1200);
+});
+
+// Paste clipboard content into the prompt textarea
+document.getElementById("aiPastePrompt")?.addEventListener('click', function(){
+  const promptEl = document.getElementById("aiChatInput");
+  if (!promptEl) return;
+  navigator.clipboard.readText().then(text => {
+    promptEl.focus();
+    promptEl.value = text;
+    promptEl.selectionStart = promptEl.value.length;
+    promptEl.selectionEnd = promptEl.value.length;
+    // Trigger input event so any listeners pick up the new value
+    const event = new Event('input', { bubbles: true });
+    promptEl.dispatchEvent(event);
+  }).catch(() => {
+    // Fallback for older browsers
+    promptEl.focus();
+    promptEl.value = promptEl.value; // no-op but focuses
+  });
 });
 document.getElementById("exportOut")?.addEventListener('click', ()=>{ const blob=new Blob([getOutputText()],{type:"text/markdown"}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download="output.md"; a.click(); });
 document.addEventListener('DOMContentLoaded', async () => {
