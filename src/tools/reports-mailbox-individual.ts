@@ -4,6 +4,39 @@ import type { PowerShellProvider } from "../clients/powershell-provider.js";
 
 export function registerIndividualMailboxReports(server: McpServer, ps: PowerShellProvider) {
   server.tool(
+    "report.mailbox_full_config",
+    "Full mailbox configuration by name, alias, or email — resolves the identity first (direct, then Name -like fallback), then Get-Mailbox + Statistics + OOF + Hold + Permissions in one call. Prefer this over fanning out separate calls.",
+    { identity: z.string().describe("Mailbox name, alias, or email, e.g. administrator or admin@contoso.com") },
+    async ({ identity }) => {
+      const raw = String(identity ?? "").trim();
+      const id = raw.replace(/'/g, "''");
+      // Double-quoted -Filter context: neutralize PowerShell interpolation.
+      const escLike = id.replace(/\*/g, "").replace(/[`$"]/g, "");
+      // Resolve: direct identity first (alias/UPN resolve server-side), then
+      // a Name -like fallback for bare display names.
+      let resolved: any = (
+        await ps.invokeJson(`Get-Mailbox -Identity '${id}' | Select-Object DisplayName,PrimarySmtpAddress,Alias,Name | Select-Object -First 1`).catch(() => [])
+      )[0] ?? null;
+      if (!resolved && escLike) {
+        resolved = (
+          await ps.invokeJson(`Get-Mailbox -Filter "Name -like '*${escLike}*'" | Select-Object DisplayName,PrimarySmtpAddress,Alias,Name | Select-Object -First 1`).catch(() => [])
+        )[0] ?? null;
+      }
+      if (!resolved) {
+        return { content: [{ type: "text", text: JSON.stringify({ found: false, searchedAs: raw, hint: "No mailbox matched. Try the full email address or check the exact mailbox name." }, null, 2) }] };
+      }
+      const canonical = String(resolved.PrimarySmtpAddress || resolved.Alias || resolved.Name || raw).replace(/'/g, "''");
+      const [mbx, stats, oof, hold, perms] = await Promise.all([
+        ps.invokeJson(`Get-Mailbox -Identity '${canonical}' | Select-Object DisplayName,PrimarySmtpAddress,RecipientTypeDetails,Database,ServerName,OrganizationalUnit,WhenCreated | Select-Object -First 1`).catch(() => []),
+        ps.invokeJson(`Get-MailboxStatistics -Identity '${canonical}' | Select-Object DisplayName,ItemCount,TotalItemSize,TotalDeletedItemSize,LastLogonTime,Database | Select-Object -First 1`).catch(() => []),
+        ps.invokeJson(`Get-MailboxAutoReplyConfiguration -Identity '${canonical}' | Select-Object AutoReplyState,StartTime,EndTime | Select-Object -First 1`).catch(() => []),
+        ps.invokeJson(`Get-Mailbox -Identity '${canonical}' | Select-Object LitigationHoldEnabled,InPlaceHolds,RetentionHoldEnabled | Select-Object -First 1`).catch(() => []),
+        ps.invokeJson(`Get-MailboxPermission -Identity '${canonical}' | Where-Object { $_.User -notlike "NT AUTHORITY*" } | Select-Object User,AccessRights | Select-Object -First 5`).catch(() => []),
+      ]);
+      return { content: [{ type: "text", text: JSON.stringify({ found: true, searchedAs: raw, resolvedAs: resolved.PrimarySmtpAddress || resolved.Name, mailbox: (mbx as any[])[0] ?? null, statistics: (stats as any[])[0] ?? null, oof: (oof as any[])[0] ?? null, hold: (hold as any[])[0] ?? null, permissions: perms }, null, 2) }] };
+    },
+  );
+  server.tool(
     "report.mailbox_detail",
     "Individual Mailbox Report — comprehensive per-mailbox (identity) — Get-Mailbox + Statistics + Permissions + OOF + Hold + Quota",
     { identity: z.string().describe("Mailbox identity, e.g. admin@contoso.com") },

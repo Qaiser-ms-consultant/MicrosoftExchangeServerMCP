@@ -37,13 +37,13 @@
         extend: {
           colors: {
             brand: { 50: '#f0fdfa', 100: '#ccfbf1', 500: '#0d9488', 600: '#0f766e', 700: '#115e59' },
-            // Light mode surfaces (default)
+            // Light mode surfaces (default) — mirrors :root DESIGN.md tokens
             surface: {
-              base: '#f8fafc',
+              base: '#f7f7f4',
               card: '#ffffff',
-              elevated: '#f1f5f9',
-              border: '#e2e8f0',
-              borderLight: '#cbd5e1'
+              elevated: '#fafaf7',
+              border: '#e6e5e0',
+              borderLight: '#cfcdc4'
             },
             // Dark mode surfaces (when .dark class is on html)
             'dark-surface': {
@@ -64,21 +64,28 @@
 </script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  /* Light mode (default) */
+  /* Light mode (default) — DESIGN.md editorial tokens: warm cream canvas,
+     warm near-black ink, hairline-only depth. Dark mode below is untouched. */
   :root {
-    --bg-base: #f8fafc;
+    --bg-base: #f7f7f4;
     --bg-card: #ffffff;
-    --bg-elevated: #f1f5f9;
-    --border: #e2e8f0;
-    --border-light: #cbd5e1;
-    --text-primary: #1e293b;
-    --text-secondary: #64748b;
-    --text-muted: #94a3b8;
-    --bg-header: #f1f5f9;
+    --bg-elevated: #fafaf7;
+    --border: #e6e5e0;
+    --border-light: #cfcdc4;
+    --text-primary: #26251e;
+    --text-secondary: #5a5852;
+    --text-muted: #807d72;
+    --bg-header: #f7f7f4;
     --bg-input: #ffffff;
-    --text-input: #1e293b;
-    --bg-sidebar: #f8fafc;
+    --text-input: #26251e;
+    --bg-sidebar: #f7f7f4;
     --text-primary-inverse: #f8fafc;
+    --brand: #f54e00;
+    --brand-active: #d04200;
+    --tl-thinking: #dfa88f;
+    --tl-read: #9fbbe0;
+    --tl-edit: #c0a8dd;
+    --tl-done: #c08532;
   }
   /* Dark mode */
   .dark {
@@ -130,6 +137,34 @@
   ::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:9999px}::-webkit-scrollbar-thumb:hover{background:var(--border-light)}
   html, body { background-color: var(--bg-base) !important; color: var(--text-primary); }
   html:not(.dark) main[class*="bg-gradient-to-b"] { background: var(--bg-base) !important; background-image: none !important; }
+  /* DESIGN.md: hairline-only depth in light mode — no drop shadows on cards */
+  html:not(.dark) [class*="shadow-xl"],
+  html:not(.dark) [class*="shadow-black"] { box-shadow: none !important; }
+  /* DESIGN.md: Cursor Orange, primary CTAs only (one per panel). Dark mode untouched. */
+  html:not(.dark) #aiRunAgent,
+  html:not(.dark) #confirmWrite,
+  html:not(.dark) #saveModel,
+  html:not(.dark) #runDoctor,
+  html:not(.dark) #checkEws,
+  html:not(.dark) #aiEnhanceUse,
+  html:not(.dark) #appLockUnlock,
+  html:not(.dark) #alVerify { background: var(--brand) !important; background-image: none !important; border-color: var(--brand) !important; }
+  html:not(.dark) #aiRunAgent:hover,
+  html:not(.dark) #confirmWrite:hover,
+  html:not(.dark) #saveModel:hover,
+  html:not(.dark) #runDoctor:hover,
+  html:not(.dark) #checkEws:hover,
+  html:not(.dark) #aiEnhanceUse:hover,
+  html:not(.dark) #appLockUnlock:hover,
+  html:not(.dark) #alVerify:hover { background: var(--brand-active) !important; background-image: none !important; border-color: var(--brand-active) !important; }
+  /* DESIGN.md: AI timeline signature pills — agent run stages only, light mode only */
+  html:not(.dark) #aiExecBadge.tl-thinking { background: var(--tl-thinking) !important; border-color: var(--tl-thinking) !important; }
+  html:not(.dark) #aiExecBadge.tl-read { background: var(--tl-read) !important; border-color: var(--tl-read) !important; }
+  html:not(.dark) #aiExecBadge.tl-edit { background: var(--tl-edit) !important; border-color: var(--tl-edit) !important; }
+  html:not(.dark) #aiExecBadge.tl-done { background: var(--tl-done) !important; border-color: var(--tl-done) !important; }
+  html:not(.dark) #aiExecBadge[class*="tl-"] > span:first-child { background-color: #26251e !important; animation: none !important; }
+  html:not(.dark) #aiExecBadge[class*="tl-"] > span:last-child { color: #26251e !important; }
+  html:not(.dark) #aiExecBadge.tl-done > span:last-child { color: #ffffff !important; }
   /* Short viewports: let the whole page scroll so no panel is ever unreachable */
   @media (max-height: 719px) {
     html body { overflow-y: auto !important; }
@@ -822,6 +857,14 @@ function aiSetExecState(kind, text){
   };
   const badge = document.getElementById("aiExecBadge");
   if (badge) badge.innerHTML = (dots[kind] || dots.ok) + ' <span id="aiExecText">' + esc(text) + '</span>';
+  // DESIGN.md timeline signature (light mode only): map run states to stage pills.
+  if (badge) {
+    badge.classList.remove('tl-thinking', 'tl-read', 'tl-edit', 'tl-done');
+    if (!document.documentElement.classList.contains('dark')) {
+      const stage = { running: 'tl-thinking', warn: 'tl-read', ok: 'tl-done' }[kind];
+      if (stage) badge.classList.add(stage);
+    }
+  }
   const home = document.getElementById("execText");
   if (home) home.textContent = text;
 }

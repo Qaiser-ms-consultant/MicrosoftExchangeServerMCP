@@ -62,6 +62,7 @@ describe("getFollowUps", () => {
       ["ai.migration_eta", {}, "migration ETA"],
       ["report.generate_hold_report", {}, "hold report"],
       ["database.dismount", { identity: "DB01" }, "dismount database DB01"],
+      ["report.mailbox_full_config", { identity: "administrator" }, "show me full configuration details of administrator mailbox"],
     ];
     for (const [tool, args, prompt] of samples) {
       for (const a of getFollowUps(tool, args, prompt)) {

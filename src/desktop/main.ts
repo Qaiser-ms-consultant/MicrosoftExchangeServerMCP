@@ -9,7 +9,7 @@ import { hasWriteIntent, helpExamplesFor, helpHintFor, routeQuery } from "./quer
 import type { RouteResult } from "./queryRouter.js";
 import { loadConfig } from "../config.js";
 import { parse as parseYaml } from "yaml";
-import { buildSummaryMessages, buildToolPickerMessages, chatComplete, isAiProvider, parseNoToolVerdict, parseToolSelection } from "./modelClient.js";
+import { buildSummaryMessages, buildToolPickerMessages, chatComplete, isAiProvider, isEmptyResult, isToolCallEcho, parseNoToolVerdict, parseToolSelection } from "./modelClient.js";
 import { appendExchange, buildContextBlocks, clipText, fillMissingArgs, narrowCatalog, recallIdentities, type ExchangeRecord } from "./conversationContext.js";
 import { checkForUpdates, checkZipUpdate, isGitCheckout, performUpdate, performZipUpdate } from "./updater.js";
 import { enhancePrompt, enhancePromptWithModel, guardResult } from "./promptGuard.js";
@@ -723,7 +723,15 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
   if (aiMode && modelCfg && tool !== "tools" && tool !== "help") {
     try {
       const summary = await chatComplete(modelCfg, buildSummaryMessages(prompt, tool, JSON.stringify(data), modelCfg.systemPrompt, contextBlock || undefined));
-      aiAnswer = summary.text; aiUsage = summary.usage;
+      // Guard against small models echoing a tool call instead of reporting:
+      // on empty results such an answer is useless, so fall back to the
+      // human-readable "nothing found" path below.
+      if (isEmptyResult(data) && isToolCallEcho(summary.text)) {
+        console.error("AI narration echoed a tool call on empty data — falling back to human fallback");
+        aiNote = "The query returned no data, so the AI summary was withheld — see result below.";
+      } else {
+        aiAnswer = summary.text; aiUsage = summary.usage;
+      }
     } catch (e: any) { console.error("AI answer failed, returning tool result only", e); aiNote = `AI unavailable (${e?.message || e}) — showing MCP result.`; }
   }
   rememberConversation(conversationId, { prompt, tool, resultJson: clipText(JSON.stringify(data), 2000), aiAnswer });

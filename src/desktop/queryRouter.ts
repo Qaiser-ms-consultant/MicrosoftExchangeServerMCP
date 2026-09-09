@@ -273,7 +273,27 @@ export function routeQuery(prompt: string): Route {
   if (has("restore request")) return { tool: "exchange_get_mailbox_restore_request", args: {}, write: false };
   if (has("soft-deleted", "soft deleted", "disconnected mailbox")) return { tool: "exchange_get_softdeleted_mailbox", args: {}, write: false };
   // Per-mailbox deep reports (email-gated)
-  if (has("mailbox detail", "detailed mailbox report") && email) return { tool: "report.mailbox_detail", args: { identity: email }, write: false };
+  if (has("mailbox detail", "detailed mailbox report", "full configuration", "full details", "complete details", "configuration details", "full config") && has("mailbox") && email) return { tool: "report.mailbox_detail", args: { identity: email }, write: false };
+  // Full-config phrasing with a bare name ("...of administrator mailbox"):
+  // no email, so resolve + report in one call instead of dumping the org.
+  if (has("full configuration", "full details", "complete details", "configuration details", "full config") && has("mailbox") && !email) {
+    const nm = prompt.match(/(?:of|for|named?|called)\s+(?:the\s+)?([A-Za-z0-9_\-]+)\s+mailbox/i)?.[1]
+      || prompt.match(/mailbox\s+(?:for|named?|called)\s+(?:the\s+)?([A-Za-z0-9_\-]+)/i)?.[1];
+    if (nm) return { tool: "report.mailbox_full_config", args: { identity: nm }, write: false };
+  }
+  // Same intent without the word "mailbox" ("full config for devlabadmin"):
+  // extract a name-like candidate so agents pick the single-call report
+  // instead of fanning out separate detail calls.
+  if (has("full configuration", "full details", "complete details", "configuration details", "full config") && !email) {
+    const stop = new Set(["the", "a", "an", "me", "my", "mailbox", "mailboxes", "user", "details", "detail", "configuration", "config", "full", "complete", "for", "of"]);
+    const cand = QUOTED_RE.exec(prompt)?.[1]
+      || afterWord(prompt, "for")?.replace(/^the\s+/i, "")
+      || afterWord(prompt, "of")?.replace(/^the\s+/i, "");
+    const tok = cand?.split(/\s+/)[0]?.replace(/["'.]+$/g, "");
+    if (tok && !stop.has(tok.toLowerCase()) && /^[A-Za-z0-9_\-@.]+$/.test(tok)) {
+      return { tool: "report.mailbox_full_config", args: { identity: tok }, write: false };
+    }
+  }
   if (has("mailbox health") && email) return { tool: "report.mailbox_health_individual", args: { identity: email }, write: false };
   if (has("mailbox compliance") && email) return { tool: "report.mailbox_compliance_individual", args: { identity: email }, write: false };
   if (has("forwarding") && email) return { tool: "report.mailbox_forwarding_individual", args: { identity: email }, write: false };

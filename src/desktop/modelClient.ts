@@ -230,6 +230,24 @@ export function parseToolSelection(
 
 export const SUMMARY_JSON_BUDGET = 12000;
 
+function isBlankValue(v: unknown): boolean {
+  if (v === null || v === undefined || v === "") return true;
+  if (Array.isArray(v)) return v.length === 0;
+  if (typeof v === "object") return Object.values(v).every(isBlankValue);
+  return false;
+}
+
+/** True when a tool result carries no usable data (empty, or all nulls — e.g. identity not found). */
+export function isEmptyResult(data: unknown): boolean {
+  if (typeof data === "string") return data.trim() === "";
+  return isBlankValue(data);
+}
+
+/** True when a narration echoes a JSON tool call instead of reporting results. */
+export function isToolCallEcho(text: string): boolean {
+  return /"tool"\s*:\s*"/.test(String(text ?? ""));
+}
+
 export function buildSummaryMessages(prompt: string, tool: string, resultJson: string, customSystemPrompt?: string, historyContext?: string): ChatMessage[] {
   const clipped = resultJson.length > SUMMARY_JSON_BUDGET
     ? resultJson.slice(0, SUMMARY_JSON_BUDGET) + '\n...[truncated]'
@@ -244,6 +262,7 @@ export function buildSummaryMessages(prompt: string, tool: string, resultJson: s
     "Use bullets sparingly (max 5) and only for genuinely distinct facts or actions.",
     "Explain numbers with context (e.g. 47.8 GB of 50 GB, about 96% of quota).",
     "Do not dump raw JSON, field names, or cmdlet syntax unless the user asked how to check it.",
+    "The tool already ran: never describe future actions ('I will run...') and never emit JSON tool calls ({tool...}). Report what the data shows.",
     "Do not bold entire sentences; use bold only for 1-3 key terms or values per response.",
     "Do not propose commands or next steps in prose — the UI offers follow-up actions separately; end with at most one plain-language recommendation when action is needed, otherwise end without filler.",
     "If the request is a follow-up (e.g. why, what about it), resolve pronouns and names from the conversation context; if the context lacks the facts, say so and suggest the check to run.",

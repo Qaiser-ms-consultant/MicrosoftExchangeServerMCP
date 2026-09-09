@@ -274,6 +274,7 @@ export function getFollowUps(
     case "ai.tell_me_everything":
     case "exchange_get_mailbox":
     case "report.mailbox_detail":
+    case "report.mailbox_full_config":
       actions = email
         ? [
             mail(forMail("mailbox statistics for alice@contoso.com"), `Statistics: ${email}`),

@@ -5,6 +5,8 @@ import {
   chatComplete,
   chatUrlFor,
   isAiProvider,
+  isEmptyResult,
+  isToolCallEcho,
   nativeBaseFor,
   parseNoToolVerdict,
   parseToolSelection,
@@ -102,6 +104,30 @@ describe("buildSummaryMessages", () => {
     const msgs = buildSummaryMessages("why?", "t.tool", '{"a":1}', undefined, "Earlier: queues");
     expect(msgs[1].content).toContain("Earlier: queues");
     expect(msgs[1].content.indexOf("Earlier: queues")).toBeLessThan(msgs[1].content.indexOf("why?"));
+  });
+});
+
+describe("isEmptyResult", () => {
+  it("flags empty and all-null results", () => {
+    expect(isEmptyResult(null)).toBe(true);
+    expect(isEmptyResult("")).toBe(true);
+    expect(isEmptyResult([])).toBe(true);
+    expect(isEmptyResult({})).toBe(true);
+    expect(isEmptyResult({ mailbox: null, statistics: null, permissions: [] })).toBe(true);
+  });
+  it("passes results carrying data", () => {
+    expect(isEmptyResult([{ DisplayName: "Admin" }])).toBe(false);
+    expect(isEmptyResult({ mailbox: { DisplayName: "Admin" }, statistics: null })).toBe(false);
+    expect(isEmptyResult("found")).toBe(false);
+  });
+});
+
+describe("isToolCallEcho", () => {
+  it("detects echoed JSON tool calls", () => {
+    expect(isToolCallEcho('using the tool. { "tool": "exchange_get_mailbox", "parameters": {} }')).toBe(true);
+  });
+  it("passes normal prose", () => {
+    expect(isToolCallEcho("Found 1 mailbox: Admin (47.8 GB of 50 GB).")).toBe(false);
   });
 });
 

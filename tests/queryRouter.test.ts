@@ -389,6 +389,17 @@ describe("routeQuery", () => {
     const r = routeQuery("mailbox detail for alice@contoso.com");
     expect(r).toEqual({ tool: "report.mailbox_detail", args: { identity: "alice@contoso.com" }, write: false });
   });
+  it("routes full-configuration phrasing with an email to mailbox detail", () => {
+    expect(routeQuery("full configuration details of alice@contoso.com mailbox")).toEqual({ tool: "report.mailbox_detail", args: { identity: "alice@contoso.com" }, write: false });
+  });
+  it("routes full-configuration phrasing with a bare name to a single-call report", () => {
+    expect(routeQuery("show me full configuration details of administrator mailbox")).toEqual({ tool: "report.mailbox_full_config", args: { identity: "administrator" }, write: false });
+    expect(routeQuery("complete details of the helpdesk mailbox")).toEqual({ tool: "report.mailbox_full_config", args: { identity: "helpdesk" }, write: false });
+  });
+  it("routes full-config phrasing without the mailbox word to the single-call report", () => {
+    expect(routeQuery("full config for devlabadmin")).toEqual({ tool: "report.mailbox_full_config", args: { identity: "devlabadmin" }, write: false });
+    expect(routeQuery("show full configuration")).toEqual({ help: true });
+  });
   it("routes mailbox health prompts", () => {
     const r = routeQuery("mailbox health for alice@contoso.com");
     expect(r).toEqual({ tool: "report.mailbox_health_individual", args: { identity: "alice@contoso.com" }, write: false });
