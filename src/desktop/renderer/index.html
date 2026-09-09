@@ -923,6 +923,7 @@ document.getElementById("aiRunAgent")?.addEventListener('click', async () => {
         const res2 = await window.exchangeDesktop.askExchange({ prompt: promptValue, confirmed: true, tool, args: res.args, conversationId: window.__aiCurrentConversationId || undefined });
         const aiAns = res2?.aiAnswer || res2?.result?.message || aiHumanFallback(res2?.result);
         aiSetRichText(aiResultOutput, aiAns || "Action completed.");
+        if (aiResultOutput) aiRenderNextActions(res2.nextActions, aiResultOutput);
         if (aiUsage) aiUsage.textContent = res2?.aiUsage ? `${fmtTok(res2.aiUsage.input)} in / ${fmtTok(res2.aiUsage.output)} out` : "Completed";
         aiSetExecState("ok", "Completed");
       });
@@ -941,8 +942,8 @@ document.getElementById("aiRunAgent")?.addEventListener('click', async () => {
     const aiAns = res && res.aiAnswer ? res.aiAnswer : (res && res.aiNote ? res.aiNote : aiHumanFallback(data));
     aiHistStatus(histEntry, tool, "completed");
     aiSetRichText(aiResultOutput, aiAns);
-    // Extract and render suggested next actions from AI answer
-    if (aiResultOutput) aiExtractAndRenderActions(aiAns, aiResultOutput);
+    // Structured follow-ups from the backend (tool-aware, max 3, insert-only)
+    if (aiResultOutput) aiRenderNextActions(res.nextActions, aiResultOutput);
     // Help results carry relevant example prompts — render them as clickable
     // chips (the document-level data-quick handler fills the prompt box).
     if (tool === "help" && data && Array.isArray(data.examples) && data.examples.length && aiResultOutput) {
@@ -1567,51 +1568,42 @@ function aiHumanFallback(data){
   return String(data);
 }
 
-// Extract suggested next actions from AI response and render as clickable buttons
-function aiExtractAndRenderActions(text, container) {
-  if (!container || !text) return;
-const actionPatterns = [
-    // Pattern 1: "Next Step:", "Recommended action:", etc. - capture first sentence after colon
-    /(?:next step|recommended action|suggested action|try running|run this|you can run)[:\s]+([^.]{10,150}\.)/gi,
-    // Pattern 2: Explicit "run <command>" or "execute <command>"
-    /(?:^|\n)\s*(?:run|execute)\s+([A-Za-z0-9_.-]+(?:\([^)]*\))?)/gi,
-    // Pattern 3: Bullet points with PowerShell verbs (single line)
-    /(?:^|\n)\s*[`\-]\s*((?:Get|Set|Test|New|Remove|Move|Enable|Disable|Start|Stop|Restart|Suspend|Resume|Mount|Dismount|Add|Grant|Revoke|Invoke|Measure|Select|Where|Sort|Group|Format|Export|Import)\-[A-Za-z0-9_.-]+(?:\s+[\-\w\d.\@\"']+)*)/gim,
-    // Pattern 4: Any PowerShell-like command anywhere in text - capture verb-noun + up to 5 params
-    /((?:Get|Set|Test|New|Remove|Move|Enable|Disable|Start|Stop|Restart|Suspend|Resume|Mount|Dismount|Add|Grant|Revoke|Invoke|Measure|Select|Where|Sort|Group|Format|Export|Import)\-[A-Za-z0-9_.-]+(?:\s+(?:[\-\w\d.\@\"']+|\[[^\]]*\]|\{[^}]*\})){0,5})/gi
-  ];
-  const actions = [];
-  for (const re of actionPatterns) {
-    let m;
-    while ((m = re.exec(text)) !== null) {
-      const cmd = (m[1] || m[0]).trim();
-      // Clean up: remove trailing filler words and multi-line artifacts
-      const clean = cmd
-        .split('\n')[0]  // Take only first line
-        .replace(/\s+(?:command|to|via|and|then|the|a|an|is|will|would|could|should|might|for|in|on|at|by|from|with|using)\b.*$/i, '')
-        .replace(/[.,;:]+$/, '')
-        .trim();
-      if (clean.length > 3 && clean.length < 200 && !actions.includes(clean)) actions.push(clean);
-    }
-  }
-  if (!actions.length) return;
-  const actionHtml = actions.slice(0, 4).map(a => 
-    `<button class="ai-suggested-action px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300 text-left transition" data-action="${aiEscapeHtml(a).replace(/"/g, '"')}">${aiEscapeHtml(a)}</button>`
+// Structured follow-up actions from the backend (tool + args aware).
+// Clicking inserts the prompt into the chat box for review — it never
+// auto-runs. This replaces the old regex scraper that parsed AI prose and
+// produced noisy, often non-executable buttons.
+function aiInsertNextActionPrompt(prompt) {
+  const input = document.getElementById('aiChatInput');
+  if (!input || !prompt) return;
+  input.value = prompt;
+  input.style.height = 'auto';
+  input.style.height = Math.min(input.scrollHeight, 150) + 'px';
+  input.focus();
+  if (typeof aiCoachValidate === 'function') aiCoachValidate();
+}
+function aiRenderNextActions(actions, container) {
+  if (!container || !Array.isArray(actions) || !actions.length) return;
+  const seen = new Set();
+  const clean = actions
+    .filter((a) => a && typeof a.prompt === "string" && a.prompt.trim())
+    .map((a) => ({ label: String(a.label || a.prompt).trim(), prompt: a.prompt.trim() }))
+    .filter((a) => {
+      const key = a.prompt.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 3);
+  if (!clean.length) return;
+  const actionHtml = clean.map((a) =>
+    `<button class="ai-suggested-action px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300 text-left transition" data-action="${aiEscapeHtml(a.prompt).replace(/"/g, "&quot;")}" title="${aiEscapeHtml(a.prompt).replace(/"/g, "&quot;")}">${aiEscapeHtml(a.label)}</button>`
   ).join('');
   const wrapper = document.createElement('div');
-  wrapper.className = 'mt-3 flex flex-wrap gap-2';
-  wrapper.innerHTML = '<div class="text-[11px] text-slate-500 mb-2">Suggested next actions:</div><div class="flex flex-wrap gap-2">' + actionHtml + '</div>';
+  wrapper.className = 'mt-3';
+  wrapper.innerHTML = '<div class="text-[11px] text-slate-500 mb-2">Suggested next actions (click to insert):</div><div class="flex flex-wrap gap-2">' + actionHtml + '</div>';
   container.appendChild(wrapper);
-  wrapper.querySelectorAll('.ai-suggested-action').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const action = btn.getAttribute('data-action');
-      const input = document.getElementById('aiChatInput');
-      if (input && action) {
-        input.value = action;
-        input.focus();
-        document.getElementById('aiRunAgent')?.click();
-      }
-    });
+  wrapper.querySelectorAll('.ai-suggested-action').forEach((btn) => {
+    btn.addEventListener('click', () => aiInsertNextActionPrompt(btn.getAttribute('data-action') || ''));
   });
 }
 
@@ -1712,13 +1704,6 @@ function aiRenderMessage(msg) {
     </div>
   </div>`;
   container.insertAdjacentHTML('beforeend', bubble);
-  // Extract and render suggested actions for AI messages
-  if (!isUser) {
-    setTimeout(() => {
-      const lastBubble = container.lastElementChild?.querySelector('.ai-msg-content');
-      if (lastBubble) aiExtractAndRenderActions(msg.content, lastBubble.parentElement);
-    }, 0);
-  }
   aiScrollToBottom();
 }
 
@@ -1784,6 +1769,9 @@ async function aiSendMessage(text) {
           const confirmRes = await window.exchangeDesktop.askExchange({ prompt: text.trim(), confirmed: true, tool: res.tool, args: res.args, conversationId: window.__aiCurrentConversationId || undefined });
           conv.messages.push({ role: 'assistant', content: confirmRes.aiAnswer || confirmRes.result?.message || 'Action completed' });
           aiRenderMessage({ role: 'assistant', content: confirmRes.aiAnswer || confirmRes.result?.message || 'Action completed' });
+          const chatBox = document.getElementById('aiMessagesContainer');
+          const lastBubble = chatBox?.lastElementChild?.querySelector('.ai-msg-content');
+          if (lastBubble) aiRenderNextActions(confirmRes.nextActions, lastBubble.parentElement);
           aiSaveConversations();
         });
         document.querySelector('.ai-cancel-btn')?.addEventListener('click', () => {
@@ -1800,6 +1788,9 @@ async function aiSendMessage(text) {
       </div>` : '';
       conv.messages.push({ role: 'assistant', content: aiContent, toolActivity });
       aiRenderMessage({ role: 'assistant', content: aiContent, toolActivity });
+      const chatBox = document.getElementById('aiMessagesContainer');
+      const lastBubble = chatBox?.lastElementChild?.querySelector('.ai-msg-content');
+      if (lastBubble) aiRenderNextActions(res.nextActions, lastBubble.parentElement);
     }
     conv.updatedAt = new Date().toISOString();
     aiSaveConversations();

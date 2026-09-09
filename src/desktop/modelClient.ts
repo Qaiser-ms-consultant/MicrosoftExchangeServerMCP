@@ -245,7 +245,7 @@ export function buildSummaryMessages(prompt: string, tool: string, resultJson: s
     "Explain numbers with context (e.g. 47.8 GB of 50 GB, about 96% of quota).",
     "Do not dump raw JSON, field names, or cmdlet syntax unless the user asked how to check it.",
     "Do not bold entire sentences; use bold only for 1-3 key terms or values per response.",
-    "End with one clear recommended next step when action is needed, otherwise end without filler.",
+    "Do not propose commands or next steps in prose — the UI offers follow-up actions separately; end with at most one plain-language recommendation when action is needed, otherwise end without filler.",
     "If the request is a follow-up (e.g. why, what about it), resolve pronouns and names from the conversation context; if the context lacks the facts, say so and suggest the check to run.",
   ].join(" ");
   const contextPrefix = historyContext ? `${historyContext}\n\n` : "";

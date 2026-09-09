@@ -13,6 +13,7 @@ import { buildSummaryMessages, buildToolPickerMessages, chatComplete, isAiProvid
 import { appendExchange, buildContextBlocks, narrowCatalog, type ExchangeRecord } from "./conversationContext.js";
 import { checkForUpdates, checkZipUpdate, isGitCheckout, performUpdate, performZipUpdate } from "./updater.js";
 import { enhancePrompt, enhancePromptWithModel, guardResult } from "./promptGuard.js";
+import { getFollowUps } from "./followUps.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -465,7 +466,8 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
     } catch (e: any) { console.error("AI answer failed, returning tool result only", e); aiNote = `AI unavailable (${e?.message || e}) — showing MCP result.`; }
   }
   if (aiAnswer || aiNote) rememberConversation(conversationId, { prompt, tool, resultJson: JSON.stringify(data), aiAnswer });
-  return { prompt, tool, args, result: data, psTrace, ...(aiAnswer ? { aiAnswer, aiUsage } : aiNote ? { aiNote } : {}) };
+  const nextActions = getFollowUps(tool, args ?? {}, prompt);
+  return { prompt, tool, args, result: data, psTrace, nextActions, ...(aiAnswer ? { aiAnswer, aiUsage } : aiNote ? { aiNote } : {}) };
 });
 
 
