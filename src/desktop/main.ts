@@ -140,7 +140,11 @@ function createWindow() {
     autoHideMenuBar: true,
     show: false,
   });
-  win.once("ready-to-show", () => { if (!gateLocked) win?.show(); });
+  // Always show the window: when the app lock is on, the renderer covers
+  // it with the lock overlay once status resolves. Hiding the window here
+  // would hide the overlay too, leaving the app apparently unlaunched.
+  // Enforcement while locked comes from withholding MCP + the IPC guards.
+  win.once("ready-to-show", () => win?.show());
   // In dev, load vite dev server; in prod, load dist or fallback to src
   const devUrl = process.env.VITE_DEV_SERVER_URL;
   if (devUrl) win.loadURL(devUrl);
@@ -170,10 +174,11 @@ function startMcpInternal(){
 app.whenReady().then(async () => {
   createWindow();
   if (isAppLockEnabled()) {
-    // App lock gate: window stays hidden and the MCP child (which holds
-    // Exchange credentials) is NOT started until a successful unlock.
+    // App lock gate: the window still shows (it carries the lock overlay),
+    // but the MCP child (which holds Exchange credentials) is NOT started
+    // until a successful unlock, and exchange:ask / mcp:start refuse work.
     gateLocked = true;
-    console.log("App lock enabled — window hidden until unlock");
+    console.log("App lock enabled — lock overlay up, MCP withheld until unlock");
     return;
   }
   const startInfo = await startMcpInternal();
@@ -287,6 +292,9 @@ async function unlockApp(): Promise<void> {
 
 ipcMain.handle("applock:unlock", async (_e, { code, pin }: { code: string; pin?: string }) => {
   const s = loadAppLock();
+  // Debug telemetry (never logs codes, PINs, or secrets — booleans only).
+  const dbg = { enabled: s.enabled, gateLocked, hasSecret: !!readAppSecret(s), hasPin: !!s.pin, failedAttempts: s.failedAttempts };
+  console.log("applock:unlock attempt", JSON.stringify(dbg));
   if (!s.enabled) return { ok: true, notEnabled: true };
   if (!gateLocked) return { ok: true };
   const now = Date.now();
@@ -301,16 +309,19 @@ ipcMain.handle("applock:unlock", async (_e, { code, pin }: { code: string; pin?:
     return { ok: false, error: "Wrong PIN.", attemptsLeft: Math.max(0, 5 - next.failedAttempts), locked: l.locked, retryAfterMs: l.retryAfterMs };
   }
   if (verifyTotp(secret, code)) {
+    console.log("applock:unlock TOTP accepted");
     saveAppLock({ ...s, ...resetFailures() });
     await unlockApp();
     return { ok: true };
   }
   const consumed = consumeRecoveryCode(s.recoveryHashes, code);
   if (consumed.ok) {
+    console.log("applock:unlock recovery code accepted");
     saveAppLock({ ...s, recoveryHashes: consumed.remaining, ...resetFailures() });
     await unlockApp();
     return { ok: true, usedRecovery: true, remainingRecovery: consumed.remaining.length };
   }
+  console.log("applock:unlock rejected (bad code)");
   const next: AppLockPersisted = { ...s, ...recordFailure(s, now) };
   saveAppLock(next);
   const lockoutAfter = isLockedOut(next, now);

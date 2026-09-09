@@ -88,7 +88,9 @@ export function generateTotp(secretBase32: string, opts: TotpOptions = {}): stri
 
 /** Verify with a ±1 step clock-skew window. Never throws. */
 export function verifyTotp(secretBase32: string, token: string, opts: TotpOptions = {}): boolean {
-  const t = String(token ?? "").trim();
+  // Accept spaces/dashes users add for readability ("123 456") — the input
+  // placeholder itself suggests a spaced format, so normalize before check.
+  const t = String(token ?? "").replace(/[\s-]+/g, "");
   const digits = opts.digits ?? 6;
   if (!/^\d+$/.test(t) || t.length !== digits) return false;
   try {
@@ -115,7 +117,9 @@ function randomCode(chars: number): string {
 }
 
 export function hashRecoveryCode(code: string): string {
-  return createHash("sha256").update(`applock-recovery:${String(code).trim().toUpperCase()}`).digest("hex");
+  // Strip whitespace only — issued codes contain dashes ("XXXX-XXXX") and
+  // their stored hashes were computed with dashes intact.
+  return createHash("sha256").update(`applock-recovery:${String(code).replace(/\s+/g, "").toUpperCase()}`).digest("hex");
 }
 
 export function generateEnrollment(label = "exchange-desktop"): Enrollment {

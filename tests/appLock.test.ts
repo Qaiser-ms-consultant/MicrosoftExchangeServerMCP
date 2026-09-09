@@ -59,6 +59,9 @@ describe("verifyTotp", () => {
     expect(verifyTotp("!!!", "123456")).toBe(false);
     expect(verifyTotp(RFC_SECRET_B32, "12")).toBe(false);
   });
+  it("accepts readability spaces in the code", () => {
+    expect(verifyTotp(RFC_SECRET_B32, "9428 7082", { atMs: 59_000, digits: 8 })).toBe(true);
+  });
 });
 
 describe("enrollment", () => {
