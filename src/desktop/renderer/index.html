@@ -215,6 +215,10 @@
 </div>
 </div>
 <div class="p-4 bg-[#0e1423] border-t border-[#1a253c]">
+<div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2.5 flex items-center justify-between"><span>🔒 App Lock (MFA)</span><span id="appLockState" class="text-[10px] font-mono text-slate-500">…</span></div>
+<div id="appLockBody" class="flex flex-col gap-2 text-xs text-slate-400">Loading…</div>
+</div>
+<div class="p-4 bg-[#0e1423] border-t border-[#1a253c]">
 <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2.5 flex items-center justify-between"><span>Quick Diagnostic Prompts</span><span class="text-[10px] text-slate-500 font-mono">10 fresh picks every launch</span></div>
 <div class="flex flex-wrap gap-2" id="quickPromptButtons"></div>
 </div>
@@ -2154,6 +2158,181 @@ document.getElementById('aiCoachToggle')?.addEventListener('click', () => {
   document.getElementById('aiCoachWrap')?.classList.toggle('hidden', hidden);
   if (!hidden) aiCoachValidate();
 });
+
+// ===== App lock (launch MFA gate) =====
+function applockBridge(){ return (typeof isDesktop !== 'undefined' && isDesktop && window.exchangeDesktop?.applockStatus) ? window.exchangeDesktop : null; }
+function applockSetErr(msg){
+  const el = document.getElementById('appLockErr');
+  if (!el) return;
+  if (!msg){ el.classList.add('hidden'); el.textContent = ''; return; }
+  el.classList.remove('hidden'); el.textContent = msg;
+}
+function applockFmtMs(ms){
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  return s >= 60 ? Math.floor(s / 60) + 'm ' + (s % 60) + 's' : s + 's';
+}
+async function applockInit(){
+  if (!applockBridge()) return;
+  try {
+    const st = await window.exchangeDesktop.applockStatus();
+    if (st.enabled && st.locked) {
+      document.getElementById('appLockOverlay')?.classList.remove('hidden');
+      if (st.hasPin) document.getElementById('appLockPinRow')?.classList.remove('hidden');
+      applockTickLockout(st);
+      setTimeout(() => document.getElementById('appLockCode')?.focus(), 300);
+    }
+  } catch (e) { console.error('applock status failed', e); }
+  applockRefresh();
+}
+function applockTickLockout(st){
+  clearInterval(window.__alTimer);
+  const btn = document.getElementById('appLockUnlock');
+  const meta = document.getElementById('appLockMeta');
+  if (!st.lockout?.locked){ if (btn) btn.disabled = false; if (meta) meta.textContent = st.remainingRecovery != null ? st.remainingRecovery + ' recovery codes left' : ''; return; }
+  if (btn) btn.disabled = true;
+  const update = () => {
+    const left = (st.lockout.retryAfterMs || 0) - (Date.now() - (st.lockout._at || Date.now()));
+    if (meta) meta.textContent = 'Locked — retry in ' + applockFmtMs(Math.max(0, left));
+    if (left <= 0){ clearInterval(window.__alTimer); applockRefresh(); }
+  };
+  st.lockout._at = Date.now();
+  update();
+  window.__alTimer = setInterval(update, 1000);
+}
+async function applockUnlockSubmit(){
+  const codeEl = document.getElementById('appLockCode');
+  const pinEl = document.getElementById('appLockPin');
+  const btn = document.getElementById('appLockUnlock');
+  const code = (codeEl?.value || '').trim();
+  if (!code){ applockSetErr('Enter your 6-digit code or a recovery code.'); return; }
+  applockSetErr('');
+  if (btn) btn.disabled = true;
+  try {
+    const r = await window.exchangeDesktop.applockUnlock(code, (pinEl?.value || '').trim() || undefined);
+    if (r?.ok){
+      document.getElementById('appLockOverlay')?.classList.add('hidden');
+      if (codeEl) codeEl.value = '';
+      if (pinEl) pinEl.value = '';
+      if (r.usedRecovery) alert('Recovery code accepted (' + r.remainingRecovery + ' left). Consider regenerating codes in Security settings.');
+      for (const fn of ['refreshBackendLabels','updateDesktopMcpStatus','updateMcpServerStatus','updateAiMcpStatus']) {
+        try { if (typeof window[fn] === 'function') await window[fn](); } catch {}
+      }
+      applockRefresh();
+      return;
+    }
+    if (r?.locked){ applockTickLockout({ lockout: { locked: true, retryAfterMs: r.retryAfterMs }, remainingRecovery: undefined }); }
+    else {
+      const left = (r?.attemptsLeft != null) ? ' (' + r.attemptsLeft + ' attempts left)' : '';
+      applockSetErr((r?.error || 'Unlock failed.') + left);
+    }
+  } catch (e) { applockSetErr('Unlock failed: ' + (e?.message || e)); }
+  finally { const st = await window.exchangeDesktop.applockStatus().catch(() => null); if (st && !st.lockout?.locked && btn) btn.disabled = false; }
+}
+document.getElementById('appLockUnlock')?.addEventListener('click', applockUnlockSubmit);
+document.getElementById('appLockCode')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') applockUnlockSubmit(); });
+document.getElementById('appLockPin')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') applockUnlockSubmit(); });
+
+async function applockRefresh(){
+  const body = document.getElementById('appLockBody');
+  const badge = document.getElementById('appLockState');
+  if (!body) return;
+  const b = applockBridge();
+  if (!b){ if (badge) badge.textContent = 'desktop only'; body.innerHTML = '<span class="text-slate-500">Available when running the Electron app.</span>'; return; }
+  let st;
+  try { st = await b.applockStatus(); }
+  catch (e) { body.innerHTML = '<span class="text-red-400">Status unavailable.</span>'; return; }
+  if (badge){
+    badge.textContent = st.enabled ? (st.locked ? 'Locked' : 'On') : 'Off';
+    badge.className = 'text-[10px] font-mono ' + (st.enabled ? 'text-emerald-400' : 'text-slate-500');
+  }
+  if (!st.enabled){
+    body.innerHTML = '<span class="text-slate-500">No launch gate. Anyone opening this app reaches your Exchange data.</span>'
+      + '<button id="alEnable" class="px-2.5 py-1.5 rounded-md bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-200 text-xs text-left transition">Enable app lock…</button>';
+    document.getElementById('alEnable')?.addEventListener('click', applockStartEnroll);
+    return;
+  }
+  body.innerHTML = '<div class="flex items-center justify-between"><span>App lock is on' + (st.hasPin ? ' + PIN' : '') + ' · ' + st.remainingRecovery + ' recovery codes left</span></div>'
+    + (st.weakStorage ? '<div class="p-2 rounded border border-amber-500/40 bg-amber-500/5 text-amber-300 text-[11px]">OS keychain unavailable — secret stored weakly. Anyone with file access can read it.</div>' : '')
+    + '<div class="flex gap-2"><input id="alCode" placeholder="Authenticator code" inputmode="numeric" class="flex-1 p-1.5 bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200 placeholder-slate-600 focus:border-blue-500 outline-none font-mono" />'
+    + '<button id="alRegen" class="px-2 py-1 rounded bg-[#141c2e] hover:bg-[#1c273e] text-slate-300 border border-[#22304d] text-[11px]">New codes</button>'
+    + '<button id="alDisable" class="px-2 py-1 rounded bg-[#141c2e] hover:bg-red-900/40 text-slate-300 border border-[#22304d] text-[11px]">Disable</button></div>'
+    + '<div id="alMsg" class="text-[11px]"></div>';
+  document.getElementById('alRegen')?.addEventListener('click', async () => {
+    const code = (document.getElementById('alCode') || {}).value?.trim() || '';
+    const msg = document.getElementById('alMsg');
+    try {
+      const r = await b.applockRecoveryRegenerate(code);
+      if (r?.ok && msg) msg.innerHTML = '<span class="text-emerald-400">New codes (save now — shown once):</span><div class="font-mono text-slate-200 mt-1">' + r.recoveryCodes.map(esc).join('<br>') + '</div>';
+      else if (msg) msg.innerHTML = '<span class="text-red-400">' + esc(r?.error || 'Failed.') + '</span>';
+    } catch (e) { if (msg) msg.innerHTML = '<span class="text-red-400">' + esc(e?.message || String(e)) + '</span>'; }
+  });
+  document.getElementById('alDisable')?.addEventListener('click', async () => {
+    const code = (document.getElementById('alCode') || {}).value?.trim() || '';
+    const msg = document.getElementById('alMsg');
+    try {
+      const r = await b.applockDisable(code);
+      if (r?.ok){ applockRefresh(); }
+      else if (msg) msg.innerHTML = '<span class="text-red-400">' + esc(r?.error || 'Failed.') + '</span>';
+    } catch (e) { if (msg) msg.innerHTML = '<span class="text-red-400">' + esc(e?.message || String(e)) + '</span>'; }
+  });
+}
+
+async function applockStartEnroll(){
+  const body = document.getElementById('appLockBody');
+  const b = applockBridge();
+  if (!body || !b) return;
+  body.innerHTML = '<span class="text-slate-500">Generating…</span>';
+  try {
+    const r = await b.applockEnrollStart();
+    window.__alEnroll = true;
+    body.innerHTML = '<span class="text-slate-200 font-medium">1. Scan with your authenticator app</span>'
+      + (r.qrDataUrl ? '<img src="' + r.qrDataUrl + '" alt="TOTP QR" class="w-40 h-40 bg-white rounded p-1" />' : '')
+      + '<span class="text-slate-500">or enter key manually (click to copy):</span>'
+      + '<div class="font-mono text-[11px] text-cyan-300 break-all cursor-pointer" id="alKey" title="Click to copy">' + esc(r.secretBase32) + '</div>'
+      + '<span class="text-slate-200 font-medium mt-1">2. Save these recovery codes (shown once)</span>'
+      + '<div class="font-mono text-[11px] text-slate-200">' + r.recoveryCodes.map(esc).join('<br>') + '</div>'
+      + '<button id="alCopyCodes" class="px-2 py-1 rounded bg-[#141c2e] hover:bg-[#1c273e] text-slate-300 border border-[#22304d] text-[11px] w-fit">Copy codes</button>'
+      + '<span class="text-slate-200 font-medium mt-1">3. Verify to enable</span>'
+      + '<div class="flex gap-2"><input id="alToken" placeholder="6-digit code" inputmode="numeric" class="flex-1 p-1.5 bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200 placeholder-slate-600 focus:border-blue-500 outline-none font-mono" />'
+      + '<input id="alPin" placeholder="PIN (optional)" type="password" inputmode="numeric" class="w-28 p-1.5 bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200 placeholder-slate-600 focus:border-blue-500 outline-none font-mono" /></div>'
+      + '<div class="flex gap-2"><button id="alVerify" class="px-3 py-1.5 rounded-md bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-medium">Verify & enable</button>'
+      + '<button id="alCancelEnroll" class="px-3 py-1.5 rounded-md bg-[#141c2e] hover:bg-[#1c273e] text-slate-300 border border-[#22304d] text-xs">Cancel</button></div>'
+      + '<div id="alMsg" class="text-[11px]"></div>'
+      + (r.weakStorage ? '<div class="p-2 rounded border border-amber-500/40 bg-amber-500/5 text-amber-300 text-[11px]">OS keychain unavailable — secret will be stored weakly.</div>' : '');
+    document.getElementById('alKey')?.addEventListener('click', () => navigator.clipboard.writeText(r.secretBase32));
+    document.getElementById('alCopyCodes')?.addEventListener('click', () => navigator.clipboard.writeText(r.recoveryCodes.join('\n')));
+    document.getElementById('alCancelEnroll')?.addEventListener('click', () => { window.__alEnroll = null; applockRefresh(); });
+    document.getElementById('alVerify')?.addEventListener('click', async () => {
+      const token = (document.getElementById('alToken') || {}).value?.trim() || '';
+      const pin = (document.getElementById('alPin') || {}).value?.trim() || undefined;
+      const msg = document.getElementById('alMsg');
+      try {
+        const v = await b.applockEnrollVerify(token, pin);
+        if (v?.ok){ window.__alEnroll = null; applockRefresh(); }
+        else if (msg) msg.innerHTML = '<span class="text-red-400">' + esc(v?.error || 'Verification failed.') + '</span>';
+      } catch (e) { if (msg) msg.innerHTML = '<span class="text-red-400">' + esc(e?.message || String(e)) + '</span>'; }
+    });
+  } catch (e) {
+    body.innerHTML = '<span class="text-red-400">Enrollment failed: ' + esc(e?.message || String(e)) + '</span>';
+  }
+}
+document.addEventListener('DOMContentLoaded', () => { setTimeout(applockInit, 600); });
+<!-- App lock gate: covers the whole UI until unlock. Shown on launch only
+     when the lock is enabled; the main process also withholds the window
+     and the MCP child until then. -->
+<div id="appLockOverlay" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-[#090d16]/95 backdrop-blur-sm">
+  <div class="w-[340px] bg-[#121829] border border-[#1f2d48] rounded-xl p-6 shadow-xl shadow-black/40">
+    <div class="flex items-center gap-2 mb-1"><span class="text-lg">🔒</span><h2 class="text-sm font-semibold text-slate-200">App locked</h2></div>
+    <p class="text-[11px] text-slate-500 mb-4">Enter your authenticator code to unlock. Recovery codes work too.</p>
+    <div id="appLockPinRow" class="hidden mb-2">
+      <input id="appLockPin" type="password" inputmode="numeric" autocomplete="off" placeholder="App PIN" class="w-full p-2 bg-[#0b0f19] border border-[#22304d] rounded text-sm text-slate-200 placeholder-slate-600 focus:border-blue-500 outline-none text-center tracking-widest" />
+    </div>
+    <input id="appLockCode" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="123 456" maxlength="11" class="w-full p-2 bg-[#0b0f19] border border-[#22304d] rounded text-sm text-slate-200 placeholder-slate-600 focus:border-blue-500 outline-none text-center tracking-[0.3em] font-mono" />
+    <button id="appLockUnlock" class="w-full mt-3 px-3 py-2 rounded-md bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-sm font-medium disabled:opacity-50">Unlock</button>
+    <div id="appLockErr" class="hidden mt-2 p-2 rounded border border-red-500/40 bg-red-500/5 text-[11px] text-red-300"></div>
+    <div id="appLockMeta" class="mt-2 text-[10px] font-mono text-slate-500 text-center"></div>
+  </div>
+</div>
 </script>
 </body>
 </html>

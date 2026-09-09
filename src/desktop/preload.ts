@@ -17,4 +17,10 @@ contextBridge.exposeInMainWorld("exchangeDesktop", {
   updaterRestart: () => ipcRenderer.invoke("updater:restart"),
   promptValidate: (prompt: string) => ipcRenderer.invoke("prompt:validate", { prompt }),
   promptEnhance: (prompt: string, useModel?: boolean) => ipcRenderer.invoke("prompt:enhance", { prompt, useModel }),
+  applockStatus: () => ipcRenderer.invoke("applock:status"),
+  applockEnrollStart: (label?: string) => ipcRenderer.invoke("applock:enroll-start", { label }),
+  applockEnrollVerify: (token: string, pin?: string) => ipcRenderer.invoke("applock:enroll-verify", { token, pin }),
+  applockUnlock: (code: string, pin?: string) => ipcRenderer.invoke("applock:unlock", { code, pin }),
+  applockDisable: (code: string) => ipcRenderer.invoke("applock:disable", { code }),
+  applockRecoveryRegenerate: (code: string) => ipcRenderer.invoke("applock:recovery-regenerate", { code }),
 });

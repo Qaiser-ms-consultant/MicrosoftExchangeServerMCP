@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from "electron";
+import { app, BrowserWindow, ipcMain, dialog, safeStorage } from "electron";
 import { createInterface } from "readline";
 import { join, resolve, dirname } from "node:path";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
@@ -14,6 +14,17 @@ import { appendExchange, buildContextBlocks, clipText, fillMissingArgs, narrowCa
 import { checkForUpdates, checkZipUpdate, isGitCheckout, performUpdate, performZipUpdate } from "./updater.js";
 import { enhancePrompt, enhancePromptWithModel, guardResult } from "./promptGuard.js";
 import { getFollowUps } from "./followUps.js";
+import {
+  consumeRecoveryCode,
+  generateEnrollment,
+  hashPin,
+  isLockedOut,
+  recordFailure,
+  resetFailures,
+  verifyPin,
+  verifyTotp,
+  type PinStored,
+} from "./appLock.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -36,6 +47,84 @@ function ensureConfig(): string {
   return p;
 }
 
+interface AppLockPersisted {
+  enabled: boolean;
+  secretEnc: string | null; // base64 safeStorage payload (OS keychain)
+  secretPlain: string | null; // fallback only when safeStorage is unavailable
+  weakStorage: boolean;
+  recoveryHashes: string[];
+  failedAttempts: number;
+  lockoutUntil: number;
+  pin: PinStored | null;
+}
+
+const APPLOCK_DEFAULTS: AppLockPersisted = {
+  enabled: false,
+  secretEnc: null,
+  secretPlain: null,
+  weakStorage: false,
+  recoveryHashes: [],
+  failedAttempts: 0,
+  lockoutUntil: 0,
+  pin: null,
+};
+
+// True from launch until a successful unlock. While gated the window stays
+// hidden, the MCP child is not started, and exchange:ask refuses work.
+let gateLocked = false;
+let pendingEnrollment: { secretBase32: string; recoveryHashes: string[]; createdAt: number } | null = null;
+
+function appLockPath(): string {
+  return resolve(getUserDataPath(), "applock.json");
+}
+
+function loadAppLock(): AppLockPersisted {
+  try {
+    const raw = readFileSync(appLockPath(), "utf-8");
+    return { ...APPLOCK_DEFAULTS, ...JSON.parse(raw) };
+  } catch {
+    return { ...APPLOCK_DEFAULTS };
+  }
+}
+
+function saveAppLock(s: AppLockPersisted): void {
+  mkdirSync(getUserDataPath(), { recursive: true });
+  writeFileSync(appLockPath(), JSON.stringify(s, null, 2), { encoding: "utf-8", mode: 0o600 });
+}
+
+function encryptionAvailable(): boolean {
+  try {
+    return safeStorage.isEncryptionAvailable();
+  } catch {
+    return false;
+  }
+}
+
+function readAppSecret(s: AppLockPersisted): string | null {
+  if (s.secretEnc) {
+    try {
+      return safeStorage.decryptString(Buffer.from(s.secretEnc, "base64"));
+    } catch {
+      return null;
+    }
+  }
+  return s.secretPlain;
+}
+
+function storeAppSecret(s: AppLockPersisted, secretBase32: string): AppLockPersisted {
+  try {
+    if (encryptionAvailable()) {
+      return { ...s, secretEnc: safeStorage.encryptString(secretBase32).toString("base64"), secretPlain: null, weakStorage: false };
+    }
+  } catch {}
+  return { ...s, secretEnc: null, secretPlain: secretBase32, weakStorage: true };
+}
+
+function isAppLockEnabled(): boolean {
+  const s = loadAppLock();
+  return s.enabled && !!readAppSecret(s);
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1280,
@@ -51,7 +140,7 @@ function createWindow() {
     autoHideMenuBar: true,
     show: false,
   });
-  win.once("ready-to-show", () => win?.show());
+  win.once("ready-to-show", () => { if (!gateLocked) win?.show(); });
   // In dev, load vite dev server; in prod, load dist or fallback to src
   const devUrl = process.env.VITE_DEV_SERVER_URL;
   if (devUrl) win.loadURL(devUrl);
@@ -80,6 +169,13 @@ function startMcpInternal(){
 
 app.whenReady().then(async () => {
   createWindow();
+  if (isAppLockEnabled()) {
+    // App lock gate: window stays hidden and the MCP child (which holds
+    // Exchange credentials) is NOT started until a successful unlock.
+    gateLocked = true;
+    console.log("App lock enabled — window hidden until unlock");
+    return;
+  }
   const startInfo = await startMcpInternal();
   console.log('MCP auto‑started', startInfo);
 });
@@ -114,6 +210,136 @@ ipcMain.handle("updater:restart", async () => {
   app.quit();
   return { ok: true };
 });
+// App lock (launch MFA gate): TOTP + optional PIN + recovery codes.
+// The TOTP secret is encrypted with the OS keychain (Electron safeStorage)
+// whenever available; recovery codes are stored as SHA-256 hashes.
+async function qrDataUrlFor(otpauthUrl: string): Promise<string | null> {
+  try {
+    const { default: QRCode } = await import("qrcode");
+    return await QRCode.toDataURL(otpauthUrl);
+  } catch {
+    return null;
+  }
+}
+
+ipcMain.handle("applock:status", async () => {
+  const s = loadAppLock();
+  const lockout = isLockedOut(s, Date.now());
+  return {
+    enabled: s.enabled,
+    locked: gateLocked,
+    lockout,
+    attemptsLeft: Math.max(0, 5 - s.failedAttempts),
+    remainingRecovery: s.recoveryHashes.length,
+    weakStorage: s.weakStorage,
+    hasPin: !!s.pin,
+  };
+});
+
+ipcMain.handle("applock:enroll-start", async (_e, { label }: { label?: string }) => {
+  const s = loadAppLock();
+  // A locked app cannot re-enroll (that would bypass the gate).
+  if (s.enabled && gateLocked) throw new Error("App is locked — unlock before re-enrolling.");
+  const e = generateEnrollment(label || "exchange-desktop");
+  pendingEnrollment = { secretBase32: e.secretBase32, recoveryHashes: e.recoveryHashes, createdAt: Date.now() };
+  return {
+    secretBase32: e.secretBase32,
+    otpauthUrl: e.otpauthUrl,
+    qrDataUrl: await qrDataUrlFor(e.otpauthUrl),
+    recoveryCodes: e.recoveryCodes,
+    weakStorage: !encryptionAvailable(),
+  };
+});
+
+ipcMain.handle("applock:enroll-verify", async (_e, { token, pin }: { token: string; pin?: string }) => {
+  if (!pendingEnrollment || Date.now() - pendingEnrollment.createdAt > 10 * 60_000) {
+    pendingEnrollment = null;
+    return { ok: false, error: "Enrollment expired — start again." };
+  }
+  if (!verifyTotp(pendingEnrollment.secretBase32, token)) {
+    return { ok: false, error: "Code does not match — check the authenticator entry and try again." };
+  }
+  if (pin !== undefined && pin !== "" && !/^\d{4,12}$/.test(pin)) {
+    return { ok: false, error: "PIN must be 4–12 digits." };
+  }
+  let s = loadAppLock();
+  s = storeAppSecret(s, pendingEnrollment.secretBase32);
+  s = {
+    ...s,
+    enabled: true,
+    recoveryHashes: pendingEnrollment.recoveryHashes,
+    pin: pin ? hashPin(pin) : null,
+    ...resetFailures(),
+  };
+  saveAppLock(s);
+  pendingEnrollment = null;
+  return { ok: true, weakStorage: s.weakStorage };
+});
+
+async function unlockApp(): Promise<void> {
+  gateLocked = false;
+  win?.show();
+  if (!mcpProc) {
+    const startInfo = await startMcpInternal();
+    console.log("MCP auto‑started after unlock", startInfo);
+  }
+}
+
+ipcMain.handle("applock:unlock", async (_e, { code, pin }: { code: string; pin?: string }) => {
+  const s = loadAppLock();
+  if (!s.enabled) return { ok: true, notEnabled: true };
+  if (!gateLocked) return { ok: true };
+  const now = Date.now();
+  const lockout = isLockedOut(s, now);
+  if (lockout.locked) return { ok: false, locked: true, retryAfterMs: lockout.retryAfterMs };
+  const secret = readAppSecret(s);
+  if (!secret) return { ok: false, error: "No lock secret stored — re-enroll from Settings." };
+  if (s.pin && !verifyPin(pin ?? "", s.pin)) {
+    const next: AppLockPersisted = { ...s, ...recordFailure(s, now) };
+    saveAppLock(next);
+    const l = isLockedOut(next, now);
+    return { ok: false, error: "Wrong PIN.", attemptsLeft: Math.max(0, 5 - next.failedAttempts), locked: l.locked, retryAfterMs: l.retryAfterMs };
+  }
+  if (verifyTotp(secret, code)) {
+    saveAppLock({ ...s, ...resetFailures() });
+    await unlockApp();
+    return { ok: true };
+  }
+  const consumed = consumeRecoveryCode(s.recoveryHashes, code);
+  if (consumed.ok) {
+    saveAppLock({ ...s, recoveryHashes: consumed.remaining, ...resetFailures() });
+    await unlockApp();
+    return { ok: true, usedRecovery: true, remainingRecovery: consumed.remaining.length };
+  }
+  const next: AppLockPersisted = { ...s, ...recordFailure(s, now) };
+  saveAppLock(next);
+  const lockoutAfter = isLockedOut(next, now);
+  return { ok: false, error: "Wrong code.", attemptsLeft: Math.max(0, 5 - next.failedAttempts), locked: lockoutAfter.locked, retryAfterMs: lockoutAfter.retryAfterMs };
+});
+
+ipcMain.handle("applock:disable", async (_e, { code }: { code: string }) => {
+  if (gateLocked) throw new Error("App is locked — unlock before disabling the lock.");
+  const s = loadAppLock();
+  if (!s.enabled) return { ok: true };
+  const secret = readAppSecret(s);
+  const valid = (secret && verifyTotp(secret, code)) || consumeRecoveryCode(s.recoveryHashes, code).ok;
+  if (!valid) return { ok: false, error: "Code does not match." };
+  saveAppLock({ ...APPLOCK_DEFAULTS });
+  return { ok: true };
+});
+
+ipcMain.handle("applock:recovery-regenerate", async (_e, { code }: { code: string }) => {
+  if (gateLocked) throw new Error("App is locked — unlock first.");
+  const s = loadAppLock();
+  if (!s.enabled) return { ok: false, error: "App lock is not enabled." };
+  const secret = readAppSecret(s);
+  // Recovery codes prove nothing about authenticator possession — require TOTP.
+  if (!secret || !verifyTotp(secret, code)) return { ok: false, error: "Enter a current authenticator code." };
+  const fresh = generateEnrollment();
+  saveAppLock({ ...s, recoveryHashes: fresh.recoveryHashes });
+  return { ok: true, recoveryCodes: fresh.recoveryCodes };
+});
+
 // Prompt coach: validate + rewrite the AI Chat input before it runs.
 // Pure rules first; an optional model-assisted rewrite is layered on top
 // when a provider is configured, falling back to rules on any failure.
@@ -258,6 +484,7 @@ function attachRpcListener(){
 }
 // Ensure listener is attached when MCP starts
 ipcMain.handle("mcp:start", async () => {
+  if (gateLocked) throw new Error("App is locked — unlock to continue.");
   if (mcpProc) { try { mcpProc.kill(); } catch {} }
   const configPath = ensureConfig();
   const serverPath = resolve(process.cwd(), "dist/server.js");
@@ -363,6 +590,7 @@ function rememberConversation(conversationId: string | undefined, record: Exchan
 }
 
 ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?: boolean; tool?: string; args?: any; conversationId?: string }) => {
+  if (gateLocked) throw new Error("App is locked — unlock to continue.");
   console.log("exchange:ask invoked", payload);
   const prompt = payload.prompt ?? "";
   if(!prompt.trim()) throw new Error("Type a prompt first");
