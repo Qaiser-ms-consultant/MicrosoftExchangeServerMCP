@@ -2057,12 +2057,17 @@ function aiCoachRender(findings){
   const wrap = document.getElementById('aiCoachWrap');
   const panel = document.getElementById('aiCoachPanel');
   const list = document.getElementById('aiCoachFindings');
+  const input = document.getElementById('aiChatInput');
   if (!wrap || !panel || !list) return;
+  const hasText = !!(input && input.value.trim());
   const hasFindings = !!(findings && findings.length);
+  // The coach bar (score + Enhance buttons) stays visible for any text —
+  // only the findings panel hides when there is nothing to flag. (A clean
+  // prompt scores 100 and simply shows no findings.)
+  wrap.classList.toggle('hidden', !hasText);
+  if (!hasFindings){ list.innerHTML = ''; panel.classList.add('hidden'); return; }
   // Respect a manual collapse: the score pill still updates, but typing
   // must not force the panel back open.
-  wrap.classList.toggle('hidden', !hasFindings);
-  if (!hasFindings){ list.innerHTML = ''; panel.classList.add('hidden'); return; }
   if (!window.__coachCollapsed) panel.classList.remove('hidden');
   const sevIcon = { error: '⛔', warn: '⚠', info: 'ℹ' };
   list.innerHTML = findings.map((f)=> {
