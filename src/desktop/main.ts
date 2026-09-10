@@ -17,6 +17,7 @@ import { getFollowUps } from "./followUps.js";
 import { appendOp, clearOpLog, getOpRuns, type OpStage } from "./opLog.js";
 import { describeWriteForm } from "./writeForms.js";
 import { examplePromptsFor } from "./toolExamples.js";
+import { categorizeTool } from "./toolCategories.js";
 import { WRITE_REQUIRED_ARGS, clearPendingWrite, getPendingWrite, pendingKey, planWriteStep, redactPromptText, redactSensitiveArgs, setPendingWrite } from "./writePlan.js";
 import {
   consumeRecoveryCode,
@@ -843,6 +844,7 @@ ipcMain.handle("tools:describe", async () => {
         description: typeof t?.description === "string" ? t.description : "",
         inputSchema: t?.inputSchema && typeof t.inputSchema === "object" ? t.inputSchema : {},
         examples: examplePromptsFor(name),
+        category: categorizeTool(name),
       };
     })
     .filter((t) => t.name);

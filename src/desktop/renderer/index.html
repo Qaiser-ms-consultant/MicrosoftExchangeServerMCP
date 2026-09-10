@@ -609,6 +609,13 @@
 <div class="flex flex-wrap items-center gap-2 mb-3">
 <span class="text-xs font-bold uppercase tracking-wider text-slate-400">MCP tool catalog</span>
 <input id="docsSearch" placeholder="Search tools, descriptions, parameters…" class="flex-1 min-w-[180px] p-1.5 bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200 placeholder-slate-600 focus:border-blue-500 outline-none" />
+<select id="docsCategory" class="bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200 focus:border-blue-500 outline-none cursor-pointer px-2 py-1">
+<option value="">All operations</option>
+<option value="create">Create</option>
+<option value="read">Read</option>
+<option value="update">Update</option>
+<option value="delete">Delete</option>
+</select>
 <button id="docsRefresh" class="px-2.5 py-1 rounded-md text-xs bg-[#141c2e] hover:bg-[#1c273e] text-slate-300 border border-[#22304d]">Refresh</button>
 <button id="docsCopy" class="px-2.5 py-1 rounded-md text-xs bg-[#141c2e] hover:bg-[#1c273e] text-slate-300 border border-[#22304d]">Copy</button>
 <span id="docsCount" class="text-[11px] font-mono text-slate-500"></span>
@@ -827,9 +834,21 @@ window.__docCollapsed = {};
 function docToolGroup(name){
   return (String(name || "other").split(/[._]/)[0] || "other").toLowerCase();
 }
+const DOC_OP_PILL = {
+  create: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30",
+  read: "bg-sky-500/10 text-sky-300 border-sky-500/30",
+  update: "bg-amber-500/10 text-amber-300 border-amber-500/30",
+  delete: "bg-red-500/10 text-red-300 border-red-500/30",
+};
+function docOpPill(op){
+  const cls = DOC_OP_PILL[op] || DOC_OP_PILL.read;
+  return `<span class="inline-flex items-center px-1.5 py-0 rounded text-[10px] font-mono border ${cls}">${esc(op || "read")}</span>`;
+}
 function docFilteredTools(){
   const q = ((document.getElementById("docsSearch") || {}).value || "").trim().toLowerCase();
+  const cat = ((document.getElementById("docsCategory") || {}).value || "").trim().toLowerCase();
   return (window.__docTools || []).filter((t) => {
+    if (cat && String(t.category || "read").toLowerCase() !== cat) return false;
     if (!q) return true;
     return JSON.stringify(t).toLowerCase().indexOf(q) >= 0;
   });
@@ -870,6 +889,7 @@ function renderDocs(){
         return `<details class="rounded border border-[#1a253a] bg-[#0b0f19] px-2 py-1.5">
           <summary class="cursor-pointer list-none flex items-center gap-2">
             <span class="font-mono text-xs text-slate-200">${esc(t.name)}</span>
+            ${docOpPill(t.category || "read")}
             <span class="text-[11px] text-slate-500 truncate flex-1">${esc((t.description || "").slice(0, 140))}</span>
           </summary>
           <div class="mt-1.5 pt-1.5 border-t border-[#1a253a]">
@@ -897,6 +917,7 @@ async function loadDocs(){
 }
 document.querySelector('[data-tab="docs"]')?.addEventListener("click", loadDocs);
 document.getElementById("docsSearch")?.addEventListener("input", renderDocs);
+document.getElementById("docsCategory")?.addEventListener("change", renderDocs);
 document.getElementById("docsRefresh")?.addEventListener("click", loadDocs);
 document.getElementById("docsCopy")?.addEventListener("click", () => {
   navigator.clipboard.writeText(JSON.stringify(docFilteredTools(), null, 2));
