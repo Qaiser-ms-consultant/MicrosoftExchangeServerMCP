@@ -177,6 +177,23 @@ export async function chatComplete(
   }
 }
 
+// --- Prompt normalizer (model rewrites a raw request into canonical,
+// router-friendly phrasing; the keyword router stays the routing authority)
+export function buildNormalizerMessages(prompt: string): ChatMessage[] {
+  return [
+    {
+      role: "system",
+      content: [
+        "Rewrite the user's Exchange administration request into one clear, canonical request.",
+        "Fix typos and grammar; expand abbreviations and synonyms into plain admin words (list, show, count, create, remove, database, mailbox, queue, certificate).",
+        "Preserve verbatim: email addresses, database and server names, numbers with units (50GB), and quoted strings.",
+        "Reply with ONLY the rewritten request, no quotes, no explanation, no extra text.",
+      ].join(" "),
+    },
+    { role: "user", content: prompt },
+  ];
+}
+
 // --- Tool-picker (model interprets unknown prompts into MCP tool calls) ---
 
 export function buildToolPickerMessages(prompt: string, toolNames: string[], customSystemPrompt?: string, context?: string): ChatMessage[] {

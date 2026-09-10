@@ -9,7 +9,7 @@ import { hasWriteIntent, helpExamplesFor, helpHintFor, routeQuery } from "./quer
 import type { RouteResult } from "./queryRouter.js";
 import { loadConfig } from "../config.js";
 import { parse as parseYaml } from "yaml";
-import { buildSummaryMessages, buildToolPickerMessages, chatComplete, isAiProvider, isEmptyResult, isToolCallEcho, parseNoToolVerdict, parseToolSelection } from "./modelClient.js";
+import { buildNormalizerMessages, buildSummaryMessages, buildToolPickerMessages, chatComplete, isAiProvider, isEmptyResult, isToolCallEcho, parseNoToolVerdict, parseToolSelection } from "./modelClient.js";
 import { appendExchange, buildContextBlocks, clipText, fillMissingArgs, narrowCatalog, recallIdentities, type ExchangeRecord } from "./conversationContext.js";
 import { checkForUpdates, checkZipUpdate, isGitCheckout, performUpdate, performZipUpdate } from "./updater.js";
 import { enhancePrompt, enhancePromptWithModel, guardResult } from "./promptGuard.js";
@@ -632,7 +632,31 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
     write = true;
     logOp("route", "explicit tool (confirm / form / paging flow)", { tool, args });
   } else {
-    const route = routeQuery(prompt);
+    let route = routeQuery(prompt);
+    let normalizedFrom: string | null = null;
+    // Normalize-first: when raw routing yields no tool, let the model repair
+    // typos/paraphrases into router-friendly phrasing and re-route. The
+    // keyword router stays authoritative; on any failure the raw prompt is
+    // used exactly as before. Skipped for explicit tool flows (payload.tool).
+    if (aiMode && modelCfg && "help" in route) {
+      try {
+        const normMsgs = buildNormalizerMessages(prompt);
+        logOp("model_request", "prompt normalizer", { provider: modelCfg.provider, model: modelCfg.model, messages: normMsgs.map((m) => ({ role: String((m as any).role), chars: String((m as any).content ?? "").length, content: clipText(String((m as any).content ?? ""), 4000) })) });
+        const t0 = Date.now();
+        const rewritten = (await chatComplete(modelCfg, normMsgs)).text;
+        const ms = Date.now() - t0;
+        const canonical = rewritten.split("\n")[0].trim().replace(/^["']+|["'.]+$/g, "").slice(0, 500);
+        logOp("model_response", "prompt normalized", { ms, from: clipText(prompt, 200), to: clipText(canonical, 200) }, ms);
+        if (canonical) {
+          const rerouted = routeQuery(canonical);
+          if (!("help" in rerouted)) {
+            route = rerouted;
+            normalizedFrom = canonical;
+            logOp("route", `keyword router (normalized): ${(rerouted as RouteResult).tool}`, { tool: (rerouted as RouteResult).tool, args: (rerouted as RouteResult).args, normalizedFrom: canonical });
+          }
+        }
+      } catch (e) { console.error("prompt normalization failed, using raw prompt", e); }
+    }
     // AI fallback: model interprets prompts the keyword router cannot classify.
     // It also reinterprets loose write phrasing that matched a read-only route
     // (e.g. typos/synonyms the keywords missed) across the full tool catalog.
@@ -640,7 +664,7 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
     if (aiMode && modelCfg) {
       const logPicker = (stage: OpStage, label: string, body?: unknown, ms?: number) => logOp(stage, label, body, ms);
       if ("help" in route) aiRouted = await tryAiRoute(prompt, modelCfg, contextBlock || undefined, recentTools, logPicker);
-      else if (!route.write && hasWriteIntent(prompt)) aiRouted = await tryAiRoute(prompt, modelCfg, contextBlock || undefined, recentTools, logPicker);
+      else if (!route.write && hasWriteIntent(normalizedFrom ?? prompt)) aiRouted = await tryAiRoute(prompt, modelCfg, contextBlock || undefined, recentTools, logPicker);
     }
     if ("help" in route && !aiRouted) {
       logOp("route", "help card (no tool matched)", { aiMode });

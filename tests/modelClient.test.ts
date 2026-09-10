@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  buildNormalizerMessages,
   buildSummaryMessages,
   buildToolPickerMessages,
   chatComplete,
@@ -76,6 +77,16 @@ describe("buildToolPickerMessages", () => {
   it("carries catalog description lines through verbatim", () => {
     const msgs = buildToolPickerMessages("remove it", ["a.tool — Remove a thing"]);
     expect(msgs[0].content).toContain("a.tool — Remove a thing");
+  });
+});
+
+describe("buildNormalizerMessages", () => {
+  it("asks for a canonical rewrite with entities preserved verbatim", () => {
+    const msgs = buildNormalizerMessages("List All maiboxes");
+    expect(msgs[1].content).toBe("List All maiboxes");
+    expect(msgs[0].content).toContain("typo");
+    expect(msgs[0].content).toContain("email");
+    expect(msgs[0].content).toContain("ONLY the rewritten request");
   });
 });
 
