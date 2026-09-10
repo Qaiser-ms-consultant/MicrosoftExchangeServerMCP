@@ -80,6 +80,13 @@ describe("listMailboxes keyset pagination", () => {
     expect(seen[0]).toContain("Database -eq 'DB01'");
   });
 
+  it("combines a name filter with the Alias cursor", async () => {
+    const { ps, seen } = providerWithRows([{ DisplayName: "Al", Alias: "al" }]);
+    await ps.listMailboxes("al*", undefined, 100, { cursor: "ak" });
+    expect(seen[0]).toContain("Name -like 'al*'");
+    expect(seen[0]).toContain("Alias -gt 'ak'");
+  });
+
   it("sorts fallback pages client-side by Alias", async () => {
     const { ps } = providerWithRows([
       { DisplayName: "C", Alias: "c" },
@@ -103,6 +110,7 @@ describe("exchange_list_mailboxes paged envelope", () => {
       mailboxes: [{ DisplayName: "B", Alias: "b" }],
       nextCursor: "b",
       pageSize: 100,
+      nextPage: { tool: "exchange_list_mailboxes", args: { cursor: "b", pageSize: 100 } },
     });
   });
 
@@ -127,6 +135,7 @@ describe("exchange_list_mailboxes paged envelope", () => {
       mailboxes: [{ DisplayName: "A", Alias: "a" }],
       nextCursor: "a",
       pageSize: 100,
+      nextPage: { tool: "exchange_list_mailboxes", args: { cursor: "a", pageSize: 100 } },
     });
   });
 
@@ -148,6 +157,40 @@ describe("exchange_list_mailboxes paged envelope", () => {
       { database: "DB1", count: 0, error: "timeout" },
       { database: "DB2", count: 1 },
     ]);
+  });
+
+  it("includes a nextPage hint the narrator can follow", async () => {
+    const server = makeServer();
+    registerRecipientAdminTools(server as any, {
+      invokeJson: async () => [],
+      listMailboxes: async () => ({ items: [{ DisplayName: "B", Alias: "b" }], nextCursor: "b" }),
+    } as any);
+    const body = JSON.parse((await server.tools["exchange_list_mailboxes"]({ pageSize: 100 })).content[0].text);
+    expect(body.nextPage).toEqual({
+      tool: "exchange_list_mailboxes",
+      args: { cursor: "b", pageSize: 100 },
+    });
+    // Paging keys come before the mailbox array so narration clipping keeps them.
+    const keys = Object.keys(body);
+    expect(keys.indexOf("nextCursor")).toBeLessThan(keys.indexOf("mailboxes"));
+  });
+
+  it("falls back to a bounded Get-Mailbox sample when the ordered page is empty but mailboxes exist", async () => {
+    const server = makeServer();
+    registerRecipientAdminTools(server as any, {
+      invokeJson: async (cmd: string) => {
+        if (cmd.startsWith("Get-MailboxDatabase")) return [{ Name: "DB1" }];
+        if (cmd.includes("-Database 'DB1'")) return [{ Alias: "a" }, { Alias: "b" }];
+        if (cmd.startsWith("Get-Mailbox -ResultSize")) return [{ DisplayName: "A", Alias: "a" }];
+        return [];
+      },
+      listMailboxes: async () => ({ items: [], nextCursor: null }),
+    } as any);
+    const body = JSON.parse((await server.tools["exchange_discover_mailboxes"]({})).content[0].text);
+    expect(body.totalMailboxes).toBe(2);
+    expect(body.mailboxes).toHaveLength(1);
+    expect(body.partial).toBe(true);
+    expect(body.note).toContain("unsorted sample");
   });
 
   it("passes cursor and database through to the provider", async () => {

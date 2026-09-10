@@ -276,8 +276,10 @@ try {
       // If filter already contains wildcard (*), use as-is (e.g. Ali*), else wrap with *filter*
       const pattern = raw.includes("*") ? raw : `*${raw}*`;
       const escPattern = escapePsSingle(pattern);
+      const nameClause = `Name -like '${escPattern}'`;
+      const cursorClause = opts?.cursor ? `Alias -gt '${escapePsSingle(opts.cursor)}'` : "";
       // No client-side -First: -Filter narrows server-side; the UI pages full sets.
-      const cmd = `Get-Recipient ${type} -Filter "${and([dbClause, `Name -like '${escPattern}'`])}" -ResultSize ${page} -SortBy Alias | Select-Object ${cols}`;
+      const cmd = `Get-Recipient ${type} -Filter "${and([dbClause, nameClause, cursorClause])}" -ResultSize ${page} -SortBy Alias | Select-Object ${cols}`;
       const result = await this.invokeJson(cmd);
       if (result.length > 0) return pageOf(result, page);
       // Fallback 1: ANR (handles Ali* prefix well)

@@ -20,7 +20,31 @@ export function registerRecipientAdminTools(server: McpServer, ps: PowerShellPro
     }
     const page = pageSize ?? Math.min(resultSize ?? 100, 200);
     const { items, nextCursor } = await ps.listMailboxes(filter, recipientType, page, { cursor, database });
-    return { content: [{ type: "text", text: JSON.stringify({ mailboxes: items, nextCursor, pageSize: page }, null, 2) }] };
+    // Paging keys first: narration clips long results, so the cursor must
+    // survive clipping. nextPage tells the narrator exactly how to continue.
+    const nextPage = nextCursor
+      ? {
+          tool: "exchange_list_mailboxes",
+          args: {
+            ...(filter ? { filter } : {}),
+            ...(recipientType ? { recipientType } : {}),
+            ...(database ? { database } : {}),
+            cursor: nextCursor,
+            pageSize: page,
+          },
+        }
+      : undefined;
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          nextCursor,
+          pageSize: page,
+          ...(nextPage ? { nextPage } : {}),
+          mailboxes: items,
+        }, null, 2),
+      }],
+    };
   });
 
   server.tool("exchange_discover_mailboxes", "Discover mailboxes granularly — total count, per-database breakdown, plus the first page (use cursor for next pages). Use this for 'list all mailboxes' on large orgs instead of fetching everything at once.", {
@@ -47,17 +71,46 @@ export function registerRecipientAdminTools(server: McpServer, ps: PowerShellPro
       }
     }
     const totalMailboxes = byDatabase.reduce((sum, d) => sum + d.count, 0);
-    const { items, nextCursor } = await ps.listMailboxes(undefined, recipientType, page, database ? { database } : undefined);
+    let { items, nextCursor } = await ps.listMailboxes(undefined, recipientType, page, database ? { database } : undefined);
+    // Resilience: per-database counts prove mailboxes exist, so an empty
+    // first page means the ordered query (not the data) failed. Fall back to
+    // one bounded Get-Mailbox sample rather than reporting an empty list.
+    let partial = false;
+    let note: string | undefined;
+    if (items.length === 0 && totalMailboxes > 0) {
+      const sample = await ps.invokeJson(
+        `Get-Mailbox -ResultSize ${page} | Select-Object DisplayName,PrimarySmtpAddress,RecipientType,Name,Alias,Identity`,
+      ).catch(() => []);
+      if (Array.isArray(sample) && sample.length > 0) {
+        items = sample;
+        partial = true;
+        note = `Ordered paging returned no rows although ${totalMailboxes} mailboxes exist; showing an unsorted sample of ${sample.length}. Narrow by database or name filter for complete paging.`;
+      }
+    }
     return {
       content: [{
         type: "text",
         text: JSON.stringify({
           totalMailboxes,
+          nextCursor,
+          pageSize: page,
+          ...(nextCursor
+            ? {
+                nextPage: {
+                  tool: "exchange_list_mailboxes",
+                  args: {
+                    ...(recipientType ? { recipientType } : {}),
+                    ...(database ? { database } : {}),
+                    cursor: nextCursor,
+                    pageSize: page,
+                  },
+                },
+              }
+            : {}),
+          ...(partial ? { partial: true, note } : {}),
           byDatabase,
           ...(scoped.length > 20 ? { truncated: true } : {}),
           mailboxes: items,
-          nextCursor,
-          pageSize: page,
         }, null, 2),
       }],
     };

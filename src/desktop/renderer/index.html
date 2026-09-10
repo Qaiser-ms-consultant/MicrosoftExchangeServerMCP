@@ -1785,7 +1785,8 @@ function aiHumanFallback(data){
         ? 'Found ' + total + ' mailbox' + (total === 1 ? '' : 's') + ' (showing ' + boxes.length + ').'
         : 'Found ' + boxes.length + ' mailbox' + (boxes.length === 1 ? '' : 's') + '.';
       var more = data.nextCursor ? '\n\nSay "more" or press "Next page (server)" for the next page.' : '';
-      return head + '\n\n- ' + bprev.join('\n- ') + more + '\n\nSee the MCP tab for the full page.';
+      var note = (typeof data.note === 'string' && data.note) ? '\n\nNote: ' + data.note : '';
+      return head + '\n\n- ' + bprev.join('\n- ') + more + note + '\n\nSee the MCP tab for the full page.';
     }
     var msg = data.message || data.detail || data.summary || data.description;
     if(typeof msg === 'string' && msg.trim()) return msg;
