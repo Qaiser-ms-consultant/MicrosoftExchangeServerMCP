@@ -251,35 +251,47 @@ try {
   }
 
   // Recipients — fixed OPATH quoting + wildcard handling (Option A)
-  async listMailboxes(filter?: string, recipientType?: string, resultSize: number = 20): Promise<any[]> {
+  // Paged discovery: Get-Mailbox has no -Skip, so pages advance with an
+  // Alias keyset cursor (Alias -gt '<cursor>') or a -Database scope. Every
+  // query is bounded by -ResultSize so large orgs never fetch all at once.
+  async listMailboxes(
+    filter?: string, recipientType?: string, resultSize: number = 20,
+    opts?: { cursor?: string; database?: string },
+  ): Promise<{ items: any[]; nextCursor: string | null }> {
+    const page = Math.min(Math.max(resultSize ?? 20, 1), 1000);
+    const db = opts?.database ? ` -Database '${escapePsSingle(opts.database)}'` : "";
+    const type = recipientType ? ` -RecipientTypeDetails ${recipientType}` : "";
+    const cols = "DisplayName,PrimarySmtpAddress,RecipientType,Name,Alias,Identity";
     if (filter) {
       const raw = filter.trim();
       // If filter already contains wildcard (*), use as-is (e.g. Ali*), else wrap with *filter*
       const pattern = raw.includes("*") ? raw : `*${raw}*`;
       const escPattern = escapePsSingle(pattern);
-      const filterCmd = `Get-Mailbox -Filter "Name -like '${escPattern}'"`;
+      const filterCmd = `Get-Mailbox${db} -Filter "Name -like '${escPattern}'"`;
       const base = recipientType ? `${filterCmd} -RecipientTypeDetails ${recipientType}` : filterCmd;
       // No client-side -First: -Filter narrows server-side; the UI pages full sets.
-      const cmd = `${base} | Select-Object DisplayName,PrimarySmtpAddress,RecipientType,Name,Identity`;
+      const cmd = `${base} -ResultSize ${page} | Sort-Object Alias | Select-Object ${cols}`;
       const result = await this.invokeJson(cmd);
-      if (result.length > 0) return result;
+      if (result.length > 0) return pageOf(result, page);
       // Fallback 1: ANR (handles Ali* prefix well)
       const anrPattern = escapePsSingle(raw.replace(/\*/g, ""));
       if (anrPattern) {
-        const anr = await this.invokeJson(`Get-Mailbox -Anr "${anrPattern}" | Select-Object DisplayName,PrimarySmtpAddress,RecipientType,Name,Identity`).catch(() => []);
-        if (anr.length > 0) return anr;
+        const anr = await this.invokeJson(`Get-Mailbox${db} -Anr "${anrPattern}" -ResultSize ${page} | Sort-Object Alias | Select-Object ${cols}`).catch(() => []);
+        if (anr.length > 0) return pageOf(anr, page);
       }
-      // Fallback 2: client-side Where-Object
+      // Fallback 2: client-side Where-Object over one bounded page
       const wherePattern = escapePsSingle(pattern);
-      return this.invokeJson(`Get-Mailbox -ResultSize 100 | Where-Object { $_.Name -like '${wherePattern}' } | Select-Object DisplayName,PrimarySmtpAddress,RecipientType,Name,Identity`);
+      const where = await this.invokeJson(`Get-Mailbox${db} -ResultSize ${page} | Where-Object { $_.Name -like '${wherePattern}' } | Select-Object ${cols}`);
+      return pageOf(where, page);
     }
-    let cmd = "Get-Mailbox";
-    if (recipientType) cmd += ` -RecipientTypeDetails ${recipientType}`;
+    let cmd = `Get-Mailbox${db}${type}`;
+    if (opts?.cursor) {
+      cmd += ` -Filter "Alias -gt '${escapePsSingle(opts.cursor)}'"`;
+    }
     // -ResultSize bounds the scan server-side; no client-side truncation.
-    const n = Math.min(Math.max(resultSize ?? 20, 1), 1000);
-    cmd += ` -ResultSize ${n}`;
-    cmd += ` | Select-Object DisplayName,PrimarySmtpAddress,RecipientType,Name,Identity`;
-    return this.invokeJson(cmd);
+    cmd += ` -ResultSize ${page} | Sort-Object Alias | Select-Object ${cols}`;
+    const items = await this.invokeJson(cmd);
+    return pageOf(items, page);
   }
 
   async getMailbox(identity: string): Promise<any> {
@@ -316,6 +328,17 @@ function escapePs(s: string): string {
 }
 function escapePsSingle(s: string): string {
   return s.replace(/'/g, "''");
+}
+
+// A full page (items.length === page) means more rows may follow; the
+// nextCursor is the last row's Alias (Name fallback). A partial page is
+// the final page (nextCursor null).
+function pageOf(items: any[], page: number): { items: any[]; nextCursor: string | null } {
+  if (!Array.isArray(items) || items.length === 0) return { items: [], nextCursor: null };
+  if (items.length < page) return { items, nextCursor: null };
+  const last = items[items.length - 1] ?? {};
+  const cursor = String(last.Alias ?? last.Name ?? "");
+  return { items, nextCursor: cursor || null };
 }
 
 const PS_NOISE_KEYS = new Set(["PSComputerName", "PSShowComputerName", "RunspaceId"]);

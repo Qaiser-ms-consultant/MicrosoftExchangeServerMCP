@@ -78,8 +78,9 @@ export class ExchangeClient {
   }
 
   // Admin (always PowerShell)
-  listMailboxes(filter?: string): Promise<Mailbox[]> {
-    return this.ps.listMailboxes(filter);
+  async listMailboxes(filter?: string): Promise<Mailbox[]> {
+    const { items } = await this.ps.listMailboxes(filter);
+    return items as Mailbox[];
   }
   getMailbox(identity: string): Promise<Mailbox> {
     return this.ps.getMailbox(identity);

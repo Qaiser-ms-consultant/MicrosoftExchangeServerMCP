@@ -15,8 +15,8 @@ export function registerRecipientAdminTools(server: McpServer, ps: PowerShellPro
       const n = Array.isArray(all) ? all.length : 0;
       return { content: [{ type: "text", text: JSON.stringify({ totalMailboxes: n }, null, 2) }] };
     }
-    const data = await ps.listMailboxes(filter, recipientType, resultSize ?? 20);
-    return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    const { items } = await ps.listMailboxes(filter, recipientType, resultSize ?? 20);
+    return { content: [{ type: "text", text: JSON.stringify(items, null, 2) }] };
   });
 
   server.tool("exchange_get_mailbox", "Get mailbox details by identity", { identity: z.string() }, async ({ identity }) => {
