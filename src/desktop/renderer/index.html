@@ -1021,7 +1021,7 @@ document.getElementById("aiRunAgent")?.addEventListener('click', async () => {
     const aiUsage0 = document.getElementById("aiUsage");
     if (emptyState0) emptyState0.classList.add("hidden");
     if (resultContent0) resultContent0.classList.remove("hidden");
-    if (!cur.nextCursor) {
+    if (cur.nextOffset === null || cur.nextOffset === undefined) {
       if (aiResultOutput0) aiSetRichText(aiResultOutput0, "That was the last page — there are no further mailboxes to fetch.");
       aiSetExecState("muted", "Last page");
       aiSetRunEnabled(true);
@@ -1030,7 +1030,7 @@ document.getElementById("aiRunAgent")?.addEventListener('click', async () => {
     aiSetExecState("running", "Running…");
     if (aiResultOutput0) aiResultOutput0.innerHTML = aiThinkingHtml("Fetching next page...");
     const start0 = Date.now();
-    const args0 = { ...(cur.args || {}), cursor: cur.nextCursor, ...(cur.pageSize ? { pageSize: cur.pageSize } : {}) };
+    const args0 = { ...(cur.args || {}), offset: cur.nextOffset, ...(cur.pageSize ? { pageSize: cur.pageSize } : {}) };
     const res0 = await window.exchangeDesktop.askExchange({ prompt: "next page", confirmed: true, tool: cur.tool, args: args0, conversationId: window.__aiCurrentConversationId || undefined });
     const elapsed0 = ((Date.now() - start0) / 1000).toFixed(2);
     const data0 = (res0 && res0.result !== undefined) ? res0.result : res0;
@@ -1264,7 +1264,7 @@ function pagedView(data){
 }
 function pagerBar(){
   const total = window.__pagingTotal || 0, ps = PAGE_SIZE;
-  const serverNext = window.__pageCursor && window.__pageCursor.nextCursor
+  const serverNext = window.__pageCursor && window.__pageCursor.nextOffset !== null && window.__pageCursor.nextOffset !== undefined
     ? `<button id="pgServerNext" class="px-3 py-1.5 rounded-md text-xs border border-[#22304d] text-slate-300 bg-[#141d30] hover:bg-[#1b2740]">Next page (server) »</button>`
     : "";
   if(!total) return serverNext ? `<div class="flex items-center justify-end mt-3 px-1">${serverNext}</div>` : "";
@@ -1276,13 +1276,13 @@ function pagerBar(){
 }
 async function pgServerNext(){
   const cur = window.__pageCursor;
-  if(!cur || !cur.nextCursor) return;
+  if(!cur || cur.nextOffset === null || cur.nextOffset === undefined) return;
   const out=document.getElementById("outResult");
   const statusBadge=document.getElementById("outStatus");
   if(out) out.innerHTML=`<span class="text-slate-500">Fetching next page…</span>`;
   if(statusBadge) statusBadge.textContent="Running…";
   try{
-    const args = { ...(cur.args || {}), cursor: cur.nextCursor, ...(cur.pageSize ? { pageSize: cur.pageSize } : {}) };
+    const args = { ...(cur.args || {}), offset: cur.nextOffset, ...(cur.pageSize ? { pageSize: cur.pageSize } : {}) };
     const res = await window.exchangeDesktop.askExchange({ prompt: "next page", confirmed: true, tool: cur.tool, args });
     const data2 = (res && res.result !== undefined) ? res.result : res;
     window.__lastArgs = (res && res.args) || args;
@@ -1367,10 +1367,10 @@ function renderResult(tool, data, keepPage){
   if(!out) return;
   if(!keepPage){ window.__page = 0; window.__lastResult = { tool, data }; }
   // Server-side discovery cursor: remember how to fetch the next page of a
-  // paged envelope ({ mailboxes, nextCursor, pageSize }); clear it for
+  // paged envelope ({ mailboxes, nextOffset, pageSize }); clear it for
   // non-paged results so stale "next page" actions can never fire.
-  if(data && typeof data === "object" && !Array.isArray(data) && ("nextCursor" in data || "mailboxes" in data)){
-    window.__pageCursor = { tool, nextCursor: data.nextCursor || null, pageSize: data.pageSize, args: window.__lastArgs || {} };
+  if(data && typeof data === "object" && !Array.isArray(data) && ("nextOffset" in data || "mailboxes" in data)){
+    window.__pageCursor = { tool, nextOffset: (data.nextOffset === undefined ? null : data.nextOffset), pageSize: data.pageSize, args: window.__lastArgs || {} };
   } else if(!keepPage){
     window.__pageCursor = null;
   }
@@ -1784,7 +1784,7 @@ function aiHumanFallback(data){
       var head = total !== null
         ? 'Found ' + total + ' mailbox' + (total === 1 ? '' : 's') + ' (showing ' + boxes.length + ').'
         : 'Found ' + boxes.length + ' mailbox' + (boxes.length === 1 ? '' : 's') + '.';
-      var more = data.nextCursor ? '\n\nSay "more" or press "Next page (server)" for the next page.' : '';
+      var more = (data.nextOffset !== null && data.nextOffset !== undefined) ? '\n\nSay "more" or press "Next page (server)" for the next page.' : '';
       var note = (typeof data.note === 'string' && data.note) ? '\n\nNote: ' + data.note : '';
       return head + '\n\n- ' + bprev.join('\n- ') + more + note + '\n\nSee the MCP tab for the full page.';
     }

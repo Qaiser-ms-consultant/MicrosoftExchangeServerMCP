@@ -4,13 +4,13 @@ import type { PowerShellProvider } from "../clients/powershell-provider.js";
 
 // Recipient Administration — covers EAC Recipients + Permissions (per learn.microsoft.com Exchange admin center)
 export function registerRecipientAdminTools(server: McpServer, ps: PowerShellProvider) {
-  server.tool("exchange_list_mailboxes", "List mailboxes (admin) — paged discovery; pass cursor for the next page, database to scope to one DB", {
+  server.tool("exchange_list_mailboxes", "List mailboxes (admin) — offset-paged discovery; pass offset for the next page, database to scope to one DB", {
     filter: z.string().optional().describe("Name filter (wildcard)"), recipientType: z.string().optional().describe("UserMailbox, SharedMailbox, RoomMailbox, EquipmentMailbox, etc."), resultSize: z.number().min(1).max(1000).optional(),
     pageSize: z.number().min(1).max(200).optional().describe("Page size for discovery (default 100)"),
-    cursor: z.string().optional().describe("Alias cursor from a previous page's nextCursor — omit for the first page"),
+    offset: z.number().min(0).optional().describe("Row offset from a previous page's nextOffset — omit for the first page"),
     database: z.string().optional().describe("Scope to one mailbox database (e.g. DB01)"),
     countOnly: z.boolean().optional().describe("Return only the total mailbox count (ignores filter) — use for 'how many mailboxes'"),
-  }, async ({ filter, recipientType, resultSize, pageSize, cursor, database, countOnly }) => {
+  }, async ({ filter, recipientType, resultSize, pageSize, offset, database, countOnly }) => {
     if (countOnly) {
       // Count client-side from a light DisplayName-only fetch: Measure-Object /
       // Select -ExpandProperty are unreliable on constrained endpoints (yield 0).
@@ -19,17 +19,17 @@ export function registerRecipientAdminTools(server: McpServer, ps: PowerShellPro
       return { content: [{ type: "text", text: JSON.stringify({ totalMailboxes: n }, null, 2) }] };
     }
     const page = pageSize ?? Math.min(resultSize ?? 100, 200);
-    const { items, nextCursor } = await ps.listMailboxes(filter, recipientType, page, { cursor, database });
-    // Paging keys first: narration clips long results, so the cursor must
+    const { items, nextOffset } = await ps.listMailboxes(filter, recipientType, page, { offset, database });
+    // Paging keys first: narration clips long results, so the offset must
     // survive clipping. nextPage tells the narrator exactly how to continue.
-    const nextPage = nextCursor
+    const nextPage = nextOffset !== null && nextOffset !== undefined
       ? {
           tool: "exchange_list_mailboxes",
           args: {
             ...(filter ? { filter } : {}),
             ...(recipientType ? { recipientType } : {}),
             ...(database ? { database } : {}),
-            cursor: nextCursor,
+            offset: nextOffset,
             pageSize: page,
           },
         }
@@ -38,7 +38,7 @@ export function registerRecipientAdminTools(server: McpServer, ps: PowerShellPro
       content: [{
         type: "text",
         text: JSON.stringify({
-          nextCursor,
+          nextOffset,
           pageSize: page,
           ...(nextPage ? { nextPage } : {}),
           mailboxes: items,
@@ -79,24 +79,12 @@ export function registerRecipientAdminTools(server: McpServer, ps: PowerShellPro
     }
     const totalMailboxes = byDatabase.reduce((sum, d) => sum + d.count, 0);
     const scopeForQuery = scopeNote ? undefined : database;
-    let { items, nextCursor } = await ps.listMailboxes(undefined, recipientType, page, scopeForQuery ? { database: scopeForQuery } : undefined);
-    // Resilience: per-database counts prove mailboxes exist, so an empty
-    // first page means the ordered query (not the data) failed. Fall back to
-    // one bounded Get-Mailbox sample rather than reporting an empty list.
-    let partial = false;
+    const { items, nextOffset } = await ps.listMailboxes(undefined, recipientType, page, scopeForQuery ? { database: scopeForQuery } : undefined);
+    // An empty first page against a nonzero total means the listing query
+    // (not the data) failed — say so plainly with a pointer to the trace.
     let note: string | undefined;
     if (items.length === 0 && totalMailboxes > 0) {
-      const scope = scopeForQuery ? ` -Database '${scopeForQuery.replace(/'/g, "''")}'` : "";
-      const sample = await ps.invokeJson(
-        `Get-Mailbox${scope} -ResultSize ${page} | Select-Object DisplayName,PrimarySmtpAddress,RecipientType,Name,Alias,Identity`,
-      ).catch(() => []);
-      if (Array.isArray(sample) && sample.length > 0) {
-        items = sample;
-        partial = true;
-        note = `Ordered paging returned no rows although ${totalMailboxes} mailboxes exist; showing an unsorted sample of ${sample.length}. Narrow by database or name filter for complete paging.`;
-      } else {
-        note = `Listing queries came back empty although ${totalMailboxes} mailboxes were counted. Check the PowerShell Trace tab for the failing command, or narrow by database or name filter and retry.`;
-      }
+      note = `Listing queries came back empty although ${totalMailboxes} mailboxes were counted. Check the PowerShell Trace tab for the failing command, or narrow by database or name filter and retry.`;
     }
     if (scopeNote) note = note ? `${scopeNote} ${note}` : scopeNote;
     return {
@@ -104,22 +92,21 @@ export function registerRecipientAdminTools(server: McpServer, ps: PowerShellPro
         type: "text",
         text: JSON.stringify({
           totalMailboxes,
-          nextCursor,
+          nextOffset,
           pageSize: page,
-          ...(nextCursor
+          ...(nextOffset !== null && nextOffset !== undefined
             ? {
                 nextPage: {
                   tool: "exchange_list_mailboxes",
                   args: {
                     ...(recipientType ? { recipientType } : {}),
-                    ...(database ? { database } : {}),
-                    cursor: nextCursor,
+                    ...(scopeForQuery ? { database: scopeForQuery } : {}),
+                    offset: nextOffset,
                     pageSize: page,
                   },
                 },
               }
             : {}),
-          ...(partial ? { partial: true } : {}),
           ...(note ? { note } : {}),
           byDatabase,
           ...(scoped.length > 20 ? { truncated: true } : {}),
