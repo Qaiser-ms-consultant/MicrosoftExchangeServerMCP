@@ -364,17 +364,19 @@ export function routeQuery(prompt: string): Route {
     return { tool: "mailflow.get_message_trace", args: { ...(email ? { sender: email } : {}), ...(q ? { subject: q } : {}) }, write: false };
   }
   // Write intents that must precede the read-only permission/mailbox fallbacks
-  if (has("remove", "revoke") && has("permission", "access") && email) {
+  if (has("remove", "revoke") && has("permission", "access", "sendas", "send as", "fullaccess", "full access") && email) {
     const all = prompt.match(/[\w.+-]+@[\w-]+\.[\w.]+/g) || [];
     const from = prompt.match(/from\s+([\w.+-]+@[\w-]+\.[\w.]+)/i);
     const user = from ? from[1] : all[1];
-    return { tool: "mailbox.remove_permission", args: { identity: email, ...(user ? { user } : {}), accessRights: /sendas/i.test(prompt) ? "SendAs" : "FullAccess" }, write: true };
+    return { tool: "mailbox.remove_permission", args: { identity: email, ...(user ? { user } : {}), accessRights: /send[\s-]*as/i.test(prompt) ? "SendAs" : "FullAccess" }, write: true };
   }
   if (has("remove", "delete", "disable") && has("mailbox") && !has("permission", "access") && email) {
     const permanent = has("permanent", "forever", "purge", "hard delete");
     return { tool: "exchange_remove_mailbox", args: { identity: email, ...(permanent ? { permanent: true } : {}) }, write: true };
   }
-  if (has("permission", "access", "fullaccess", "sendas", "send as") && email) return { tool: "exchange_get_mailbox_permissions", args: { identity: email }, write: false };
+  // Grant phrasing ("grant ...", "... to bob@...") is a write; plain
+  // "give me the permissions of X" stays a read.
+  if (has("permission", "access", "fullaccess", "sendas", "send as") && email && !(has("grant") || /to\s+[\w.+-]+@[\w-]+\.[\w.]+/i.test(prompt))) return { tool: "exchange_get_mailbox_permissions", args: { identity: email }, write: false };
   if (has("fullaccess", "full access", "full_access") && !email) return { tool: "report.generate_fullaccess_audit_report", args: {}, write: false };
   if (has("statistic", "how big", "item count", "last logon") && email) return { tool: "exchange_get_mailbox_statistics", args: { identity: email }, write: false };
   // Write intents (need confirm — enforced by caller)
@@ -389,16 +391,22 @@ export function routeQuery(prompt: string): Route {
     const targetDatabase = dbm && dbm[1].indexOf("@") < 0 ? dbm[1] : undefined;
     return { tool: "mailbox.new_move_request", args: { ...(email ? { identity: email } : {}), ...(targetDatabase ? { targetDatabase } : {}) }, write: true };
   }
-  if (has("quota") && has("set", "change", "increase", "raise")) return { tool: "mailbox.set_quota", args: email ? { identity: email } : {}, write: true };
-  if (has("set") && has("mailbox") && email) return { tool: "exchange_set_mailbox", args: { identity: email }, write: true };
+  const sizeArg = prompt.match(/(\d+\s?(?:MB|GB|TB))\b/i)?.[1]?.replace(/\s+/g, "");
+  if (has("quota") && has("set", "change", "increase", "raise")) return { tool: "mailbox.set_quota", args: { ...(email ? { identity: email } : {}), ...(sizeArg ? { prohibitSendQuota: sizeArg } : {}) }, write: true };
+  if (has("set") && has("mailbox") && email) return { tool: "exchange_set_mailbox", args: { identity: email, ...(sizeArg ? { prohibitSendQuota: sizeArg } : {}) }, write: true };
   if (has("create", "new") && has("mailbox") && !has("move request", "move status")) {
     const q = QUOTED_RE.exec(prompt)?.[1];
-    return { tool: "exchange_create_mailbox", args: { ...(q ? { name: q } : {}), ...(has("shared") ? { shared: true } : {}), ...(has("room") ? { room: true } : {}), ...(has("equipment") ? { equipment: true } : {}) }, write: true };
+    const dbm = prompt.match(/(?:\bin\b|\bon\b)\s+(?:database\s+)?([A-Za-z0-9_\-]+)/i);
+    const db = dbm && !dbm[1].includes("@") ? dbm[1] : undefined;
+    return { tool: "exchange_create_mailbox", args: { ...(q ? { name: q } : {}), ...(email ? { userPrincipalName: email } : {}), ...(db ? { database: db } : {}), ...(has("shared") ? { shared: true } : {}), ...(has("room") ? { room: true } : {}), ...(has("equipment") ? { equipment: true } : {}) }, write: true };
   }
-  if (has("repair") && has("database", "mailbox")) return { tool: "database.new_repair_request", args: {}, write: true };
+  if (has("repair") && has("database", "mailbox")) {
+    const dbm = prompt.match(/database\s+([A-Za-z0-9_\-]+)/i);
+    return { tool: "database.new_repair_request", args: { ...(dbm ? { database: dbm[1] } : {}) }, write: true };
+  }
   if ((has("grant", "give", "add") && has("permission", "access")) && email) {
     const m = prompt.match(/to\s+([\w.+-]+@[\w-]+\.[\w.]+)/i);
-    const rights = /sendas/i.test(prompt) ? "SendAs" : "FullAccess";
+    const rights = /send[\s-]*as/i.test(prompt) ? "SendAs" : "FullAccess";
     return { tool: "mailbox.add_permission", args: { identity: email, ...(m ? { user: m[1] } : {}), accessRights: rights }, write: true };
   }
   if (has("suspend") && has("copy")) { const id = afterWord(prompt, "copy"); return { tool: "database.suspend_copy", args: id ? { identity: id } : {}, write: true }; }

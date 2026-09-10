@@ -646,6 +646,24 @@ describe("routeQuery", () => {
   it("routes remove permission as a write with identity and user", () => {
     expect(routeQuery("remove FullAccess for alice@contoso.com from bob@contoso.com")).toEqual({ tool: "mailbox.remove_permission", args: { identity: "alice@contoso.com", user: "bob@contoso.com", accessRights: "FullAccess" }, write: true });
   });
+  it("extracts spaced Send As rights on grant", () => {
+    expect(routeQuery("grant alice@contoso.com send as permission to bob@contoso.com")).toEqual({ tool: "mailbox.add_permission", args: { identity: "alice@contoso.com", user: "bob@contoso.com", accessRights: "SendAs" }, write: true });
+  });
+  it("extracts spaced Send As rights on revoke", () => {
+    expect(routeQuery("remove Send As for alice@contoso.com from bob@contoso.com")).toEqual({ tool: "mailbox.remove_permission", args: { identity: "alice@contoso.com", user: "bob@contoso.com", accessRights: "SendAs" }, write: true });
+  });
+  it("extracts quota sizes like 50GB", () => {
+    expect(routeQuery("set quota for alice@contoso.com to 50GB")).toEqual({ tool: "mailbox.set_quota", args: { identity: "alice@contoso.com", prohibitSendQuota: "50GB" }, write: true });
+  });
+  it("extracts quota sizes on set mailbox", () => {
+    expect(routeQuery("set mailbox alice@contoso.com to 50GB")).toEqual({ tool: "exchange_set_mailbox", args: { identity: "alice@contoso.com", prohibitSendQuota: "50GB" }, write: true });
+  });
+  it("extracts email and database on create mailbox", () => {
+    expect(routeQuery('create mailbox "Alice Smith" for alice@contoso.com in database DB01')).toEqual({ tool: "exchange_create_mailbox", args: { name: "Alice Smith", userPrincipalName: "alice@contoso.com", database: "DB01" }, write: true });
+  });
+  it("extracts the database on repair requests", () => {
+    expect(routeQuery("repair database DB01")).toEqual({ tool: "database.new_repair_request", args: { database: "DB01" }, write: true });
+  });
   it("routes create mailbox as a write needing a name", () => {
     expect(routeQuery("create mailbox")).toEqual({ tool: "exchange_create_mailbox", args: {}, write: true });
   });
