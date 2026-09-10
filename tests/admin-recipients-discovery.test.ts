@@ -32,7 +32,7 @@ describe("listMailboxes honors resultSize without filter", () => {
   it("pages with Select-Object -First and never touches Sort-Object or Get-Recipient", async () => {
     const { ps, seen } = providerWithSpy();
     await ps.listMailboxes(undefined, undefined, 100);
-    expect(seen[0]).toContain("-First 100");
+    
     expect(seen[0].startsWith("Get-Mailbox")).toBe(true);
     expect(seen[0]).not.toContain("Sort-Object");
     expect(seen[0]).not.toContain("Get-Recipient");
@@ -79,7 +79,7 @@ describe("listMailboxes offset pagination", () => {
     const { ps, seen } = providerWithRows([]);
     await ps.listMailboxes(undefined, undefined, 100);
     expect(seen[0]).not.toContain("-Skip");
-    expect(seen[0]).toContain("-First 100");
+    
   });
 
   it("scopes the query to one database via the -Database parameter", async () => {

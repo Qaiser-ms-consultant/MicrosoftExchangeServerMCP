@@ -684,6 +684,21 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
 
     // If ModelFirst succeeded, use its pick and skip keyword router
     if (modelFirstPick) {
+      if (modelFirstPick.tool === "__no_tool" && modelCfg) {
+        logOp("route", "ModelFirst pick: __no_tool, answering from context", { tool: "__no_tool" });
+        let ctxAnswer: string | undefined; let ctxUsage: { input: number; output: number } | undefined; let ctxNote: string | undefined;
+        try {
+          const ctxMsgs = buildSummaryMessages(prompt, "history", "No new tool result for this follow-up — answer from the conversation context.", modelCfg.systemPrompt, contextBlock || undefined);
+          logOp("model_request", "context answer", { provider: modelCfg.provider, model: modelCfg.model, messages: ctxMsgs.map((m) => ({ role: String((m as any).role), chars: String((m as any).content ?? "").length, content: clipText(String((m as any).content ?? ""), 4000) })) });
+          const t0 = Date.now();
+          const s = await chatComplete(modelCfg, ctxMsgs);
+          logOp("model_response", "context answer received", { chars: s.text.length, usage: s.usage, reply: clipText(s.text, 2000) }, Date.now() - t0);
+          ctxAnswer = s.text; ctxUsage = s.usage;
+        } catch (e: any) { console.error("Context answer failed", e); ctxNote = `AI unavailable (${e?.message || e}) — no new Exchange data was fetched.`; }
+        if (ctxAnswer || ctxNote) rememberConversation(conversationId, { prompt, tool: "history", resultJson: "", aiAnswer: ctxAnswer });
+        logOp("result", "answered from context", { outcome: "context" });
+        return { prompt, tool: "history", args: {}, result: { message: "Answered from conversation context." }, psTrace: [], ...(ctxAnswer ? { aiAnswer: ctxAnswer, aiUsage: ctxUsage } : { aiNote: ctxNote }) };
+      }
       logOp("route", `ModelFirst pick: ${modelFirstPick.tool}`, { tool: modelFirstPick.tool });
       tool = modelFirstPick.tool;
       args = modelFirstPick.args;
