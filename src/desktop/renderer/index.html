@@ -300,6 +300,12 @@
 <div class="flex items-center gap-2 mt-2">
   <span id="aiModeBadge" class="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-500/10 text-slate-400 border border-slate-500/30">AI Mode: Off</span>
 </div>
+<div class="flex items-center gap-2 mt-2">
+  <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+    <input type="checkbox" id="modelFirstEnabled" class="w-4 h-4 rounded border border-[#22304d] bg-[#0b0f19] text-blue-600 focus:ring-2 focus:ring-blue-500/20" />
+    <span class="text-xs text-slate-300">ModelFirst (AI picks tool first)</span>
+  </label>
+</div>
 <div class="text-[10px] font-mono text-slate-500 break-all cursor-pointer hover:text-slate-300" id="cfgPath" title="Settings file location — click to copy">Settings file: loading…</div>
 <div id="modelOut" class="text-[11px] font-mono text-slate-400 bg-[#0b0f19] border border-[#1d2943] rounded p-2 max-h-20 overflow-auto">Not tested</div>
 </div>
@@ -1080,6 +1086,7 @@ async function restoreModelConfig(){
     if(cfg.apiKey){ const k=document.getElementById("apiKey"); if(k) k.value=cfg.apiKey; }
     if(cfg.baseUrl){ const b=document.getElementById("baseUrl"); if(b) b.value=cfg.baseUrl; }
     if(cfg.systemPrompt){ const sp=document.getElementById("systemPrompt"); if(sp) sp.value=cfg.systemPrompt; }
+    if(cfg.modelFirst !== undefined){ const cb=document.getElementById("modelFirstEnabled"); if(cb) cb.checked = !!cfg.modelFirst; }
     if(cfg.provider||cfg.model||cfg.apiKey||cfg.baseUrl||cfg.systemPrompt){
       showStatus("modelOut", "Restored saved model config from file");
       // Auto-test the restored connection and refresh the live model list
@@ -1141,7 +1148,7 @@ async function testAndPopulateModels(){
 }
 safeHandler("testModel", testAndPopulateModels);
 safeHandler("saveModel", async()=>{
-  const data={ provider:(document.getElementById("provider")).value, model:(document.getElementById("model")).value, apiKey:(document.getElementById("apiKey")).value, baseUrl:(document.getElementById("baseUrl")).value, systemPrompt:(document.getElementById("systemPrompt")).value };
+  const data={ provider:(document.getElementById("provider")).value, model:(document.getElementById("model")).value, apiKey:(document.getElementById("apiKey")).value, baseUrl:(document.getElementById("baseUrl")).value, systemPrompt:(document.getElementById("systemPrompt")).value, modelFirst: document.getElementById("modelFirstEnabled")?.checked };
     // Save provider/model/apiKey/systemPrompt into the config file (YAML) – use existing saveConfig helper
     const cfgObj = parseYaml(await window.exchangeDesktop.loadConfig());
     cfgObj.provider = data.provider;
@@ -1150,6 +1157,7 @@ safeHandler("saveModel", async()=>{
     if(data.apiKey) cfgObj.apiKey = data.apiKey;
     cfgObj.baseUrl = data.baseUrl;
     cfgObj.systemPrompt = data.systemPrompt;
+    cfgObj.modelFirst = data.modelFirst;
     await window.exchangeDesktop.saveConfig(dumpYaml(cfgObj));
     showStatus("modelOut", "Saved model config to file" + (aiProviderOn(data.provider) ? " • AI answers ON" : ""));
     updateAiModeBadge();

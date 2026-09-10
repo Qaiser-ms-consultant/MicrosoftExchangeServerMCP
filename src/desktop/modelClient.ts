@@ -8,6 +8,7 @@ export interface ModelConfig {
   baseUrl?: string;
   model: string;
   systemPrompt?: string;
+  modelFirst?: boolean;
 }
 
 export interface ChatMessage {

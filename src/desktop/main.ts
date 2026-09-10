@@ -518,13 +518,13 @@ ipcMain.handle("mcp:stop", async () => { try { mcpProc?.kill(); } catch {} mcpPr
 ipcMain.handle("mcp:isRunning", async () => !!mcpProc);
 
 // Model settings live in the desktop config file (provider/apiKey/baseUrl/model/systemPrompt).
-function readModelConfig(): { provider: string; apiKey: string; baseUrl?: string; model: string; systemPrompt?: string } | null {
+function readModelConfig(): { provider: string; apiKey: string; baseUrl?: string; model: string; systemPrompt?: string; modelFirst?: boolean } | null {
   try {
     const raw = readFileSync(ensureConfig(), "utf-8").trim();
     if (!raw || raw === "{}") return null;
     const cfg = raw.startsWith("{") ? JSON.parse(raw) : parseYaml(raw);
     if (cfg?.provider && cfg?.apiKey && cfg?.model) {
-      return { provider: cfg.provider, apiKey: cfg.apiKey, baseUrl: cfg.baseUrl, model: cfg.model, systemPrompt: cfg.systemPrompt };
+      return { provider: cfg.provider, apiKey: cfg.apiKey, baseUrl: cfg.baseUrl, model: cfg.model, systemPrompt: cfg.systemPrompt, modelFirst: cfg.modelFirst };
     }
   } catch {}
   return null;
@@ -659,6 +659,35 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
         }
       } catch (e) { console.error("prompt normalization failed, using raw prompt", e); }
     }
+
+    // ModelFirst: when AI mode is ON and ModelFirst is enabled, let the model
+    // pick the tool directly from the full catalog before falling back to
+    // keyword router. This allows the model to handle typos/paraphrases naturally.
+    const modelFirstEnabled = modelCfg?.modelFirst === true;
+    if (modelFirstEnabled && aiMode && modelCfg && "help" in route) {
+      logOp("model_request", "ModelFirst: picking tool from catalog", { provider: modelCfg.provider, model: modelCfg.model });
+      const list = await mcpRpc("tools/list", {});
+      const toolNames = (((list as any)?.tools ?? []) as any[])
+        .map((t: any) => String(t?.name ?? "")).filter((n) => n);
+      const normMsgs = buildToolPickerMessages(prompt, toolNames);
+      logOp("model_request", "ModelFirst tool picker", { provider: modelCfg.provider, model: modelCfg.model, toolCount: toolNames.length });
+      const t0 = Date.now();
+      const pick = await chatComplete(modelCfg, normMsgs);
+      const ms = Date.now() - t0;
+      logOp("model_response", "ModelFirst pick", { ms, reply: clipText(pick.text, 2000) }, ms);
+      let picked: { tool: string; args: Record<string, unknown>; write: boolean } | null = null;
+      try {
+        const parsed = JSON.parse(pick.text);
+        if (parsed.tool && typeof parsed.tool === "string") {
+          picked = { tool: parsed.tool, args: parsed.args || {}, write: false };
+        }
+      } catch { }
+      if (picked) {
+        logOp("route", `ModelFirst pick: ${picked.tool}`, { tool: picked.tool });
+        tool = picked.tool; args = picked.args; write = picked.write;
+      }
+    }
+
     // AI fallback: model interprets prompts the keyword router cannot classify.
     // It also reinterprets loose write phrasing that matched a read-only route
     // (e.g. typos/synonyms the keywords missed) across the full tool catalog.
