@@ -705,7 +705,7 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
       logOp("result", "help card shown", { outcome: "help" });
       const learnUrl = modelCfg && modelCfg.learnMoreUrl
         ? modelCfg.learnMoreUrl
-        : "https://learn.microsoft.com/en-us/exchange/exchange-server";
+        : "https://learn.microsoft.com/en-us/powershell/module/exchangepowershell/?view=exchange-ps";
       return { prompt, tool: "help", result: {
       message: "I can run Exchange queries. Try one of these:",
       examples: helpExamplesFor(prompt),
