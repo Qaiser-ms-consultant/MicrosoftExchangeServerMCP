@@ -229,6 +229,9 @@
   @keyframes ai-blink{ 0%,100%{ opacity:.25 } 50%{ opacity:1 } }
   /* Enable text selection for AI response output (overrides body select-none) */
   #aiResultOutput { user-select: text; -webkit-user-select: text; }
+  /* Quick Diagnostic Prompts strip: single-row horizontal scroll, always visible */
+  #quickPromptButtons { scrollbar-width: thin; }
+  #quickPromptButtons button { flex-shrink: 0; white-space: nowrap; }
 </style>
 </head>
 <body class="h-full antialiased font-sans select-none overflow-hidden flex flex-col">
@@ -306,10 +309,6 @@
 <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2.5 flex items-center justify-between"><span>🔒 App Lock (MFA)</span><span id="appLockState" class="text-[10px] font-mono text-slate-500">…</span></div>
 <div id="appLockBody" class="flex flex-col gap-2 text-xs text-slate-400">Loading…</div>
 </div>
-<div class="p-4 bg-[#0e1423] border-t border-[#1a253c]">
-<div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2.5 flex items-center justify-between"><span>Quick Diagnostic Prompts</span><span class="text-[10px] text-slate-500 font-mono">10 fresh picks every launch</span></div>
-<div class="flex flex-wrap gap-2" id="quickPromptButtons"></div>
-</div>
 </div>
 </section>
 
@@ -384,6 +383,10 @@
 </div>
 </div>
 <div class="p-4 bg-[#0c111e] border-t border-[#1b253b] flex-shrink-0">
+<div class="mb-2">
+<div class="flex items-center justify-between mb-1.5"><span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Quick Diagnostic Prompts</span><span class="text-[10px] text-slate-500 font-mono">10 fresh picks · click to fill</span></div>
+<div class="flex gap-2 overflow-x-auto pb-1" id="quickPromptButtons"></div>
+</div>
 <div class="flex items-end gap-3">
 <div class="flex-1 relative">
 <textarea id="aiChatInput" rows="1" placeholder="Ask anything about Exchange..." class="w-full p-3 bg-[#0b0f19] text-slate-100 rounded-xl border border-[#22304d] text-sm resize-none outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 placeholder-slate-600 leading-relaxed"></textarea>
@@ -1510,7 +1513,7 @@ function initQuickPrompts(){
   });
   const all = [...seen.entries()];
   for(let i=all.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [all[i],all[j]]=[all[j],all[i]]; }
-  container.innerHTML = all.slice(0,10).map(([prompt,label])=>`<button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="${esc(prompt)}">${esc(label)}</button>`).join("");
+  container.innerHTML = all.slice(0,10).map(([prompt,label])=>`<button title="${esc(prompt)}" class="flex-shrink-0 whitespace-nowrap px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300 text-left transition" data-quick="${esc(prompt)}">${esc(label)}</button>`).join("");
 }
 initQuickPrompts();
 
