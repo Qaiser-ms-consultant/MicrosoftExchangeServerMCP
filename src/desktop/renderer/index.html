@@ -261,6 +261,7 @@
 <button aria-selected="true" class="px-3.5 py-1 rounded-md text-xs font-medium bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm flex items-center gap-1.5" data-tab="home" role="tab"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> Home (Agent)</button>
 <button aria-selected="false" class="px-3.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-[#1b253c] flex items-center gap-1.5" data-tab="health" role="tab"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> Health <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span></button>
 <button aria-selected="false" class="px-3.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-[#1b253c] flex items-center gap-1.5" data-tab="prompts" role="tab"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> Helping Prompts</button>
+<button aria-selected="false" class="px-3.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-[#1b253c] flex items-center gap-1.5" data-tab="logs" role="tab"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> Logs <span id="logUnread" class="hidden px-1.5 rounded-full text-[10px] font-mono bg-blue-600 text-white"></span></button>
 </div>
 </nav>
 
@@ -573,6 +574,34 @@
 <div class="bg-[#121829] border border-[#1f2d48] rounded-xl p-4"><h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5">🖥️ Environment & Version</h3><div class="flex flex-wrap gap-2"><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="What version of Exchange do I have?">Exchange version</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="List Exchange servers">List servers</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Environment overview">Environment overview</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Show topology">Topology</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="List mail contacts">Mail contacts</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="List mail users">Mail users</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Dynamic distribution groups">Dynamic DLs</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="List distribution groups">Dist. groups</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Role groups">Role groups</button></div></div>
 </section>
 
+<!-- END-TO-END OPERATION LOGS: one timeline per run, prompt → route → model → MCP → Exchange → narration → result -->
+<section class="col-span-12 lg:col-span-12 hidden min-h-0 overflow-hidden flex-col" data-view="logs" style="max-height:100%">
+<div class="bg-[#121829] border border-[#1f2d48] rounded-xl p-4 flex flex-col min-h-0 flex-1">
+<div class="flex flex-wrap items-center gap-2 mb-3">
+<span class="text-xs font-bold uppercase tracking-wider text-slate-400">Pipeline logs</span>
+<select id="logStageFilter" class="bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200 focus:border-blue-500 outline-none cursor-pointer px-2 py-1">
+<option value="">All stages</option>
+<option value="prompt">prompt</option>
+<option value="route">route</option>
+<option value="model_request">model_request</option>
+<option value="model_response">model_response</option>
+<option value="mcp_request">mcp_request</option>
+<option value="mcp_response">mcp_response</option>
+<option value="exchange">exchange</option>
+<option value="narration">narration</option>
+<option value="result">result</option>
+</select>
+<input id="logSearch" placeholder="Search runs, tools, commands…" class="flex-1 min-w-[180px] p-1.5 bg-[#0b0f19] border border-[#22304d] rounded text-xs text-slate-200 placeholder-slate-600 focus:border-blue-500 outline-none" />
+<label class="flex items-center gap-1 text-[11px] text-slate-400"><input type="checkbox" id="logAutoScroll" checked /> Live</label>
+<button id="logCopy" class="px-2.5 py-1 rounded-md text-xs bg-[#141c2e] hover:bg-[#1c273e] text-slate-300 border border-[#22304d]">Copy</button>
+<button id="logExport" class="px-2.5 py-1 rounded-md text-xs bg-[#141c2e] hover:bg-[#1c273e] text-slate-300 border border-[#22304d]">Export JSON</button>
+<button id="logClear" class="px-2.5 py-1 rounded-md text-xs bg-[#141c2e] hover:bg-[#1c273e] text-slate-300 border border-[#22304d]">Clear</button>
+<span id="logCount" class="text-[11px] font-mono text-slate-500"></span>
+</div>
+<div id="logsView" class="flex-1 min-h-0 overflow-y-auto space-y-3"></div>
+</div>
+</section>
+
 <script>
 var $ = function(s){ return document.querySelector(s); };
 var $$ = function(s){ return Array.prototype.slice.call(document.querySelectorAll(s)); };
@@ -629,6 +658,152 @@ $$('[data-tab]').forEach(function(b){ b.addEventListener('click',function(){
 }); });
 // Ensure Home visible on load
 document.querySelectorAll('section[data-view]').forEach(function(v){ var isHome=v.getAttribute('data-view')==="home"; v.style.display=isHome?'flex':'none'; });
+
+// ---------- End-to-end operation logs (Logs tab) ----------
+window.__opRuns = [];
+window.__opCollapsed = {};
+window.__opUnread = 0;
+const OP_STAGE_PILL = {
+  prompt: "bg-slate-500/10 text-slate-300 border-slate-500/30",
+  route: "bg-blue-500/10 text-blue-300 border-blue-500/30",
+  model_request: "bg-violet-500/10 text-violet-300 border-violet-500/30",
+  model_response: "bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/30",
+  mcp_request: "bg-cyan-500/10 text-cyan-300 border-cyan-500/30",
+  mcp_response: "bg-teal-500/10 text-teal-300 border-teal-500/30",
+  exchange: "bg-amber-500/10 text-amber-300 border-amber-500/30",
+  narration: "bg-indigo-500/10 text-indigo-300 border-indigo-500/30",
+  result: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30",
+};
+function opLogsVisible(){
+  const s = document.querySelector('section[data-view="logs"]');
+  return !!s && s.style.display !== "none";
+}
+function opStagePill(stage){
+  const cls = OP_STAGE_PILL[stage] || OP_STAGE_PILL.prompt;
+  return `<span class="inline-flex items-center px-1.5 py-0 rounded text-[10px] font-mono border ${cls}">${esc(stage)}</span>`;
+}
+function opRunOutcome(run){
+  for (let i = run.entries.length - 1; i >= 0; i--) {
+    const e = run.entries[i];
+    if (e.stage === "result" && e.body && typeof e.body === "object" && e.body.outcome) return String(e.body.outcome);
+  }
+  return "running";
+}
+function opFilteredRuns(){
+  const stage = (document.getElementById("logStageFilter") || {}).value || "";
+  const q = ((document.getElementById("logSearch") || {}).value || "").trim().toLowerCase();
+  return (window.__opRuns || []).map((run) => {
+    const entries = (run.entries || []).filter((e) => {
+      if (stage && e.stage !== stage) return false;
+      if (q && JSON.stringify(e).toLowerCase().indexOf(q) < 0 && String(run.prompt || "").toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    });
+    return { run, entries };
+  }).filter((r) => r.entries.length > 0);
+}
+function renderOpLogs(){
+  const el = document.getElementById("logsView");
+  if (!el) return;
+  const filtered = opFilteredRuns();
+  const totalEntries = (window.__opRuns || []).reduce((n, r) => n + (r.entries || []).length, 0);
+  const count = document.getElementById("logCount");
+  if (count) count.textContent = `${(window.__opRuns || []).length} runs • ${totalEntries} entries`;
+  if (!filtered.length) {
+    el.innerHTML = `<div class="text-xs text-slate-500 p-4 text-center">No pipeline logs yet. Run a prompt from Home, then open this tab to trace every stage.</div>`;
+    return;
+  }
+  el.innerHTML = filtered.map(({ run, entries }) => {
+    const collapsed = !!window.__opCollapsed[run.runId];
+    const outcome = opRunOutcome(run);
+    const t = run.startedAt ? new Date(run.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
+    return `<div class="rounded-lg border border-[#1d2a42] bg-[#111726] overflow-hidden" data-op-run="${esc(run.runId)}">
+      <div class="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-[#1a2538]" data-op-toggle="${esc(run.runId)}">
+        <span class="text-slate-500 text-xs">${collapsed ? "▸" : "▾"}</span>
+        <span class="text-[10px] font-mono text-slate-500">${esc(t)}</span>
+        <span class="text-xs text-slate-200 truncate flex-1">${esc(run.prompt || run.runId)}</span>
+        <span class="text-[10px] font-mono px-1.5 py-0 rounded border ${outcome === "completed" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : outcome === "running" ? "bg-amber-500/10 text-amber-300 border-amber-500/30" : "bg-slate-500/10 text-slate-300 border-slate-500/30"}">${esc(outcome)}</span>
+        <span class="text-[10px] font-mono text-slate-500">${entries.length} stages</span>
+      </div>
+      ${collapsed ? "" : `<div class="px-3 pb-2 pt-1 space-y-1.5">` + entries.map((e) => {
+        const et = e.at ? new Date(e.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) + "." + String(new Date(e.at).getMilliseconds()).padStart(3, "0") : "";
+        const ms = (e.ms !== undefined && e.ms !== null) ? `<span class="text-[10px] font-mono text-slate-500">${e.ms}ms</span>` : "";
+        const body = (e.body !== undefined) ? `<details class="mt-1"><summary class="text-[11px] text-slate-500 cursor-pointer hover:text-slate-300">body</summary><pre class="mt-1 p-2 rounded border border-[#1a253a] bg-[#0b0f19] text-[11px] font-mono text-slate-300 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">${esc(typeof e.body === "string" ? e.body : JSON.stringify(e.body, null, 2))}</pre></details>` : "";
+        return `<div class="flex flex-col rounded border border-[#1a253a] bg-[#0b0f19] px-2 py-1.5">
+          <div class="flex items-center gap-2">${opStagePill(e.stage)}<span class="text-xs text-slate-200 flex-1 break-words">${esc(e.label || "")}</span><span class="text-[10px] font-mono text-slate-500">${esc(et)}</span>${ms}</div>
+          ${body}
+        </div>`;
+      }).join("") + `</div>`}
+    </div>`;
+  }).join("");
+}
+async function loadOpLogs(){
+  try {
+    const runs = await window.exchangeDesktop.oplogList?.();
+    if (Array.isArray(runs)) { window.__opRuns = runs; renderOpLogs(); }
+  } catch (e) { console.error("oplog list failed", e); }
+}
+function opLogBumpUnread(){
+  window.__opUnread = (window.__opUnread || 0) + 1;
+  const b = document.getElementById("logUnread");
+  if (b) { b.textContent = String(window.__opUnread); b.classList.remove("hidden"); }
+}
+function opLogClearUnread(){
+  window.__opUnread = 0;
+  const b = document.getElementById("logUnread");
+  if (b) { b.textContent = ""; b.classList.add("hidden"); }
+}
+document.querySelector('[data-tab="logs"]')?.addEventListener("click", () => { opLogClearUnread(); loadOpLogs(); });
+document.getElementById("logStageFilter")?.addEventListener("change", renderOpLogs);
+document.getElementById("logSearch")?.addEventListener("input", renderOpLogs);
+document.getElementById("logsView")?.addEventListener("click", (e) => {
+  const t = e.target.closest("[data-op-toggle]");
+  if (t) {
+    const id = t.getAttribute("data-op-toggle");
+    window.__opCollapsed[id] = !window.__opCollapsed[id];
+    renderOpLogs();
+  }
+});
+document.getElementById("logCopy")?.addEventListener("click", () => {
+  navigator.clipboard.writeText(JSON.stringify(opFilteredRuns().map((r) => r.run), null, 2));
+});
+document.getElementById("logExport")?.addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(window.__opRuns || [], null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  a.download = `oplog-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+});
+document.getElementById("logClear")?.addEventListener("click", async () => {
+  try { await window.exchangeDesktop.oplogClear?.(); } catch (e) { console.error("oplog clear failed", e); }
+  window.__opRuns = [];
+  window.__opCollapsed = {};
+  renderOpLogs();
+});
+if (isDesktop && window.exchangeDesktop.onOpLog) {
+  window.exchangeDesktop.onOpLog((entry) => {
+    if (!entry || !entry.runId) return;
+    let run = (window.__opRuns || []).find((r) => r.runId === entry.runId);
+    if (!run) {
+      run = { runId: entry.runId, prompt: "", startedAt: entry.at, entries: [] };
+      window.__opRuns.push(run);
+      if (window.__opRuns.length > 30) window.__opRuns.shift();
+    }
+    if (entry.stage === "prompt" && entry.body && typeof entry.body.prompt === "string") run.prompt = String(entry.body.prompt).slice(0, 200);
+    run.entries.push(entry);
+    if (opLogsVisible()) {
+      renderOpLogs();
+      if (document.getElementById("logAutoScroll")?.checked) {
+        const el = document.getElementById("logsView");
+        if (el) el.scrollTop = el.scrollHeight;
+      }
+    } else {
+      opLogBumpUnread();
+    }
+  });
+}
 
 // Theme toggle — cycles through: dark → light → notion
 var savedTheme = localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
