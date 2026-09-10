@@ -1076,28 +1076,78 @@ document.getElementById("aiRunAgent")?.addEventListener('click', async () => {
   } else if (res && res.needsConfirm) {
     window.__pendingWrite = { tool, args: res.args || (data && data.parameters) || {}, prompt: promptValue, hist: histEntry };
     aiHistStatus(histEntry, tool, "needs confirm");
-    if (aiResultOutput) aiResultOutput.innerHTML = `<div class="p-3 rounded border text-xs" style="background:var(--bg-elevated);border-color:var(--border)"><p class="font-semibold mb-1" style="color:var(--text-secondary)">Confirm action: ${esc(tool)}</p><p class="mb-2" style="color:var(--text-muted)">Type <code style="color:var(--brand)">yes</code> or press Confirm to proceed, <code style="color:var(--brand)">no</code> to cancel.</p>${kvTable(data.parameters || {})}<div class="flex gap-2 mt-3"><button id="confirmWrite" class="px-3 py-1.5 rounded-md text-white text-xs" style="background:var(--brand)">Confirm</button><button id="cancelWrite" class="px-3 py-1.5 rounded-md text-xs" style="background:var(--bg-elevated);border-color:var(--border);color:var(--text-primary)">Cancel</button></div></div>`;
-    aiSetExecState("warn", "Needs confirm");
-    aiSetRunEnabled(true);
-    setTimeout(() => {
-      document.getElementById("confirmWrite")?.addEventListener("click", async () => {
+    const runConfirmedWrite = async (finalArgs) => {
+      window.__pendingWrite = null;
+      aiSetExecState("running", "Running…");
+      const res2 = await window.exchangeDesktop.askExchange({ prompt: promptValue, confirmed: true, tool, args: finalArgs, conversationId: window.__aiCurrentConversationId || undefined });
+      const aiAns = res2?.aiAnswer || res2?.result?.message || aiHumanFallback(res2?.result);
+      aiSetRichText(aiResultOutput, aiAns || "Action completed.");
+      if (aiResultOutput) aiRenderNextActions(res2.nextActions, aiResultOutput);
+      if (aiUsage) aiUsage.textContent = res2?.aiUsage ? `${fmtTok(res2.aiUsage.input)} in / ${fmtTok(res2.aiUsage.output)} out` : "Completed";
+      aiSetExecState("ok", "Completed");
+      renderResult((res2 && res2.tool) || tool, (res2 && res2.result !== undefined) ? res2.result : res2);
+    };
+    renderWriteReview(aiResultOutput, { tool, args: res.args || (data && data.parameters) || {}, fields: res.fields || [],
+      onConfirm: runConfirmedWrite,
+      onCancel: () => {
         window.__pendingWrite = null;
-        const res2 = await window.exchangeDesktop.askExchange({ prompt: promptValue, confirmed: true, tool, args: res.args, conversationId: window.__aiCurrentConversationId || undefined });
-        const aiAns = res2?.aiAnswer || res2?.result?.message || aiHumanFallback(res2?.result);
-        aiSetRichText(aiResultOutput, aiAns || "Action completed.");
-        if (aiResultOutput) aiRenderNextActions(res2.nextActions, aiResultOutput);
-        if (aiUsage) aiUsage.textContent = res2?.aiUsage ? `${fmtTok(res2.aiUsage.input)} in / ${fmtTok(res2.aiUsage.output)} out` : "Completed";
-        aiSetExecState("ok", "Completed");
-      });
-      document.getElementById("cancelWrite")?.addEventListener("click", () => {
-        window.__pendingWrite = null;
-        aiSetRichText(aiResultOutput, "Action cancelled.");
+        aiSetRichText(aiResultOutput, "Action cancelled. Nothing was changed.");
         aiSetExecState("muted", "Cancelled");
-      });
-    }, 0);
+        aiSetRunEnabled(true);
+      },
+    });
+    aiSetExecState("warn", "Needs confirm — review, edit, then Confirm (or type yes)");
+    aiSetRunEnabled(true);
   } else if (res && res.needsInfo) {
     aiHistStatus(histEntry, tool, "needs info");
-    aiSetRichText(aiResultOutput, (data && data.message) || "I need a bit more detail to run that. Tell me which mailbox, server, or database you mean.");
+    const fields = res.fields || (res.missing || []).map((m) => ({ name: m, label: m, kind: "text", required: true }));
+    const submitWriteForm = async (patch) => {
+      aiSetExecState("running", "Running…");
+      if (aiResultOutput) aiResultOutput.innerHTML = aiThinkingHtml("Collecting details...");
+      const r2 = await window.exchangeDesktop.askExchange({ prompt: promptValue, tool, formPatch: patch, conversationId: window.__aiCurrentConversationId || undefined });
+      if (r2 && r2.needsInfo) {
+        aiHistStatus(histEntry, (r2 && r2.tool) || tool, "needs info");
+        window.__pendingWrite = { tool: (r2 && r2.tool) || tool, args: r2.args || r2.collected || {}, prompt: promptValue, hist: histEntry };
+        renderWriteForm(aiResultOutput, { tool: (r2 && r2.tool) || tool, title: r2.formTitle || ((r2 && r2.tool) || tool), fields: r2.fields || [], collected: r2.collected || r2.args || {}, onSubmit: submitWriteForm,
+          onCancel: () => { window.__pendingWrite = null; aiSetRichText(aiResultOutput, "Action cancelled. Nothing was changed."); aiSetExecState("muted", "Cancelled"); aiSetRunEnabled(true); } });
+        aiSetExecState("warn", "Needs info");
+        aiSetRunEnabled(true);
+        return;
+      }
+      if (r2 && r2.needsConfirm) {
+        window.__pendingWrite = { tool: (r2 && r2.tool) || tool, args: r2.args || {}, prompt: promptValue, hist: histEntry };
+        aiHistStatus(histEntry, (r2 && r2.tool) || tool, "needs confirm");
+        renderWriteReview(aiResultOutput, { tool: (r2 && r2.tool) || tool, args: r2.args || {}, fields: r2.fields || [],
+          onConfirm: async (edited) => {
+            window.__pendingWrite = null;
+            aiSetExecState("running", "Running…");
+            const r3 = await window.exchangeDesktop.askExchange({ prompt: promptValue, confirmed: true, tool: (r2 && r2.tool) || tool, args: edited, conversationId: window.__aiCurrentConversationId || undefined });
+            const aiAns3 = r3?.aiAnswer || r3?.result?.message || aiHumanFallback(r3?.result);
+            aiSetRichText(aiResultOutput, aiAns3 || "Action completed.");
+            if (aiResultOutput) aiRenderNextActions(r3.nextActions, aiResultOutput);
+            if (aiUsage) aiUsage.textContent = r3?.aiUsage ? `${fmtTok(r3.aiUsage.input)} in / ${fmtTok(r3.aiUsage.output)} out` : "Completed";
+            renderResult((r3 && r3.tool) || tool, (r3 && r3.result !== undefined) ? r3.result : r3);
+            aiSetExecState("ok", "Completed");
+          },
+          onCancel: () => { window.__pendingWrite = null; aiSetRichText(aiResultOutput, "Action cancelled. Nothing was changed."); aiSetExecState("muted", "Cancelled"); aiSetRunEnabled(true); },
+        });
+        aiSetExecState("warn", "Needs confirm — review, edit, then Confirm (or type yes)");
+        aiSetRunEnabled(true);
+        return;
+      }
+      const d2 = (r2 && r2.result !== undefined) ? r2.result : r2;
+      const aiAns2 = r2?.aiAnswer || r2?.result?.message || aiHumanFallback(d2);
+      aiHistStatus(histEntry, (r2 && r2.tool) || tool, "completed");
+      aiSetRichText(aiResultOutput, aiAns2 || "Action completed.");
+      if (aiResultOutput) aiRenderNextActions(r2.nextActions, aiResultOutput);
+      if (aiUsage) aiUsage.textContent = r2?.aiUsage ? `${fmtTok(r2.aiUsage.input)} in / ${fmtTok(r2.aiUsage.output)} out` : "Completed";
+      renderResult((r2 && r2.tool) || tool, d2);
+      aiSetExecState("ok", "Completed");
+      aiSetRunEnabled(true);
+    };
+    window.__pendingWrite = { tool, args: res.args || res.collected || {}, prompt: promptValue, hist: histEntry };
+    renderWriteForm(aiResultOutput, { tool, title: res.formTitle || tool, fields, collected: res.collected || res.args || {}, onSubmit: submitWriteForm,
+      onCancel: () => { window.__pendingWrite = null; aiSetRichText(aiResultOutput, "Action cancelled. Nothing was changed."); aiSetExecState("muted", "Cancelled"); aiSetRunEnabled(true); } });
     aiSetExecState("warn", "Needs info");
     aiSetRunEnabled(true);
   } else {
@@ -1132,6 +1182,141 @@ document.addEventListener('click', (e) => {
     if (home) home.click();
   }
 });
+// ---------- Shared interactive write forms (ADD/Create/Edit/Modify) ----------
+// One renderer for every surface (AI card, MCP card, chat tab). Sensitive
+// values are never pre-filled; blanks never overwrite collected values.
+function wfFieldInput(f, val) {
+  const v = (f.sensitive || val === undefined || val === null) ? "" : String(val);
+  const cls = "w-full p-2 rounded-md border text-xs";
+  const style = "background:var(--bg-input);border-color:var(--border);color:var(--text-input)";
+  if (f.kind === "select") {
+    const opts = (f.options || []).map((o) => `<option value="${esc(o)}"${String(val ?? "") === o ? " selected" : ""}>${esc(o)}</option>`).join("");
+    return `<select data-wf="${esc(f.name)}" class="${cls}" style="${style}">${opts}</select>`;
+  }
+  if (f.kind === "boolean") {
+    return `<input type="checkbox" data-wf="${esc(f.name)}"${v && v !== "false" ? " checked" : (val ? " checked" : "")} />`;
+  }
+  const type = f.kind === "password" ? "password" : (f.kind === "number" ? "number" : (f.kind === "email" ? "email" : "text"));
+  const main = `<input type="${type}" data-wf="${esc(f.name)}" value="${esc(v)}" placeholder="${esc(f.placeholder || "")}" class="${cls}" style="${style}" />`;
+  if (f.kind === "password") {
+    return main + `<input type="password" data-wf-confirm="${esc(f.name)}" value="" placeholder="Repeat password" class="${cls} mt-1" style="${style}" />`;
+  }
+  return main;
+}
+function wfSetErr(root, name, msg) {
+  const e = root.querySelector(`[data-wf-err="${name}"]`);
+  if (e) { e.textContent = msg || ""; e.classList.toggle("hidden", !msg); }
+}
+function wfCollectPatch(root, fields) {
+  const patch = {};
+  let ok = true;
+  (fields || []).forEach((fld) => {
+    wfSetErr(root, fld.name, "");
+    const input = root.querySelector(`[data-wf="${fld.name}"]`);
+    if (!input) return;
+    let val;
+    if (fld.kind === "boolean") val = input.checked ? true : undefined;
+    else val = (input.value || "").trim();
+    if (fld.kind === "password") {
+      const rep = ((root.querySelector(`[data-wf-confirm="${fld.name}"]`) || {}).value || "").trim();
+      if ((val || rep) && val !== rep) { wfSetErr(root, fld.name, "Passwords do not match"); ok = false; return; }
+    }
+    if (fld.kind === "number" && val !== undefined && val !== "") {
+      if (isNaN(Number(val))) { wfSetErr(root, fld.name, "Must be a number"); ok = false; return; }
+      val = Number(val);
+    }
+    if (fld.required && (val === undefined || val === "")) { wfSetErr(root, fld.name, "Required"); ok = false; return; }
+    if (val !== undefined && val !== "") patch[fld.name] = val;
+  });
+  return { patch, ok };
+}
+function wfFormHtml(title, subtitle, fields, collected, submitLabel) {
+  collected = collected || {};
+  return `<div class="p-3 rounded-lg border text-xs space-y-2" data-write-root style="background:var(--bg-elevated);border-color:var(--border)">
+    <div class="font-semibold text-sm" style="color:var(--text-primary)">${esc(title)}</div>
+    ${subtitle ? `<div style="color:var(--text-muted)">${esc(subtitle)}</div>` : ""}
+    ${(fields || []).map((fld) => `<label class="block">
+      <span class="block mb-1 font-medium" style="color:var(--text-secondary)">${esc(fld.label || fld.name)}${fld.required ? ' <span style="color:var(--brand)">*</span>' : ""}</span>
+      ${wfFieldInput(fld, collected[fld.name])}
+      ${fld.help ? `<span class="block mt-0.5 text-[11px]" style="color:var(--text-muted)">${esc(fld.help)}</span>` : ""}
+      <span class="hidden text-[11px] text-red-400" data-wf-err="${esc(fld.name)}"></span>
+    </label>`).join("")}
+    <div class="flex gap-2 pt-1">
+      <button data-wf-submit class="px-3 py-1.5 rounded-md text-white text-xs font-medium" style="background:var(--brand)">${esc(submitLabel || "Continue")}</button>
+      <button data-wf-cancel class="px-3 py-1.5 rounded-md text-xs border" style="background:var(--bg-elevated);border-color:var(--border);color:var(--text-primary)">Cancel</button>
+    </div></div>`;
+}
+function renderWriteForm(container, opts) {
+  if (!container) return;
+  container.innerHTML = wfFormHtml(opts.title || opts.tool, opts.subtitle || "A few details are needed — what you already told me is kept.", opts.fields || [], opts.collected);
+  const submit = () => {
+    const { patch, ok } = wfCollectPatch(container, opts.fields || []);
+    if (!ok) return;
+    if (opts.onSubmit) opts.onSubmit(patch);
+  };
+  container.querySelector("[data-wf-submit]")?.addEventListener("click", submit);
+  container.querySelector("[data-wf-cancel]")?.addEventListener("click", () => { if (opts.onCancel) opts.onCancel(); });
+  container.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && e.target.matches("input,select") && e.target.type !== "checkbox") { e.preventDefault(); submit(); }
+    if (e.key === "Escape" && opts.onCancel) opts.onCancel();
+  });
+  container.querySelector("[data-wf]")?.focus();
+}
+// Review-before-run: every arg editable; emptying an optional field drops
+// it. Sensitive fields kept server-side show as "unchanged" and survive
+// unless retyped (baseArgs carries the kept values for the merge).
+function wfReviewHtml(tool, args, fields) {
+  const defs = {};
+  (fields || []).forEach((fld) => { defs[fld.name] = fld; });
+  const keys = Object.keys(args || {});
+  return `<div class="p-3 rounded-lg border text-xs space-y-2" data-write-root style="background:var(--bg-elevated);border-color:var(--border)">
+    <div class="font-semibold text-sm" style="color:var(--text-primary)">Review before running <span class="font-mono">${esc(tool)}</span></div>
+    <div style="color:var(--text-muted)">Edit any value, then Confirm. Clearing an optional field drops it.</div>
+    ${keys.map((k) => {
+      const d = defs[k] || { name: k, label: k, kind: "text", required: false };
+      const kept = d.sensitive && args[k] ? `<div class="text-[11px] mb-1" style="color:var(--text-muted)">•••••• (unchanged — retype to replace)</div>` : "";
+      return `<label class="block">
+        <span class="block mb-1 font-medium" style="color:var(--text-secondary)">${esc(d.label || k)}</span>
+        ${kept}${wfFieldInput(d, d.sensitive ? "" : args[k])}
+        <span class="hidden text-[11px] text-red-400" data-wf-err="${esc(k)}"></span>
+      </label>`;
+    }).join("")}
+    <div class="flex gap-2 pt-1">
+      <button data-wr-confirm class="px-3 py-1.5 rounded-md text-white text-xs font-medium" style="background:var(--brand)">Confirm</button>
+      <button data-wr-cancel class="px-3 py-1.5 rounded-md text-xs border" style="background:var(--bg-elevated);border-color:var(--border);color:var(--text-primary)">Cancel</button>
+    </div></div>`;
+}
+function wfCollectReview(root, baseArgs, fields) {
+  const args = {};
+  baseArgs = baseArgs || {};
+  const defs = {};
+  (fields || []).forEach((fld) => { defs[fld.name] = fld; });
+  root.querySelectorAll("[data-wf]").forEach((input) => {
+    const name = input.getAttribute("data-wf");
+    if (!name) return;
+    let val;
+    if (input.type === "checkbox") val = input.checked ? true : undefined;
+    else val = (input.value || "").trim();
+    if (val === undefined || val === "") {
+      // Blank sensitive fields mean "keep the server-side value" (they
+      // render empty by design); blanked optional fields drop out.
+      if (defs[name]?.sensitive && baseArgs[name] !== undefined && baseArgs[name] !== "") {
+        args[name] = baseArgs[name]; return;
+      }
+      return; // dropped
+    }
+    if (val !== undefined && val !== "") args[name] = val;
+  });
+  return args;
+}
+function renderWriteReview(container, opts) {
+  if (!container) return;
+  container.innerHTML = wfReviewHtml(opts.tool, opts.args || {}, opts.fields);
+  container.querySelector("[data-wr-confirm]")?.addEventListener("click", () => {
+    if (opts.onConfirm) opts.onConfirm(wfCollectReview(container, opts.args, opts.fields));
+  });
+  container.querySelector("[data-wr-cancel]")?.addEventListener("click", () => { if (opts.onCancel) opts.onCancel(); });
+}
 // Gather generic output text for copy/export
 function getOutputText(){
   const el=document.getElementById("outResult");
@@ -1425,10 +1610,73 @@ safeHandler("runPrompt", async()=>{
   } else if(res && res.needsConfirm){
     window.__pendingWrite = { tool, args: res.args || (data && data.parameters) || {} };
     const out2=document.getElementById("outResult");
-    if(out2) out2.innerHTML=`<div class="p-3 rounded border border-amber-500/40 bg-amber-500/5 text-xs"><p class="text-amber-300 font-semibold mb-1">Confirm action: ${esc(tool)}</p>${kvTable(data.parameters||{})}<div class="flex gap-2 mt-3"><button id="confirmWrite" class="px-3 py-1.5 rounded-md bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs">Confirm</button><button id="cancelWrite" class="px-3 py-1.5 rounded-md bg-[#141d30] border border-[#22304d] text-xs text-slate-300">Cancel</button></div></div>`;
-    if(statusBadge) statusBadge.textContent="Needs confirm";
+    const finishConfirmedWrite = async (finalArgs) => {
+      window.__pendingWrite = null;
+      if(statusBadge) statusBadge.textContent="Running…";
+      const pEl=document.getElementById("prompt");
+      window.__lastPromptText = pEl?pEl.value:"";
+      const res2 = await window.exchangeDesktop.askExchange({prompt: pEl?pEl.value:"", confirmed: true, tool, args: finalArgs});
+      const data2 = (res2 && res2.result !== undefined) ? res2.result : res2;
+      window.__lastArgs = (res2 && res2.args) || finalArgs || {};
+      window.__lastRaw = data2;
+      window.__lastPsTrace = (res2 && res2.psTrace) || [];
+      renderPsTrace();
+      renderResult((res2 && res2.tool)||tool, data2);
+      if(res2 && res2.aiAnswer){ renderAiAnswer(res2.aiAnswer, res2.aiUsage); switchOutputTab('ai'); }
+      else { if(res2 && res2.aiNote) renderAiNote(res2.aiNote); switchOutputTab('mcp'); }
+      if(statusBadge) statusBadge.textContent="Completed";
+    };
+    if(out2) renderWriteReview(out2, { tool, args: res.args || (data && data.parameters) || {}, fields: res.fields || [],
+      onConfirm: finishConfirmedWrite,
+      onCancel: () => { window.__pendingWrite=null; if(out2) out2.textContent="Cancelled."; if(statusBadge) statusBadge.textContent="Idle"; },
+    });
+    if(statusBadge) statusBadge.textContent="Needs confirm — review, edit, then Confirm";
   } else if(res && res.needsInfo){
-    renderResult("info", { message: (data&&data.message)||"More info needed", missing: res.missing||[] });
+    const out3=document.getElementById("outResult");
+    const fields3 = res.fields || (res.missing || []).map((m) => ({ name: m, label: m, kind: "text", required: true }));
+    const submitMcpForm = async (patch) => {
+      if(statusBadge) statusBadge.textContent="Running…";
+      const pEl=document.getElementById("prompt");
+      const r2 = await window.exchangeDesktop.askExchange({prompt: pEl?pEl.value:"", tool, formPatch: patch});
+      if (r2 && r2.needsInfo) {
+        const f2 = r2.fields || [];
+        window.__pendingWrite = { tool: (r2 && r2.tool) || tool, args: r2.args || r2.collected || {} };
+        if(out3) renderWriteForm(out3, { tool: (r2 && r2.tool) || tool, title: r2.formTitle || ((r2 && r2.tool) || tool), fields: f2, collected: r2.collected || r2.args || {}, onSubmit: submitMcpForm,
+          onCancel: () => { window.__pendingWrite=null; if(out3) out3.textContent="Cancelled."; if(statusBadge) statusBadge.textContent="Idle"; } });
+        if(statusBadge) statusBadge.textContent="Needs info";
+        return;
+      }
+      if (r2 && r2.needsConfirm) {
+        window.__pendingWrite = { tool: (r2 && r2.tool) || tool, args: r2.args || {} };
+        if(out3) renderWriteReview(out3, { tool: (r2 && r2.tool) || tool, args: r2.args || {}, fields: r2.fields || [],
+          onConfirm: async (edited) => {
+            window.__pendingWrite = null;
+            if(statusBadge) statusBadge.textContent="Running…";
+            const r3 = await window.exchangeDesktop.askExchange({prompt: (document.getElementById("prompt")||{}).value || "", confirmed: true, tool: (r2 && r2.tool) || tool, args: edited});
+            const data3 = (r3 && r3.result !== undefined) ? r3.result : r3;
+            window.__lastArgs = (r3 && r3.args) || edited || {};
+            window.__lastRaw = data3;
+            window.__lastPsTrace = (r3 && r3.psTrace) || [];
+            renderPsTrace();
+            renderResult((r3 && r3.tool) || tool, data3);
+            if(statusBadge) statusBadge.textContent="Completed";
+          },
+          onCancel: () => { window.__pendingWrite=null; if(out3) out3.textContent="Cancelled."; if(statusBadge) statusBadge.textContent="Idle"; },
+        });
+        if(statusBadge) statusBadge.textContent="Needs confirm — review, edit, then Confirm";
+        return;
+      }
+      const data2 = (r2 && r2.result !== undefined) ? r2.result : r2;
+      window.__lastArgs = (r2 && r2.args) || {};
+      window.__lastRaw = data2;
+      window.__lastPsTrace = (r2 && r2.psTrace) || [];
+      renderPsTrace();
+      renderResult((r2 && r2.tool) || tool, data2);
+      if(statusBadge) statusBadge.textContent="Completed";
+    };
+    window.__pendingWrite = { tool, args: res.args || res.collected || {} };
+    if(out3) renderWriteForm(out3, { tool, title: res.formTitle || tool, fields: fields3, collected: res.collected || res.args || {}, onSubmit: submitMcpForm,
+      onCancel: () => { window.__pendingWrite=null; if(out3) out3.textContent="Cancelled."; if(statusBadge) statusBadge.textContent="Idle"; } });
     if(statusBadge) statusBadge.textContent="Needs info";
   } else {
     renderResult(tool, data);
@@ -1443,25 +1691,6 @@ document.getElementById("outResult")?.addEventListener("click", async (e)=>{
   if(e.target.closest("#pgPrev")){ pgNav(-1); return; }
   if(e.target.closest("#pgNext")){ pgNav(1); return; }
   if(e.target.closest("#pgServerNext")){ pgServerNext(); return; }
-  if(e.target.closest("#cancelWrite")){ window.__pendingWrite=null; const o=document.getElementById("outResult"); if(o) o.textContent="Cancelled."; const s=document.getElementById("outStatus"); if(s) s.textContent="Idle"; return; }
-  if(e.target.closest("#confirmWrite")){
-    const pw = window.__pendingWrite;
-    if(!pw) return;
-    const pEl=document.getElementById("prompt");
-    window.__lastPromptText = pEl?pEl.value:"";
-    const res2 = await window.exchangeDesktop.askExchange({prompt: pEl?pEl.value:"", confirmed: true, tool: pw.tool, args: pw.args});
-    const data2 = (res2 && res2.result !== undefined) ? res2.result : res2;
-    window.__lastArgs = (res2 && res2.args) || pw.args || {};
-    window.__lastRaw = data2;
-    window.__lastPsTrace = (res2 && res2.psTrace) || [];
-    renderPsTrace();
-    renderResult((res2 && res2.tool)||pw.tool, data2);
-    if(res2 && res2.aiAnswer){ renderAiAnswer(res2.aiAnswer, res2.aiUsage); switchOutputTab('ai'); }
-    else { if(res2 && res2.aiNote) renderAiNote(res2.aiNote); switchOutputTab('mcp'); }
-    const s=document.getElementById("outStatus"); if(s) s.textContent="Completed";
-    window.__pendingWrite=null;
-    return;
-  }
 });
 safeHandler("restartMcpDesktop", async()=>{
   await window.exchangeDesktop.stopMcp();
@@ -1958,6 +2187,76 @@ function aiSetInputEnabled(enabled) {
   if (stopBtn) stopBtn.classList.toggle('hidden', enabled);
 }
 
+// Shared chat-tab handler for write follow-ups (needsInfo form rounds and
+// needsConfirm review). Used for the first response and for resubmits, so
+// multi-turn collection never duplicates rendering logic.
+async function aiHandleChatWrite(conv, text, res) {
+  if (res.needsInfo) {
+    const fields = res.fields || (res.missing || []).map((m) => ({ name: m, label: m, kind: "text", required: true }));
+    const formHtml = wfFormHtml(res.formTitle || res.tool, "What you already told me is kept.", fields, res.collected || res.args || {}, "Continue");
+    conv.messages.push({ role: 'assistant', content: res.result?.message || 'A few details are needed.', toolActivity: formHtml });
+    aiRenderMessage({ role: 'assistant', content: res.result?.message || 'A few details are needed.', toolActivity: formHtml });
+    aiSaveConversations();
+    const bubble = document.getElementById('aiMessagesContainer')?.lastElementChild;
+    const submitChatForm = async () => {
+      if (!bubble) return;
+      const collected = wfCollectPatch(bubble, fields);
+      if (!collected.ok) return;
+      const r2 = await window.exchangeDesktop.askExchange({ prompt: text, tool: res.tool, formPatch: collected.patch, conversationId: window.__aiCurrentConversationId || undefined });
+      if (r2 && (r2.needsInfo || r2.needsConfirm)) { await aiHandleChatWrite(conv, text, r2); return; }
+      const done = r2?.aiAnswer || r2?.result?.message || 'Action completed.';
+      conv.messages.push({ role: 'assistant', content: done });
+      aiRenderMessage({ role: 'assistant', content: done });
+      aiSaveConversations();
+    };
+    bubble?.querySelector("[data-wf-submit]")?.addEventListener("click", submitChatForm);
+    bubble?.querySelector("[data-wf-cancel]")?.addEventListener("click", () => {
+      conv.messages.push({ role: 'assistant', content: 'Action cancelled. Nothing was changed.' });
+      aiRenderMessage({ role: 'assistant', content: 'Action cancelled. Nothing was changed.' });
+      aiSaveConversations();
+    });
+    bubble?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && e.target.matches("input,select") && e.target.type !== "checkbox") { e.preventDefault(); submitChatForm(); }
+    });
+    return;
+  }
+  if (res.needsConfirm) {
+    const reviewHtml = `<div class="mt-2 p-2 rounded border" style="background:var(--bg-elevated);border-color:var(--border)">
+      <div class="text-xs font-semibold mb-1" style="color:var(--text-secondary)">⚠️ Review before running <code style="color:var(--brand)">${aiEscapeHtml(res.tool)}</code> — edit any value, then Confirm</div>
+      <div class="space-y-2">${Object.keys(res.args || {}).map((k) => {
+        const d = (res.fields || []).find((fld) => fld.name === k) || { name: k, label: k, kind: "text", required: false };
+        return `<label class="block text-xs"><span class="block mb-1 font-medium" style="color:var(--text-secondary)">${aiEscapeHtml(d.label || k)}</span>${wfFieldInput(d, d.sensitive ? "" : res.args[k])}</label>`;
+      }).join("")}</div>
+      <div class="flex gap-2 mt-2">
+        <button class="ai-confirm-btn px-3 py-1 rounded text-white text-xs" style="background:var(--brand)">Confirm</button>
+        <button class="ai-cancel-btn px-3 py-1 rounded text-xs border" style="background:var(--bg-elevated);border-color:var(--border);color:var(--text-primary)">Cancel</button>
+      </div>
+    </div>`;
+    conv.messages.push({ role: 'assistant', content: res.result?.message || 'Confirmation required', toolActivity: reviewHtml });
+    aiRenderMessage({ role: 'assistant', content: res.result?.message || 'Confirmation required', toolActivity: reviewHtml });
+    // Remember for typed "yes"/"no" continuations in this chat flow.
+    window.__pendingChatConfirm = { tool: res.tool, args: res.args, prompt: text };
+    const liveBubble = document.getElementById('aiMessagesContainer')?.lastElementChild;
+    liveBubble?.querySelector('.ai-confirm-btn')?.addEventListener('click', async () => {
+      window.__pendingChatConfirm = null;
+      const edited = wfCollectReview(liveBubble, res.args, res.fields);
+      const confirmRes = await window.exchangeDesktop.askExchange({ prompt: text, confirmed: true, tool: res.tool, args: edited, conversationId: window.__aiCurrentConversationId || undefined });
+      conv.messages.push({ role: 'assistant', content: confirmRes.aiAnswer || confirmRes.result?.message || 'Action completed' });
+      aiRenderMessage({ role: 'assistant', content: confirmRes.aiAnswer || confirmRes.result?.message || 'Action completed' });
+      const chatBox = document.getElementById('aiMessagesContainer');
+      const lastBubble = chatBox?.lastElementChild?.querySelector('.ai-msg-content');
+      if (lastBubble) aiRenderNextActions(confirmRes.nextActions, lastBubble.parentElement);
+      aiSaveConversations();
+    });
+    liveBubble?.querySelector('.ai-cancel-btn')?.addEventListener('click', () => {
+      window.__pendingChatConfirm = null;
+      conv.messages.push({ role: 'assistant', content: 'Action cancelled.' });
+      aiRenderMessage({ role: 'assistant', content: 'Action cancelled.' });
+      aiSaveConversations();
+    });
+  }
+}
+
 async function aiSendMessage(text) {
   if (!text.trim() || window.__aiGenerating) return;
   // Typed continuation for a pending write confirmation in this chat flow:
@@ -2031,37 +2330,8 @@ async function aiSendMessage(text) {
     if (res.error) {
       conv.messages.push({ role: 'assistant', content: '', error: res.error });
       aiRenderMessage({ role: 'assistant', content: '', error: res.error });
-    } else if (res.needsConfirm) {
-      const confirmHtml = `<div class="mt-2 p-2 rounded border" style="background:var(--bg-elevated);border-color:var(--border)">
-        <div class="text-xs font-semibold mb-1" style="color:var(--text-secondary)">⚠️ Action requires confirmation</div>
-        <div class="text-xs mb-2" style="color:var(--text-muted)">Ready to run: <code style="color:var(--brand)">${aiEscapeHtml(res.tool)}</code></div>
-        <div class="flex gap-2">
-          <button class="ai-confirm-btn px-3 py-1 rounded text-white text-xs" style="background:var(--brand)">Confirm</button>
-          <button class="ai-cancel-btn px-3 py-1 rounded text-xs border" style="background:var(--bg-elevated);border-color:var(--border);color:var(--text-primary)">Cancel</button>
-        </div>
-      </div>`;
-      conv.messages.push({ role: 'assistant', content: res.result?.message || 'Confirmation required', toolActivity: confirmHtml });
-      aiRenderMessage({ role: 'assistant', content: res.result?.message || 'Confirmation required', toolActivity: confirmHtml });
-      // Remember for typed "yes"/"no" continuations in this chat flow.
-      window.__pendingChatConfirm = { tool: res.tool, args: res.args, prompt: text.trim() };
-      setTimeout(() => {
-        document.querySelector('.ai-confirm-btn')?.addEventListener('click', async () => {
-          window.__pendingChatConfirm = null;
-          const confirmRes = await window.exchangeDesktop.askExchange({ prompt: text.trim(), confirmed: true, tool: res.tool, args: res.args, conversationId: window.__aiCurrentConversationId || undefined });
-          conv.messages.push({ role: 'assistant', content: confirmRes.aiAnswer || confirmRes.result?.message || 'Action completed' });
-          aiRenderMessage({ role: 'assistant', content: confirmRes.aiAnswer || confirmRes.result?.message || 'Action completed' });
-          const chatBox = document.getElementById('aiMessagesContainer');
-          const lastBubble = chatBox?.lastElementChild?.querySelector('.ai-msg-content');
-          if (lastBubble) aiRenderNextActions(confirmRes.nextActions, lastBubble.parentElement);
-          aiSaveConversations();
-        });
-        document.querySelector('.ai-cancel-btn')?.addEventListener('click', () => {
-          window.__pendingChatConfirm = null;
-          conv.messages.push({ role: 'assistant', content: 'Action cancelled.' });
-          aiRenderMessage({ role: 'assistant', content: 'Action cancelled.' });
-          aiSaveConversations();
-        });
-      }, 0);
+    } else if (res.needsInfo || res.needsConfirm) {
+      await aiHandleChatWrite(conv, text.trim(), res);
     } else {
       const aiContent = res.aiAnswer || res.result?.message || (typeof res.result === 'object' ? JSON.stringify(res.result, null, 2) : String(res.result || ''));
       const toolActivity = res.psTrace?.length ? `<div class="text-[11px] text-slate-400 mt-1">

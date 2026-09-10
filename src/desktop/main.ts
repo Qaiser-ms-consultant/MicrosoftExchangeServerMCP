@@ -14,6 +14,7 @@ import { appendExchange, buildContextBlocks, clipText, fillMissingArgs, narrowCa
 import { checkForUpdates, checkZipUpdate, isGitCheckout, performUpdate, performZipUpdate } from "./updater.js";
 import { enhancePrompt, enhancePromptWithModel, guardResult } from "./promptGuard.js";
 import { getFollowUps } from "./followUps.js";
+import { describeWriteForm } from "./writeForms.js";
 import { WRITE_REQUIRED_ARGS, clearPendingWrite, getPendingWrite, pendingKey, planWriteStep, setPendingWrite } from "./writePlan.js";
 import {
   consumeRecoveryCode,
@@ -658,7 +659,7 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
     args = plan.args;
     setPendingWrite(key, { tool, args, prompt });
     const assumedNote = assumed.length ? ` (assuming ${assumed.map((k) => `${k} = ${args[k]}`).join(", ")} from earlier in this conversation — say no to cancel)` : "";
-    return { prompt, tool, args, needsConfirm: true, result: { message: `Ready to run ${tool}${assumedNote}`, parameters: args } };
+    return { prompt, tool, args, needsConfirm: true, fields: describeWriteForm(tool)?.fields ?? [], result: { message: `Ready to run ${tool}${assumedNote}`, parameters: args } };
   }
   if(write && payload.confirmed) clearPendingWrite(pendingKey(conversationId));
   if(write) args = { ...args, confirm: true };
