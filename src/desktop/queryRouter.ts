@@ -382,15 +382,19 @@ export function routeQuery(prompt: string): Route {
   if (has("remove copy")) return { tool: "database.remove_copy", args: {}, write: true };
   if (has("set activation", "activation polic")) return { tool: "dag.set_activation_policy", args: {}, write: true };
   if (has("mailbox", "mailboxes") && has("list", "number", "count", "how many", "show", "all")) {
-    // Pure count questions get the exact total; listings fetch up to 1000
-    // so the output card pager covers large orgs. An explicit count in the
-    // prompt wins for listings, clamped to the tool maximum.
+    // Pure count questions get the exact total. Bare list-all prompts go to
+    // granular discovery (summary + first page) so large orgs never trigger
+    // one giant fetch. An explicit count in the prompt becomes a bounded
+    // page size, clamped to the page maximum (200).
     if (has("how many", "number of") || (has("count") && !has("list", "show", "all"))) {
       return { tool: "exchange_list_mailboxes", args: { countOnly: true }, write: false };
     }
     const m = prompt.match(/(\d+)\s*mailbox/i);
-    const n = m ? Math.min(1000, Math.max(1, parseInt(m[1], 10))) : 1000;
-    return { tool: "exchange_list_mailboxes", args: { resultSize: n }, write: false };
+    if (m) {
+      const n = Math.min(200, Math.max(1, parseInt(m[1], 10)));
+      return { tool: "exchange_list_mailboxes", args: { pageSize: n }, write: false };
+    }
+    return { tool: "exchange_discover_mailboxes", args: { pageSize: 100 }, write: false };
   }
   // Live sample for UI placeholder substitution (small, cheap fetch)
   if (has("first mailbox")) return { tool: "exchange_list_mailboxes", args: { resultSize: 5 }, write: false };

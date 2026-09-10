@@ -71,14 +71,17 @@ describe("routeQuery", () => {
   it("routes bare count prompts to an exact count", () => {
     expect(routeQuery("mailbox count")).toEqual({ tool: "exchange_list_mailboxes", args: { countOnly: true }, write: false });
   });
-  it("fetches 1000 mailboxes by default so the card pager covers large orgs", () => {
-    expect(routeQuery("list mailboxes")).toEqual({ tool: "exchange_list_mailboxes", args: { resultSize: 1000 }, write: false });
+  it("routes bare list-all prompts to granular discovery, not a giant fetch", () => {
+    expect(routeQuery("list mailboxes")).toEqual({ tool: "exchange_discover_mailboxes", args: { pageSize: 100 }, write: false });
   });
-  it("parses an explicit mailbox count from the prompt", () => {
-    expect(routeQuery("show 50 mailboxes")).toEqual({ tool: "exchange_list_mailboxes", args: { resultSize: 50 }, write: false });
+  it("routes show-all prompts to granular discovery", () => {
+    expect(routeQuery("show all mailboxes")).toEqual({ tool: "exchange_discover_mailboxes", args: { pageSize: 100 }, write: false });
   });
-  it("clamps explicit mailbox counts to the tool maximum", () => {
-    expect(routeQuery("list 2000 mailboxes")).toEqual({ tool: "exchange_list_mailboxes", args: { resultSize: 1000 }, write: false });
+  it("parses an explicit mailbox count from the prompt as a page size", () => {
+    expect(routeQuery("show 50 mailboxes")).toEqual({ tool: "exchange_list_mailboxes", args: { pageSize: 50 }, write: false });
+  });
+  it("clamps explicit mailbox counts to the page maximum", () => {
+    expect(routeQuery("list 2000 mailboxes")).toEqual({ tool: "exchange_list_mailboxes", args: { pageSize: 200 }, write: false });
   });
   it("routes inbox prompts to message listing", () => {
     expect(routeQuery("show recent inbox mail")).toEqual({ tool: "exchange_list_messages", args: {}, write: false });
