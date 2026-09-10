@@ -58,7 +58,14 @@ export function registerRecipientAdminTools(server: McpServer, ps: PowerShellPro
     const names: string[] = Array.isArray(dbs)
       ? dbs.map((d: any) => String(d?.Name ?? "")).filter(Boolean)
       : [];
-    const scoped = database ? names.filter((n) => n.toLowerCase() === database.toLowerCase()) : names;
+    let scoped = database ? names.filter((n) => n.toLowerCase() === database.toLowerCase()) : names;
+    // A mistyped database name must not report a misleading total of 0 —
+    // fall back to all databases and say so.
+    let scopeNote: string | undefined;
+    if (database && scoped.length === 0 && names.length > 0) {
+      scopeNote = `Database '${database}' did not match any known database; showing all databases instead.`;
+      scoped = names;
+    }
     // Per-database light counts: one tiny Alias-only projection per DB, so a
     // single slow database cannot sink the whole summary.
     const byDatabase: Array<{ database: string; count: number; error?: string }> = [];
@@ -71,14 +78,15 @@ export function registerRecipientAdminTools(server: McpServer, ps: PowerShellPro
       }
     }
     const totalMailboxes = byDatabase.reduce((sum, d) => sum + d.count, 0);
-    let { items, nextCursor } = await ps.listMailboxes(undefined, recipientType, page, database ? { database } : undefined);
+    const scopeForQuery = scopeNote ? undefined : database;
+    let { items, nextCursor } = await ps.listMailboxes(undefined, recipientType, page, scopeForQuery ? { database: scopeForQuery } : undefined);
     // Resilience: per-database counts prove mailboxes exist, so an empty
     // first page means the ordered query (not the data) failed. Fall back to
     // one bounded Get-Mailbox sample rather than reporting an empty list.
     let partial = false;
     let note: string | undefined;
     if (items.length === 0 && totalMailboxes > 0) {
-      const scope = database ? ` -Database '${database.replace(/'/g, "''")}'` : "";
+      const scope = scopeForQuery ? ` -Database '${scopeForQuery.replace(/'/g, "''")}'` : "";
       const sample = await ps.invokeJson(
         `Get-Mailbox${scope} -ResultSize ${page} | Select-Object DisplayName,PrimarySmtpAddress,RecipientType,Name,Alias,Identity`,
       ).catch(() => []);
@@ -90,6 +98,7 @@ export function registerRecipientAdminTools(server: McpServer, ps: PowerShellPro
         note = `Listing queries came back empty although ${totalMailboxes} mailboxes were counted. Check the PowerShell Trace tab for the failing command, or narrow by database or name filter and retry.`;
       }
     }
+    if (scopeNote) note = note ? `${scopeNote} ${note}` : scopeNote;
     return {
       content: [{
         type: "text",

@@ -25,6 +25,17 @@ function afterWord(prompt: string, word: string): string | null {
   return rest || null;
 }
 
+// "list mailboxes in Exchange DB B" / "show mailboxes on DB01" — the
+// database scoping for mailbox discovery. Deliberately narrow (in/on/from
+// right after "mailbox(es)") so identity prompts like
+// "mailbox detail for alice@contoso.com" never match.
+export function extractMailboxDatabase(prompt: string): string | null {
+  const m = prompt.match(/mailboxes?\s+(?:in|on|from)\s+(?:the\s+)?(?:database\s+)?(.+?)\s*$/i);
+  if (!m) return null;
+  const db = m[1].replace(/^["']+|["'.]+$/g, "").trim();
+  return db || null;
+}
+
 // Loose-language tolerance: common typos + synonyms, applied to the
 // lowercased prompt before keyword matching. Extraction (emails, quotes,
 // afterWord) keeps using the original prompt.
@@ -124,6 +135,21 @@ export function routeQuery(prompt: string): Route {
   // Per-mailbox health (email-gated) must come before general health
   if (has("mailbox health") && email) return { tool: "report.mailbox_health_individual", args: { identity: email }, write: false };
   if (has("health", "healthy", "unhealthy")) return { tool: "exchange_test_service_health", args: {}, write: false };
+  // Mailboxes scoped to a database beat the generic database rules below:
+  // "list mailboxes in Exchange DB B" is a mailbox discovery, not database.list.
+  if (has("mailbox", "mailboxes") && has("list", "number", "count", "how many", "show", "all")) {
+    const db = extractMailboxDatabase(prompt);
+    if (db) {
+      if (has("how many", "number of") || (has("count") && !has("list", "show", "all"))) {
+        return { tool: "exchange_discover_mailboxes", args: { pageSize: 100, database: db }, write: false };
+      }
+      const dm = prompt.match(/(\d+)\s*mailbox/i);
+      if (dm) {
+        return { tool: "exchange_list_mailboxes", args: { pageSize: Math.min(200, Math.max(1, parseInt(dm[1], 10))), database: db }, write: false };
+      }
+      return { tool: "exchange_discover_mailboxes", args: { pageSize: 100, database: db }, write: false };
+    }
+  }
   if (has("database", "databases", "db01", "db0") && has("list", "number", "count", "how many", "show", "all")) return { tool: "database.list", args: {}, write: false };
   if (has("databases") && !has("dismount", "mount", "backup", "whitespace", "growth", "repair")) return { tool: "database.list", args: {}, write: false };
   if (has("per database") || (has("distribution") && has("database", "mailbox"))) return { tool: "report.generate_database_distribution_report", args: {}, write: false };

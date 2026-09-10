@@ -83,6 +83,18 @@ describe("routeQuery", () => {
   it("clamps explicit mailbox counts to the page maximum", () => {
     expect(routeQuery("list 2000 mailboxes")).toEqual({ tool: "exchange_list_mailboxes", args: { pageSize: 200 }, write: false });
   });
+  it("scopes discovery to a named database", () => {
+    expect(routeQuery("list mailboxes in Exchange DB B")).toEqual({ tool: "exchange_discover_mailboxes", args: { pageSize: 100, database: "Exchange DB B" }, write: false });
+  });
+  it("scopes discovery with on/from phrasing", () => {
+    expect(routeQuery("show mailboxes on DB01")).toEqual({ tool: "exchange_discover_mailboxes", args: { pageSize: 100, database: "DB01" }, write: false });
+  });
+  it("scopes explicit counts to a database", () => {
+    expect(routeQuery("show 50 mailboxes in DB01")).toEqual({ tool: "exchange_list_mailboxes", args: { pageSize: 50, database: "DB01" }, write: false });
+  });
+  it("leaves bare list-all prompts unscoped", () => {
+    expect(routeQuery("list all mailboxes")).toEqual({ tool: "exchange_discover_mailboxes", args: { pageSize: 100 }, write: false });
+  });
   it("routes inbox prompts to message listing", () => {
     expect(routeQuery("show recent inbox mail")).toEqual({ tool: "exchange_list_messages", args: {}, write: false });
   });

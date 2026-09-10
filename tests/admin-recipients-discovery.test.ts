@@ -230,6 +230,23 @@ describe("exchange_list_mailboxes paged envelope", () => {
     expect(seen.some((c) => c.startsWith("Get-Mailbox -Database 'DB1' -ResultSize 100 | Select-Object"))).toBe(true);
   });
 
+  it("falls back to unscoped discovery when the database name matches nothing", async () => {
+    const server = makeServer();
+    registerRecipientAdminTools(server as any, {
+      invokeJson: async (cmd: string) => {
+        if (cmd.startsWith("Get-MailboxDatabase")) return [{ Name: "DB1" }];
+        if (cmd.includes("-Database 'DB1'")) return [{ Alias: "a" }, { Alias: "b" }];
+        return [];
+      },
+      listMailboxes: async () => ({ items: [{ DisplayName: "A", Alias: "a" }], nextCursor: "a" }),
+    } as any);
+    const body = JSON.parse((await server.tools["exchange_discover_mailboxes"]({ database: "TypoDB" })).content[0].text);
+    expect(body.totalMailboxes).toBe(2);
+    expect(body.byDatabase).toHaveLength(1);
+    expect(body.note).toContain("TypoDB");
+    expect(body.mailboxes).toHaveLength(1);
+  });
+
   it("passes cursor and database through to the provider", async () => {
     const server = makeServer();
     let got: any = null;
