@@ -302,7 +302,7 @@
 </div>
 <div class="flex items-center gap-2 mt-2">
   <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-    <input type="checkbox" id="modelFirstEnabled" class="w-4 h-4 rounded border border-[#22304d] bg-[#0b0f19] text-blue-600 focus:ring-2 focus:ring-blue-500/20" />
+    <input type="checkbox" id="modelFirstEnabled" checked class="w-4 h-4 rounded border border-[#22304d] bg-[#0b0f19] text-blue-600 focus:ring-2 focus:ring-blue-500/20" />
     <span class="text-xs text-slate-300">ModelFirst (AI picks tool first)</span>
   </label>
 </div>
@@ -636,27 +636,22 @@ var $$ = function(s){ return Array.prototype.slice.call(document.querySelectorAl
 window.addEventListener('error', function(e){ console.error(e.error||e.message); var el=document.getElementById('modelOut'); if(el) el.textContent='JS Error: '+(e.error&&e.error.message||e.message); });
 var isDesktop = typeof window.exchangeDesktop !== 'undefined';
 console.log("isDesktop:", isDesktop, "exchangeDesktop:", window.exchangeDesktop);
-if(!isDesktop){
-  var warn=document.createElement('div');
-  warn.style.cssText='background:#fffbeb;border:1px solid #fde68a;color:#92400e;padding:8px 12px;border-radius:8px;margin:8px 12px;font-size:12px';
-  warn.textContent='⚠️ Not in Electron — fallback mode. Run via npm run desktop for full features.';
-  document.body.prepend(warn);
-} else {
+window.addEventListener('DOMContentLoaded', async () => {
+  if(!isDesktop) return;
   // Initialize UI state based on MCP status
-(async()=>{
-  const runBtn=document.getElementById('runPrompt');
-  if(runBtn) runBtn.disabled=true;
-  const isRunning=await window.exchangeDesktop.isMcpRunning?.();
-  if(isRunning && runBtn) runBtn.disabled=false;
-})();
+  (async()=>{
+    const runBtn=document.getElementById('runPrompt');
+    if(runBtn) runBtn.disabled=true;
+    const isRunning=await window.exchangeDesktop.isMcpRunning?.();
+    if(isRunning && runBtn) runBtn.disabled=false;
+  })();
   // Repopulate saved model config (provider, key, model) from file
-  restoreModelConfig();
+  await restoreModelConfig();
   // Show the live backend Exchange server from the MCP config
   refreshBackendLabels();
   updateDesktopMcpStatus();
   updateMcpServerStatus();
-
-}
+});
 // Output tabs — AI / MCP / Raw JSON / PowerShell Trace
 var OUT_TABS={ai:'aiChatCard',mcp:'resultCard',json:'jsonCard',ps:'psCard',history:'historyCard'};
 var OUT_ACTIVE=['bg-gradient-to-r','from-blue-600','to-indigo-600','text-white','shadow-sm'];
@@ -1086,7 +1081,13 @@ async function restoreModelConfig(){
     if(cfg.apiKey){ const k=document.getElementById("apiKey"); if(k) k.value=cfg.apiKey; }
     if(cfg.baseUrl){ const b=document.getElementById("baseUrl"); if(b) b.value=cfg.baseUrl; }
     if(cfg.systemPrompt){ const sp=document.getElementById("systemPrompt"); if(sp) sp.value=cfg.systemPrompt; }
-    if(cfg.modelFirst !== undefined){ const cb=document.getElementById("modelFirstEnabled"); if(cb) cb.checked = !!cfg.modelFirst; }
+    const modelFirstCheckbox = document.getElementById("modelFirstEnabled");
+    if(modelFirstCheckbox) {
+      // Default to true (checked) if no preference saved
+      modelFirstCheckbox.checked = cfg.modelFirst !== undefined ? !!cfg.modelFirst : true;
+      // Ensure it is not disabled
+      modelFirstCheckbox.disabled = false;
+    }
     if(cfg.provider||cfg.model||cfg.apiKey||cfg.baseUrl||cfg.systemPrompt){
       showStatus("modelOut", "Restored saved model config from file");
       // Auto-test the restored connection and refresh the live model list

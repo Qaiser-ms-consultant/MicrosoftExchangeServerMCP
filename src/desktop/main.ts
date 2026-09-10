@@ -661,10 +661,10 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
     }
 
     // ModelFirst: when AI mode is ON and ModelFirst is enabled, let the model
-    // pick the tool directly from the full catalog before falling back to
-    // keyword router. This allows the model to handle typos/paraphrases naturally.
+    // pick the tool directly from the full catalog. If successful, use it and skip keyword router.
     const modelFirstEnabled = modelCfg?.modelFirst === true;
-    if (modelFirstEnabled && aiMode && modelCfg && "help" in route) {
+    let modelFirstPick: { tool: string; args: Record<string, unknown>; write: boolean } | null = null;
+    if (modelFirstEnabled && aiMode && modelCfg) {
       logOp("model_request", "ModelFirst: picking tool from catalog", { provider: modelCfg.provider, model: modelCfg.model });
       const list = await mcpRpc("tools/list", {});
       const toolNames = (((list as any)?.tools ?? []) as any[])
@@ -675,17 +675,21 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
       const pick = await chatComplete(modelCfg, normMsgs);
       const ms = Date.now() - t0;
       logOp("model_response", "ModelFirst pick", { ms, reply: clipText(pick.text, 2000) }, ms);
-      let picked: { tool: string; args: Record<string, unknown>; write: boolean } | null = null;
       try {
         const parsed = JSON.parse(pick.text);
         if (parsed.tool && typeof parsed.tool === "string") {
-          picked = { tool: parsed.tool, args: parsed.args || {}, write: false };
+          modelFirstPick = { tool: parsed.tool, args: parsed.args || {}, write: false };
         }
       } catch { }
-      if (picked) {
-        logOp("route", `ModelFirst pick: ${picked.tool}`, { tool: picked.tool });
-        tool = picked.tool; args = picked.args; write = picked.write;
-      }
+    }
+
+    // If ModelFirst succeeded, use its pick and skip keyword router
+    if (modelFirstPick) {
+      logOp("route", `ModelFirst pick: ${modelFirstPick.tool}`, { tool: modelFirstPick.tool });
+      tool = modelFirstPick.tool;
+      args = modelFirstPick.args;
+      write = modelFirstPick.write;
+      route = { tool: modelFirstPick.tool, args: modelFirstPick.args, write: modelFirstPick.write };
     }
 
     // AI fallback: model interprets prompts the keyword router cannot classify.
