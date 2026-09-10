@@ -276,6 +276,8 @@ try {
     let cmd = "Get-Mailbox";
     if (recipientType) cmd += ` -RecipientTypeDetails ${recipientType}`;
     // -ResultSize bounds the scan server-side; no client-side truncation.
+    const n = Math.min(Math.max(resultSize ?? 20, 1), 1000);
+    cmd += ` -ResultSize ${n}`;
     cmd += ` | Select-Object DisplayName,PrimarySmtpAddress,RecipientType,Name,Identity`;
     return this.invokeJson(cmd);
   }
