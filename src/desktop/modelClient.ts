@@ -9,6 +9,7 @@ export interface ModelConfig {
   model: string;
   systemPrompt?: string;
   modelFirst?: boolean;
+  learnMoreUrl?: string;
 }
 
 export interface ChatMessage {

@@ -518,7 +518,7 @@ ipcMain.handle("mcp:stop", async () => { try { mcpProc?.kill(); } catch {} mcpPr
 ipcMain.handle("mcp:isRunning", async () => !!mcpProc);
 
 // Model settings live in the desktop config file (provider/apiKey/baseUrl/model/systemPrompt).
-function readModelConfig(): { provider: string; apiKey: string; baseUrl?: string; model: string; systemPrompt?: string; modelFirst?: boolean } | null {
+function readModelConfig(): { provider: string; apiKey: string; baseUrl?: string; model: string; systemPrompt?: string; modelFirst?: boolean; learnMoreUrl?: string } | null {
   try {
     const raw = readFileSync(ensureConfig(), "utf-8").trim();
     if (!raw || raw === "{}") return null;
@@ -534,7 +534,7 @@ function readModelConfig(): { provider: string; apiKey: string; baseUrl?: string
 // keyword router cannot classify. Returns null to keep today's help card.
 // With conversation context, the model may also answer "__no_tool" when a
 // follow-up is answerable from recent exchanges without running anything.
-async function tryAiRoute(prompt: string, modelCfg: { provider: string; apiKey: string; baseUrl?: string; model: string; systemPrompt?: string }, context?: string, recentTools?: string[], log?: (stage: OpStage, label: string, body?: unknown, ms?: number) => void): Promise<{ tool: string; args: any; write: boolean } | null> {
+async function tryAiRoute(prompt: string, modelCfg: { provider: string; apiKey: string; baseUrl?: string; model: string; systemPrompt?: string; learnMoreUrl?: string }, context?: string, recentTools?: string[], log?: (stage: OpStage, label: string, body?: unknown, ms?: number) => void): Promise<{ tool: string; args: any; write: boolean } | null> {
   try {
     await ensureMcpInitialized();
     const list = await mcpRpc("tools/list", {});
