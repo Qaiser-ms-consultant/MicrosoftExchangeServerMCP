@@ -829,6 +829,21 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
 ipcMain.handle("oplog:list", async () => getOpRuns());
 ipcMain.handle("oplog:clear", async () => { clearOpLog(); return { ok: true }; });
 
+// Live tool catalog for the Docs tab: queried from the running MCP server on
+// every call, so newly registered tools appear automatically with no UI changes.
+ipcMain.handle("tools:describe", async () => {
+  await ensureMcpInitialized();
+  const list = await mcpRpc("tools/list", {});
+  const tools = (((list as any)?.tools ?? []) as any[])
+    .map((t: any) => ({
+      name: String(t?.name ?? ""),
+      description: typeof t?.description === "string" ? t.description : "",
+      inputSchema: t?.inputSchema && typeof t.inputSchema === "object" ? t.inputSchema : {},
+    }))
+    .filter((t) => t.name);
+  return { tools };
+});
+
 
 // Dialog helpers
 ipcMain.handle("dialog:openFile", async () => {

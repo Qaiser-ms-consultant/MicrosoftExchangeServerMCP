@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld("exchangeDesktop", {
   askExchange: (payload: { prompt: string; conversationId?: string; confirmed?: boolean; tool?: string; args?: any; formPatch?: Record<string, unknown>; systemPrompt?: string }) => ipcRenderer.invoke("exchange:ask", payload),
   oplogList: () => ipcRenderer.invoke("oplog:list"),
   oplogClear: () => ipcRenderer.invoke("oplog:clear"),
+  toolsDescribe: () => ipcRenderer.invoke("tools:describe"),
   onOpLog: (cb: (entry: any) => void) => ipcRenderer.on("oplog:append", (_e: any, entry: any) => cb(entry)),
   isMcpRunning: () => ipcRenderer.invoke("mcp:isRunning"),
   getBackendInfo: () => ipcRenderer.invoke("backend:info"),
