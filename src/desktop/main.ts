@@ -660,11 +660,10 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
       } catch (e) { console.error("prompt normalization failed, using raw prompt", e); }
     }
 
-    // ModelFirst: when AI mode is ON and ModelFirst is enabled, let the model
-    // pick the tool directly from the full catalog. If successful, use it and skip keyword router.
-    const modelFirstEnabled = modelCfg?.modelFirst === true;
+    // ModelFirst: when AI mode is ON, let the model pick the tool directly from the full catalog.
+    // If successful, use it and skip keyword router. This is now the primary/only routing path.
     let modelFirstPick: { tool: string; args: Record<string, unknown>; write: boolean } | null = null;
-    if (modelFirstEnabled && aiMode && modelCfg) {
+    if (aiMode && modelCfg) {
       logOp("model_request", "ModelFirst: picking tool from catalog", { provider: modelCfg.provider, model: modelCfg.model });
       const list = await mcpRpc("tools/list", {});
       const toolNames = (((list as any)?.tools ?? []) as any[])
