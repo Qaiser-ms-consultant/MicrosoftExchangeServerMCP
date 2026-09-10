@@ -1009,6 +1009,45 @@ document.getElementById("aiRunAgent")?.addEventListener('click', async () => {
     return;
   }
   window.__pendingWrite = null;
+  // Paged-discovery continuation: "more / next page / continue" fetches the
+  // next server page of the last paged result. Only intercepts when a paged
+  // result exists; otherwise falls through to normal routing.
+  const moreRe = /^(more|next(\s+page)?|continue|show\s+more)\W*$/i;
+  if (moreRe.test(promptValue) && window.__pageCursor) {
+    const cur = window.__pageCursor;
+    const emptyState0 = document.getElementById("aiResultEmpty");
+    const resultContent0 = document.getElementById("aiResultContent");
+    const aiResultOutput0 = document.getElementById("aiResultOutput");
+    const aiUsage0 = document.getElementById("aiUsage");
+    if (emptyState0) emptyState0.classList.add("hidden");
+    if (resultContent0) resultContent0.classList.remove("hidden");
+    if (!cur.nextCursor) {
+      if (aiResultOutput0) aiSetRichText(aiResultOutput0, "That was the last page — there are no further mailboxes to fetch.");
+      aiSetExecState("muted", "Last page");
+      aiSetRunEnabled(true);
+      return;
+    }
+    aiSetExecState("running", "Running…");
+    if (aiResultOutput0) aiResultOutput0.innerHTML = aiThinkingHtml("Fetching next page...");
+    const start0 = Date.now();
+    const args0 = { ...(cur.args || {}), cursor: cur.nextCursor, ...(cur.pageSize ? { pageSize: cur.pageSize } : {}) };
+    const res0 = await window.exchangeDesktop.askExchange({ prompt: "next page", confirmed: true, tool: cur.tool, args: args0, conversationId: window.__aiCurrentConversationId || undefined });
+    const elapsed0 = ((Date.now() - start0) / 1000).toFixed(2);
+    const data0 = (res0 && res0.result !== undefined) ? res0.result : res0;
+    window.__lastPromptText = "next page";
+    window.__lastArgs = (res0 && res0.args) || args0;
+    window.__lastRaw = data0;
+    window.__lastPsTrace = (res0 && res0.psTrace) || [];
+    renderPsTrace();
+    const aiAns0 = res0?.aiAnswer || res0?.result?.message || aiHumanFallback(data0);
+    aiSetRichText(aiResultOutput0, aiAns0 || "Page fetched.");
+    if (aiUsage0) aiUsage0.textContent = res0?.aiUsage ? `${fmtTok(res0.aiUsage.input)} in / ${fmtTok(res0.aiUsage.output)} out` : "Completed";
+    renderResult((res0 && res0.tool) || cur.tool, data0);
+    aiSetExecState("ok", `Done in ${elapsed0}s`);
+    aiSetRunEnabled(true);
+    document.getElementById("aiChatOutput")?.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
   aiSetExecState("running", "Running…");
   const emptyState = document.getElementById("aiResultEmpty");
   const resultContent = document.getElementById("aiResultContent");
@@ -1225,12 +1264,38 @@ function pagedView(data){
 }
 function pagerBar(){
   const total = window.__pagingTotal || 0, ps = PAGE_SIZE;
-  if(!total) return "";
+  const serverNext = window.__pageCursor && window.__pageCursor.nextCursor
+    ? `<button id="pgServerNext" class="px-3 py-1.5 rounded-md text-xs border border-[#22304d] text-slate-300 bg-[#141d30] hover:bg-[#1b2740]">Next page (server) »</button>`
+    : "";
+  if(!total) return serverNext ? `<div class="flex items-center justify-end mt-3 px-1">${serverNext}</div>` : "";
   const pages = Math.max(1, Math.ceil(total/ps));
   const page = Math.min(pages-1, window.__page || 0);
   const lo = page*ps+1, hi = Math.min(total, (page+1)*ps);
   const btn = (id, label, dis)=>`<button id="${id}" ${dis?"disabled":""} class="px-3 py-1.5 rounded-md text-xs border border-[#22304d] ${dis?"text-slate-600 bg-[#141d30] cursor-not-allowed":"text-slate-300 bg-[#141d30] hover:bg-[#1b2740]"}">${label}</button>`;
-  return `<div class="flex items-center justify-between mt-3 px-1">${btn("pgPrev","« Prev",page<=0)}<span class="text-[11px] font-mono text-slate-500">Showing ${lo}–${hi} of ${total} • Page ${page+1}/${pages}</span>${btn("pgNext","Next »",page>=pages-1)}</div>`;
+  return `<div class="flex items-center justify-between mt-3 px-1">${btn("pgPrev","« Prev",page<=0)}<span class="text-[11px] font-mono text-slate-500">Showing ${lo}–${hi} of ${total} • Page ${page+1}/${pages}</span><span class="flex gap-2">${btn("pgNext","Next »",page>=pages-1)}${serverNext}</span></div>`;
+}
+async function pgServerNext(){
+  const cur = window.__pageCursor;
+  if(!cur || !cur.nextCursor) return;
+  const out=document.getElementById("outResult");
+  const statusBadge=document.getElementById("outStatus");
+  if(out) out.innerHTML=`<span class="text-slate-500">Fetching next page…</span>`;
+  if(statusBadge) statusBadge.textContent="Running…";
+  try{
+    const args = { ...(cur.args || {}), cursor: cur.nextCursor, ...(cur.pageSize ? { pageSize: cur.pageSize } : {}) };
+    const res = await window.exchangeDesktop.askExchange({ prompt: "next page", confirmed: true, tool: cur.tool, args });
+    const data2 = (res && res.result !== undefined) ? res.result : res;
+    window.__lastArgs = (res && res.args) || args;
+    window.__lastRaw = data2;
+    window.__lastPsTrace = (res && res.psTrace) || [];
+    renderPsTrace();
+    renderResult((res && res.tool) || cur.tool, data2);
+    if(res && res.aiAnswer){ renderAiAnswer(res.aiAnswer, res.aiUsage); }
+    if(statusBadge) statusBadge.textContent="Completed";
+  }catch(err){
+    if(out) out.innerHTML=`<div class="p-3 rounded border border-red-500/40 bg-red-500/5 text-xs text-red-300">${esc((err && err.message) || String(err))}</div>`;
+    if(statusBadge) statusBadge.textContent="Failed";
+  }
 }
 function tokEncoding(){
   const model = ((document.getElementById("model") || {}).value || "").toLowerCase();
@@ -1301,6 +1366,14 @@ function renderResult(tool, data, keepPage){
   const out=document.getElementById("outResult");
   if(!out) return;
   if(!keepPage){ window.__page = 0; window.__lastResult = { tool, data }; }
+  // Server-side discovery cursor: remember how to fetch the next page of a
+  // paged envelope ({ mailboxes, nextCursor, pageSize }); clear it for
+  // non-paged results so stale "next page" actions can never fire.
+  if(data && typeof data === "object" && !Array.isArray(data) && ("nextCursor" in data || "mailboxes" in data)){
+    window.__pageCursor = { tool, nextCursor: data.nextCursor || null, pageSize: data.pageSize, args: window.__lastArgs || {} };
+  } else if(!keepPage){
+    window.__pageCursor = null;
+  }
   out.innerHTML=kvTable(pagedView(data))+pagerBar()+rawBlock();
   setRaw(data);
   if(tool!=="info") updateOpTokens(window.__lastPromptText||"", window.__lastArgs||{}, data);
@@ -1369,6 +1442,7 @@ safeHandler("runPrompt", async()=>{
 document.getElementById("outResult")?.addEventListener("click", async (e)=>{
   if(e.target.closest("#pgPrev")){ pgNav(-1); return; }
   if(e.target.closest("#pgNext")){ pgNav(1); return; }
+  if(e.target.closest("#pgServerNext")){ pgServerNext(); return; }
   if(e.target.closest("#cancelWrite")){ window.__pendingWrite=null; const o=document.getElementById("outResult"); if(o) o.textContent="Cancelled."; const s=document.getElementById("outStatus"); if(s) s.textContent="Idle"; return; }
   if(e.target.closest("#confirmWrite")){
     const pw = window.__pendingWrite;
@@ -1691,7 +1765,7 @@ function aiHumanFallback(data){
   if(data === null || data === undefined || data === '') return 'I did not find anything for that request. Try a broader question, or check the MCP tab for the raw result.';
   if(typeof data === 'string') return data;
   if(Array.isArray(data)){
-    if(!data.length) return 'Nothing found. No matching items were returned.';
+    if(!data.length) return 'Nothing found. No matching items were returned. Narrow it down instead of listing everything at once — try a name filter, one database, or one mailbox type.';
     var preview = data.slice(0, 5).map(function(x){
       if(x === null || typeof x !== 'object') return String(x);
       return String(x.DisplayName || x.Name || x.PrimarySmtpAddress || x.Identity || x.Server || x.Database || JSON.stringify(x).slice(0, 120));
@@ -1700,6 +1774,19 @@ function aiHumanFallback(data){
       (data.length > 5 ? '\n\nSee the MCP tab for the full list.' : '');
   }
   if(typeof data === 'object'){
+    if(Array.isArray(data.mailboxes)){
+      var boxes = data.mailboxes;
+      if(!boxes.length) return 'No mailboxes matched. Try a name filter, one database, or one mailbox type — or check the MCP tab for the raw result.';
+      var total = (data.totalMailboxes !== undefined && data.totalMailboxes !== null) ? data.totalMailboxes : null;
+      var bprev = boxes.slice(0, 5).map(function(x){
+        return String(x.DisplayName || x.Name || x.PrimarySmtpAddress || x.Alias || JSON.stringify(x).slice(0, 120));
+      });
+      var head = total !== null
+        ? 'Found ' + total + ' mailbox' + (total === 1 ? '' : 's') + ' (showing ' + boxes.length + ').'
+        : 'Found ' + boxes.length + ' mailbox' + (boxes.length === 1 ? '' : 's') + '.';
+      var more = data.nextCursor ? '\n\nSay "more" or press "Next page (server)" for the next page.' : '';
+      return head + '\n\n- ' + bprev.join('\n- ') + more + '\n\nSee the MCP tab for the full page.';
+    }
     var msg = data.message || data.detail || data.summary || data.description;
     if(typeof msg === 'string' && msg.trim()) return msg;
     var keys = Object.keys(data).filter(function(k){ var v = data[k]; return v !== null && typeof v !== 'object' && String(v) !== ''; }).slice(0, 6);
