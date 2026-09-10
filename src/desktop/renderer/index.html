@@ -874,6 +874,7 @@ function renderDocs(){
           </summary>
           <div class="mt-1.5 pt-1.5 border-t border-[#1a253a]">
             ${t.description ? `<div class="text-xs text-slate-300 leading-relaxed mb-2">${esc(t.description)}</div>` : ""}
+            ${(t.examples || []).length ? `<div class="flex flex-wrap items-center gap-2 mb-2"><span class="text-[11px] text-slate-500">Try:</span>` + t.examples.slice(0, 2).map((ex) => `<button data-quick="${esc(ex).replace(/"/g, "&quot;")}" class="px-2 py-1 rounded-md text-[11px] bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300 text-left transition">${esc(ex)}</button>`).join("") + `</div>` : ""}
             ${docParamRows(t.inputSchema)}
           </div>
         </details>`;

@@ -16,6 +16,7 @@ import { enhancePrompt, enhancePromptWithModel, guardResult } from "./promptGuar
 import { getFollowUps } from "./followUps.js";
 import { appendOp, clearOpLog, getOpRuns, type OpStage } from "./opLog.js";
 import { describeWriteForm } from "./writeForms.js";
+import { examplePromptsFor } from "./toolExamples.js";
 import { WRITE_REQUIRED_ARGS, clearPendingWrite, getPendingWrite, pendingKey, planWriteStep, redactPromptText, redactSensitiveArgs, setPendingWrite } from "./writePlan.js";
 import {
   consumeRecoveryCode,
@@ -835,11 +836,15 @@ ipcMain.handle("tools:describe", async () => {
   await ensureMcpInitialized();
   const list = await mcpRpc("tools/list", {});
   const tools = (((list as any)?.tools ?? []) as any[])
-    .map((t: any) => ({
-      name: String(t?.name ?? ""),
-      description: typeof t?.description === "string" ? t.description : "",
-      inputSchema: t?.inputSchema && typeof t.inputSchema === "object" ? t.inputSchema : {},
-    }))
+    .map((t: any) => {
+      const name = String(t?.name ?? "");
+      return {
+        name,
+        description: typeof t?.description === "string" ? t.description : "",
+        inputSchema: t?.inputSchema && typeof t.inputSchema === "object" ? t.inputSchema : {},
+        examples: examplePromptsFor(name),
+      };
+    })
     .filter((t) => t.name);
   return { tools };
 });
