@@ -14,6 +14,7 @@ import { appendExchange, buildContextBlocks, clipText, fillMissingArgs, narrowCa
 import { checkForUpdates, checkZipUpdate, isGitCheckout, performUpdate, performZipUpdate } from "./updater.js";
 import { enhancePrompt, enhancePromptWithModel, guardResult } from "./promptGuard.js";
 import { getFollowUps } from "./followUps.js";
+import { appendOp, clearOpLog, getOpRuns, type OpStage } from "./opLog.js";
 import { describeWriteForm } from "./writeForms.js";
 import { WRITE_REQUIRED_ARGS, clearPendingWrite, getPendingWrite, pendingKey, planWriteStep, redactPromptText, redactSensitiveArgs, setPendingWrite } from "./writePlan.js";
 import {
@@ -531,7 +532,7 @@ function readModelConfig(): { provider: string; apiKey: string; baseUrl?: string
 // keyword router cannot classify. Returns null to keep today's help card.
 // With conversation context, the model may also answer "__no_tool" when a
 // follow-up is answerable from recent exchanges without running anything.
-async function tryAiRoute(prompt: string, modelCfg: { provider: string; apiKey: string; baseUrl?: string; model: string; systemPrompt?: string }, context?: string, recentTools?: string[]): Promise<{ tool: string; args: any; write: boolean } | null> {
+async function tryAiRoute(prompt: string, modelCfg: { provider: string; apiKey: string; baseUrl?: string; model: string; systemPrompt?: string }, context?: string, recentTools?: string[], log?: (stage: OpStage, label: string, body?: unknown, ms?: number) => void): Promise<{ tool: string; args: any; write: boolean } | null> {
   try {
     await ensureMcpInitialized();
     const list = await mcpRpc("tools/list", {});
@@ -547,9 +548,17 @@ async function tryAiRoute(prompt: string, modelCfg: { provider: string; apiKey: 
       return e?.description ? `${n} — ${e.description}` : n;
     };
     const pickFrom = async (pool: string[]) => {
-      const reply = (await chatComplete(modelCfg, buildToolPickerMessages(prompt, pool.map(labelFor), modelCfg.systemPrompt, context))).text;
-      if (parseNoToolVerdict(reply)) return { verdict: "no_tool" as const };
+      const msgs = buildToolPickerMessages(prompt, pool.map(labelFor), modelCfg.systemPrompt, context);
+      log?.("model_request", "tool-picker", { provider: modelCfg.provider, model: modelCfg.model, toolCount: pool.length, messages: msgs.map((m) => ({ role: String((m as any).role), chars: String((m as any).content ?? "").length, content: clipText(String((m as any).content ?? ""), 4000) })) });
+      const t0 = Date.now();
+      const reply = (await chatComplete(modelCfg, msgs)).text;
+      const ms = Date.now() - t0;
+      if (parseNoToolVerdict(reply)) {
+        log?.("model_response", "tool-picker: no_tool", { ms, reply: clipText(reply, 2000) }, ms);
+        return { verdict: "no_tool" as const };
+      }
       const picked = parseToolSelection(reply, pool);
+      log?.("model_response", picked ? `tool-picker: picked ${picked.tool}` : "tool-picker: miss", { ms, reply: clipText(reply, 2000) }, ms);
       return picked ? { verdict: "picked" as const, picked } : { verdict: "miss" as const, reply };
     };
     let r = await pickFrom(names);
@@ -592,6 +601,21 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
   console.log("exchange:ask invoked", { ...payload, args: redactSensitiveArgs(payload.args ?? {}), formPatch: redactSensitiveArgs((payload.formPatch ?? {}) as Record<string, unknown>) });
   const prompt = payload.prompt ?? "";
   if(!prompt.trim()) throw new Error("Type a prompt first");
+  // End-to-end operation log for the Logs tab. Capture is best-effort and
+  // must never fail the run itself.
+  const runId = `${Date.now().toString(36)}${Math.floor(Math.random() * 46656).toString(36)}`;
+  const logOp = (stage: OpStage, label: string, body?: unknown, ms?: number) => {
+    try {
+      const entry = appendOp(runId, stage, label, body, ms);
+      win?.webContents.send("oplog:append", entry);
+    } catch (e) { console.error("opLog append failed", e); }
+  };
+  logOp("prompt", "user prompt", {
+    prompt,
+    ...(payload.tool ? { tool: payload.tool, args: payload.args ?? {} } : {}),
+    ...(payload.formPatch ? { formPatch: payload.formPatch } : {}),
+    ...(payload.confirmed ? { confirmed: true } : {}),
+  });
   // AI mode: a configured OpenAI-compatible model interprets unknown prompts
   // and narrates results. Without it, pure keyword routing runs as before.
   const modelCfg = readModelConfig();
@@ -606,6 +630,7 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
   if(payload.tool){
     tool = payload.tool; args = payload.args ?? {};
     write = true;
+    logOp("route", "explicit tool (confirm / form / paging flow)", { tool, args });
   } else {
     const route = routeQuery(prompt);
     // AI fallback: model interprets prompts the keyword router cannot classify.
@@ -613,31 +638,43 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
     // (e.g. typos/synonyms the keywords missed) across the full tool catalog.
     let aiRouted: { tool: string; args: any; write: boolean } | null = null;
     if (aiMode && modelCfg) {
-      if ("help" in route) aiRouted = await tryAiRoute(prompt, modelCfg, contextBlock || undefined, recentTools);
-      else if (!route.write && hasWriteIntent(prompt)) aiRouted = await tryAiRoute(prompt, modelCfg, contextBlock || undefined, recentTools);
+      const logPicker = (stage: OpStage, label: string, body?: unknown, ms?: number) => logOp(stage, label, body, ms);
+      if ("help" in route) aiRouted = await tryAiRoute(prompt, modelCfg, contextBlock || undefined, recentTools, logPicker);
+      else if (!route.write && hasWriteIntent(prompt)) aiRouted = await tryAiRoute(prompt, modelCfg, contextBlock || undefined, recentTools, logPicker);
     }
-    if ("help" in route && !aiRouted) return { prompt, tool: "help", result: {
+    if ("help" in route && !aiRouted) {
+      logOp("route", "help card (no tool matched)", { aiMode });
+      logOp("result", "help card shown", { outcome: "help" });
+      return { prompt, tool: "help", result: {
       message: "I can run Exchange queries. Try one of these:",
       examples: helpExamplesFor(prompt),
       ...(helpHintFor(prompt) ? { hint: helpHintFor(prompt) } : {}),
       ...(modelCfg && !isAiProvider(modelCfg.provider) ? { note: "Tip: AI answers need an OpenAI-compatible provider (OpenAI, Groq, Together, OpenRouter, Mistral, Ollama, Custom)." } : {}),
     },
     ...((aiMode && modelCfg) ? { aiNote: "Model could not interpret this request — keyword help below." } : {}) };
+    }
     if (aiRouted) {
       // Follow-up answerable from recent exchanges: no tool runs. The answer
       // is narrated from context below; still recorded so later turns see it.
       if (aiRouted.tool === "__no_tool" && modelCfg) {
+        logOp("route", "AI tool-picker: answered from context, no tool", { tool: "__no_tool" });
         let ctxAnswer: string | undefined; let ctxUsage: { input: number; output: number } | undefined; let ctxNote: string | undefined;
         try {
-          const s = await chatComplete(modelCfg, buildSummaryMessages(prompt, "history", "No new tool result for this follow-up — answer from the conversation context.", modelCfg.systemPrompt, contextBlock || undefined));
+          const ctxMsgs = buildSummaryMessages(prompt, "history", "No new tool result for this follow-up — answer from the conversation context.", modelCfg.systemPrompt, contextBlock || undefined);
+          logOp("model_request", "context answer", { provider: modelCfg.provider, model: modelCfg.model, messages: ctxMsgs.map((m) => ({ role: String((m as any).role), chars: String((m as any).content ?? "").length, content: clipText(String((m as any).content ?? ""), 4000) })) });
+          const t0 = Date.now();
+          const s = await chatComplete(modelCfg, ctxMsgs);
+          logOp("model_response", "context answer received", { chars: s.text.length, usage: s.usage, reply: clipText(s.text, 2000) }, Date.now() - t0);
           ctxAnswer = s.text; ctxUsage = s.usage;
         } catch (e: any) { console.error("Context answer failed", e); ctxNote = `AI unavailable (${e?.message || e}) — no new Exchange data was fetched.`; }
         if (ctxAnswer || ctxNote) rememberConversation(conversationId, { prompt, tool: "history", resultJson: "", aiAnswer: ctxAnswer });
+        logOp("result", "answered from context", { outcome: "context" });
         return { prompt, tool: "history", args: {}, result: { message: "Answered from conversation context." }, psTrace: [], ...(ctxAnswer ? { aiAnswer: ctxAnswer, aiUsage: ctxUsage } : { aiNote: ctxNote }) };
       }
       tool = aiRouted.tool; args = aiRouted.args; write = aiRouted.write;
+      logOp("route", `AI tool-picker: ${tool}`, { tool, args });
     }
-    else { const r = route as RouteResult; tool = r.tool; args = r.args; write = r.write; }
+    else { const r = route as RouteResult; tool = r.tool; args = r.args; write = r.write; logOp("route", `keyword router: ${tool}`, { tool, args }); }
   }
 
   // Safety gate for writes. Missing args are first resolved from the
@@ -661,11 +698,13 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
     const plan = planWriteStep(tool, args, {});
     if (plan.needsInfo) {
       setPendingWrite(key, { tool, args: plan.args, prompt });
+      logOp("result", "waiting on form input", { outcome: "needsInfo", tool, missing: plan.missing });
       return { prompt, tool, args: plan.args, needsInfo: true, missing: plan.missing, fields: plan.fields, collected: plan.collected, formTitle: plan.formTitle, result: { message: `To run ${tool} I still need: ${plan.missing.join(", ")}. Fill the form below — what you already told me is kept.` } };
     }
     args = plan.args;
     setPendingWrite(key, { tool, args, prompt });
     const assumedNote = assumed.length ? ` (assuming ${assumed.map((k) => `${k} = ${args[k]}`).join(", ")} from earlier in this conversation — say no to cancel)` : "";
+    logOp("result", "waiting on confirm", { outcome: "needsConfirm", tool });
     return { prompt, tool, args, needsConfirm: true, fields: describeWriteForm(tool)?.fields ?? [], result: { message: `Ready to run ${tool}${assumedNote}`, parameters: args } };
   }
   if(write && payload.confirmed) clearPendingWrite(pendingKey(conversationId));
@@ -682,6 +721,7 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
       for (const n of names) { const g = n.split(/[._]/)[0] || "other"; counts[g] = (counts[g] ?? 0) + 1; }
       const groups = Object.entries(counts).map(([prefix, count]) => ({ prefix, count })).sort((a, b) => b.count - a.count);
       const psTrace = await readPsTrace();
+      logOp("result", "tool catalog shown", { outcome: "completed", toolCount: names.length });
       return { prompt, tool: "tools", result: { toolCount: names.length, groups, tools: [...names].sort() }, psTrace };
     } catch {
       return { prompt, tool: "help", result: { message: "I can run Exchange queries. Try one of these:", examples: ["what version of exchange do i have", "show delayed queues", "server health report", "database whitespace and growth", "certificates expiring soon", "explain bounce 5.7.1", "trace messages from admin@contoso.com", "tell me everything about admin@contoso.com", "dismount database DB01", "what tools do you offer"] } };
@@ -701,44 +741,69 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
   await readPsTrace();
   let toolError: string | null = null;
   let result: any = null;
+  logOp("mcp_request", `tools/call ${tool}`, { method: "tools/call", name: tool, arguments: args });
+  const mcpStart = Date.now();
   try {
     result = await mcpRpc("tools/call", { name: tool, arguments: args });
   } catch (e: any) {
     toolError = e?.message || String(e);
   }
+  const mcpMs = Date.now() - mcpStart;
   const psTrace = await readPsTrace();
+  for (const t of psTrace as any[]) {
+    logOp("exchange", String(t?.command ?? "").slice(0, 120) || "exchange command", { command: t?.command, ms: t?.ms, rows: t?.rows, ok: t?.ok, ...(t?.error ? { error: t.error } : {}) });
+  }
   // Remember every exchange (success or failure) so follow-ups like "why?"
   // or a bare "yes" resolve against what just happened — even with no AI
   // provider configured. Clipped so a long session stays bounded.
   if(toolError) {
     rememberConversation(conversationId, { prompt, tool, resultJson: clipText(toolError, 2000) });
+    logOp("mcp_response", "tools/call failed", { ms: mcpMs, error: toolError });
+    logOp("result", "tool error", { outcome: "error", tool });
     return { prompt, tool, error: toolError, psTrace };
   }
   const text = (result as any)?.content?.[0]?.text;
-  if(!text) return { prompt, tool, args, result, psTrace };
+  if(!text) {
+    logOp("mcp_response", "tools/call empty", { ms: mcpMs, outcome: "empty" });
+    logOp("result", "empty result", { outcome: "empty", tool });
+    return { prompt, tool, args, result, psTrace };
+  }
   let data: any;
-  try { data = JSON.parse(text); } catch { return { prompt, tool, args, result: text, psTrace }; }
+  try { data = JSON.parse(text); } catch { logOp("mcp_response", "tools/call non-JSON", { ms: mcpMs, chars: text.length }); logOp("result", "non-JSON result", { outcome: "completed", tool }); return { prompt, tool, args, result: text, psTrace }; }
+  logOp("mcp_response", `tools/call ${tool} ok`, { ms: mcpMs, chars: text.length, preview: clipText(text, 2000) });
   // AI narration: model answers from the executed result. Never fails the ask,
   // but a failed attempt is reported (aiNote) so the UI never looks AI-less.
   let aiAnswer: string | undefined; let aiUsage: { input: number; output: number } | undefined; let aiNote: string | undefined;
   if (aiMode && modelCfg && tool !== "tools" && tool !== "help") {
     try {
-      const summary = await chatComplete(modelCfg, buildSummaryMessages(prompt, tool, JSON.stringify(data), modelCfg.systemPrompt, contextBlock || undefined));
+      const narrationMsgs = buildSummaryMessages(prompt, tool, JSON.stringify(data), modelCfg.systemPrompt, contextBlock || undefined);
+      logOp("model_request", "result narration", { provider: modelCfg.provider, model: modelCfg.model, messages: narrationMsgs.map((m) => ({ role: String((m as any).role), chars: String((m as any).content ?? "").length, content: clipText(String((m as any).content ?? ""), 4000) })) });
+      const n0 = Date.now();
+      const summary = await chatComplete(modelCfg, narrationMsgs);
+      const nms = Date.now() - n0;
       // Guard against small models echoing a tool call instead of reporting:
       // on empty results such an answer is useless, so fall back to the
       // human-readable "nothing found" path below.
       if (isEmptyResult(data) && isToolCallEcho(summary.text)) {
         console.error("AI narration echoed a tool call on empty data — falling back to human fallback");
         aiNote = "The query returned no data, so the AI summary was withheld — see result below.";
+        logOp("narration", "withheld (tool-call echo on empty data)", { ms: nms });
       } else {
         aiAnswer = summary.text; aiUsage = summary.usage;
+        logOp("narration", "model summary", { ms: nms, chars: summary.text.length, usage: summary.usage, reply: clipText(summary.text, 2000) });
       }
-    } catch (e: any) { console.error("AI answer failed, returning tool result only", e); aiNote = `AI unavailable (${e?.message || e}) — showing MCP result.`; }
+    } catch (e: any) { console.error("AI answer failed, returning tool result only", e); aiNote = `AI unavailable (${e?.message || e}) — showing MCP result.`; logOp("narration", "unavailable, showing raw result", { error: String(e?.message || e).slice(0, 300) }); }
+  } else {
+    logOp("narration", aiMode ? "skipped (catalog/help tool)" : "skipped (AI mode off)", {});
   }
   rememberConversation(conversationId, { prompt, tool, resultJson: clipText(JSON.stringify(data), 2000), aiAnswer });
   const nextActions = getFollowUps(tool, args ?? {}, prompt);
+  logOp("result", "completed", { outcome: "completed", tool });
   return { prompt, tool, args, result: data, psTrace, nextActions, ...(aiAnswer ? { aiAnswer, aiUsage } : aiNote ? { aiNote } : {}) };
 });
+
+ipcMain.handle("oplog:list", async () => getOpRuns());
+ipcMain.handle("oplog:clear", async () => { clearOpLog(); return { ok: true }; });
 
 
 // Dialog helpers

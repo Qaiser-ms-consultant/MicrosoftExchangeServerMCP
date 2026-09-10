@@ -18,6 +18,13 @@ describe("opLog", () => {
     expect(JSON.stringify(getOpRuns())).not.toContain("s3cret");
   });
 
+  it("carries ms at top level and serializes cleanly for IPC", () => {
+    clearOpLog();
+    const entry = appendOp("r9", "exchange", "Get-Mailbox", { command: "Get-Mailbox -ResultSize 100", ms: 1200, rows: 100, ok: true }, 1200);
+    expect(entry.ms).toBe(1200);
+    expect(JSON.parse(JSON.stringify(getOpRuns()))).toEqual(getOpRuns());
+  });
+
   it("evicts oldest runs beyond the cap", () => {
     clearOpLog();
     for (let i = 0; i < 35; i++) appendOp(`r${i}`, "prompt", "p", {});
