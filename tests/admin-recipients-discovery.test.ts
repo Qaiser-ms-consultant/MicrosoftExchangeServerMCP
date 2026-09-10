@@ -193,6 +193,43 @@ describe("exchange_list_mailboxes paged envelope", () => {
     expect(body.note).toContain("unsorted sample");
   });
 
+  it("explains when every listing query comes back empty despite a nonzero total", async () => {
+    const server = makeServer();
+    registerRecipientAdminTools(server as any, {
+      invokeJson: async (cmd: string) => {
+        if (cmd.startsWith("Get-MailboxDatabase")) return [{ Name: "DB1" }];
+        if (cmd.includes("-Database 'DB1'")) return [{ Alias: "a" }];
+        return [];
+      },
+      listMailboxes: async () => ({ items: [], nextCursor: null }),
+    } as any);
+    const body = JSON.parse((await server.tools["exchange_discover_mailboxes"]({})).content[0].text);
+    expect(body.totalMailboxes).toBe(1);
+    expect(body.mailboxes).toEqual([]);
+    expect(body.partial).toBeUndefined();
+    expect(body.note).toContain("came back empty");
+  });
+
+  it("scopes the fallback sample to the requested database", async () => {
+    const server = makeServer();
+    const seen: string[] = [];
+    registerRecipientAdminTools(server as any, {
+      invokeJson: async (cmd: string) => {
+        seen.push(cmd);
+        if (cmd.startsWith("Get-MailboxDatabase")) return [{ Name: "DB1" }, { Name: "DB2" }];
+        if (cmd.includes("-Database 'DB1'") && !cmd.startsWith("Get-Mailbox -ResultSize")) return [{ Alias: "a" }];
+        if (cmd.includes("-Database 'DB2'") && !cmd.startsWith("Get-Mailbox -ResultSize")) return [];
+        if (cmd.startsWith("Get-Mailbox -ResultSize")) return [{ DisplayName: "A", Alias: "a" }];
+        return [];
+      },
+      listMailboxes: async () => ({ items: [], nextCursor: null }),
+    } as any);
+    const body = JSON.parse((await server.tools["exchange_discover_mailboxes"]({ database: "DB1" })).content[0].text);
+    expect(body.mailboxes).toHaveLength(1);
+    expect(body.partial).toBe(true);
+    expect(seen.some((c) => c.startsWith("Get-Mailbox -Database 'DB1' -ResultSize 100 | Select-Object"))).toBe(true);
+  });
+
   it("passes cursor and database through to the provider", async () => {
     const server = makeServer();
     let got: any = null;

@@ -78,13 +78,16 @@ export function registerRecipientAdminTools(server: McpServer, ps: PowerShellPro
     let partial = false;
     let note: string | undefined;
     if (items.length === 0 && totalMailboxes > 0) {
+      const scope = database ? ` -Database '${database.replace(/'/g, "''")}'` : "";
       const sample = await ps.invokeJson(
-        `Get-Mailbox -ResultSize ${page} | Select-Object DisplayName,PrimarySmtpAddress,RecipientType,Name,Alias,Identity`,
+        `Get-Mailbox${scope} -ResultSize ${page} | Select-Object DisplayName,PrimarySmtpAddress,RecipientType,Name,Alias,Identity`,
       ).catch(() => []);
       if (Array.isArray(sample) && sample.length > 0) {
         items = sample;
         partial = true;
         note = `Ordered paging returned no rows although ${totalMailboxes} mailboxes exist; showing an unsorted sample of ${sample.length}. Narrow by database or name filter for complete paging.`;
+      } else {
+        note = `Listing queries came back empty although ${totalMailboxes} mailboxes were counted. Check the PowerShell Trace tab for the failing command, or narrow by database or name filter and retry.`;
       }
     }
     return {
@@ -107,7 +110,8 @@ export function registerRecipientAdminTools(server: McpServer, ps: PowerShellPro
                 },
               }
             : {}),
-          ...(partial ? { partial: true, note } : {}),
+          ...(partial ? { partial: true } : {}),
+          ...(note ? { note } : {}),
           byDatabase,
           ...(scoped.length > 20 ? { truncated: true } : {}),
           mailboxes: items,
