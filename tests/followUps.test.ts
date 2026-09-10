@@ -39,6 +39,15 @@ describe("getFollowUps", () => {
     expect(getFollowUps("report.generate_mailbox_size_report", {}, "mailbox size report").length).toBeGreaterThan(0);
   });
 
+  it("suggests drill-downs after mailbox discovery", () => {
+    const actions = getFollowUps("exchange_discover_mailboxes", {}, "list all mailboxes");
+    expect(actions.length).toBeGreaterThan(0);
+    expect(actions.length).toBeLessThanOrEqual(3);
+    for (const a of actions) {
+      expect(routeQuery(a.prompt), `follow-up "${a.prompt}" should route`).not.toHaveProperty("help");
+    }
+  });
+
   it("every suggested prompt routes to a real tool (no dead buttons)", () => {
     const samples: Array<[string, Record<string, unknown>, string]> = [
       ["ai.change_impact_report", { change: "failover DB01" }, "what is impact of failover DB01"],

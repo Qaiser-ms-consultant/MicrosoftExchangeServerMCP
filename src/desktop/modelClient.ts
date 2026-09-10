@@ -262,6 +262,7 @@ export function buildSummaryMessages(prompt: string, tool: string, resultJson: s
     "Use bullets sparingly (max 5) and only for genuinely distinct facts or actions.",
     "Explain numbers with context (e.g. 47.8 GB of 50 GB, about 96% of quota).",
     "Do not dump raw JSON, field names, or cmdlet syntax unless the user asked how to check it.",
+    "For paged discovery results (mailboxes with nextCursor/totalMailboxes), state the total and what this page shows, and note that more pages exist — never dump all rows.",
     "The tool already ran: never describe future actions ('I will run...') and never emit JSON tool calls ({tool...}). Report what the data shows.",
     "Do not bold entire sentences; use bold only for 1-3 key terms or values per response.",
     "Do not propose commands or next steps in prose — the UI offers follow-up actions separately; end with at most one plain-language recommendation when action is needed, otherwise end without filler.",

@@ -395,6 +395,14 @@ export function getFollowUps(
       ];
       break;
 
+    case "exchange_discover_mailboxes":
+      actions = [
+        mail("mailbox size report", "Largest mailboxes"),
+        mail("inactive mailbox report", "Inactive mailboxes"),
+        mail("list databases", "List databases"),
+      ];
+      break;
+
     case "exchange_get_softdeleted_mailbox":
     case "exchange_get_mailbox_import_request":
     case "exchange_get_mailbox_restore_request":
