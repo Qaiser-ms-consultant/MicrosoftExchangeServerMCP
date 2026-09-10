@@ -219,8 +219,8 @@ export function registerSpecMissingTools(server: McpServer, ps: PowerShellProvid
   });
 
   // 6.6 group.* extensions
-  server.tool("group.new", "New distribution group", { name: z.string(), members: z.array(z.string()).optional() }, async ({ name }) => {
-    const d = await ps.invokeJson(`New-DistributionGroup -Name "${name}" | Select-Object Name,PrimarySmtpAddress`);
+  server.tool("group.new", "New distribution group", { name: z.string(), members: z.array(z.string()).optional(), type: z.enum(["Distribution", "Security"]).optional().describe("Group type: Distribution list or mail-enabled Security group") }, async ({ name, type }) => {
+    const d = await ps.invokeJson(`New-DistributionGroup -Name "${name}"${type ? ` -Type "${type}"` : ""} | Select-Object Name,PrimarySmtpAddress`);
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
   server.tool("group.add_member", "Add group member", { identity: z.string(), member: z.string() }, async ({ identity, member }) => {

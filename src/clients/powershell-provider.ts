@@ -8,6 +8,9 @@ import { withHA, getHAServers } from "../utils/ha.js";
 const ALLOWED_CMDLETS = new Set([
   // Recipients
   "Get-Mailbox", "New-Mailbox", "Set-Mailbox", "Remove-Mailbox", "Enable-Mailbox", "Disable-Mailbox",
+  "New-RemoteMailbox", "Enable-RemoteMailbox", "New-MailUser", "Enable-MailUser", "New-MailContact",
+  "New-DynamicDistributionGroup", "New-MailboxExportRequest", "Get-MailboxExportRequest",
+  "New-InboxRule", "Enable-MailPublicFolder",
   "Get-MailboxStatistics", "Get-MailboxPermission", "Add-MailboxPermission", "Remove-MailboxPermission",
   "Get-Recipient", "Get-User", "Get-MailUser", "Get-MailContact", "Get-Contact",
   "Get-DistributionGroup", "New-DistributionGroup", "Set-DistributionGroup", "Remove-DistributionGroup",

@@ -8,6 +8,7 @@ import { registerCalendarTools } from "./tools/calendar-tools.js";
 import { registerContactTools } from "./tools/contact-tools.js";
 import { registerAdminTools } from "./tools/admin-tools.js";
 import { registerRecipientAdminTools } from "./tools/admin-recipients.js";
+import { registerProvisioningTools } from "./tools/admin-provisioning.js";
 import { registerTransportAdminTools } from "./tools/admin-transport.js";
 import { registerServerAdminTools } from "./tools/admin-servers.js";
 import { registerMonitoringTools } from "./tools/admin-monitoring.js";
@@ -47,6 +48,7 @@ async function main() {
   registerContactTools(server, client);
   registerAdminTools(server, client);
   registerRecipientAdminTools(server, client.ps);
+  registerProvisioningTools(server, client.ps);
   registerTransportAdminTools(server, client.ps);
   registerServerAdminTools(server, client.ps);
   registerMonitoringTools(server, client.ps);

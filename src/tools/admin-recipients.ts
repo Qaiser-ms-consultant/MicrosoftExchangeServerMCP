@@ -143,12 +143,27 @@ export function registerRecipientAdminTools(server: McpServer, ps: PowerShellPro
     database: z.string().optional(),
     firstName: z.string().optional(),
     lastName: z.string().optional(),
-  }, async ({ name, alias, userPrincipalName, password, organizationalUnit, shared, room, equipment, database, firstName, lastName }) => {
+    primarySmtpAddress: z.string().optional().describe("Primary SMTP address (derived from alias/EAP if omitted)"),
+    linkedMasterAccount: z.string().optional().describe("Linked mailbox: DOMAIN\\user in the trusted account forest (requires linkedDomainController)"),
+    linkedDomainController: z.string().optional().describe("Linked mailbox: DC in the account forest"),
+    discovery: z.boolean().optional().describe("Create a discovery mailbox (-Discovery)"),
+    archive: z.boolean().optional().describe("Create an archive mailbox alongside (-Archive)"),
+    archiveDatabase: z.string().optional().describe("Database for the archive mailbox"),
+    resourceCapacity: z.number().optional().describe("Room/equipment capacity (people or units)"),
+    enableRoomMailboxAccount: z.boolean().optional().describe("Enable the room account for Teams Rooms etc. (requires roomPassword)"),
+    roomPassword: z.string().optional().describe("Password for the enabled room account (SecureString). Will be converted to SecureString."),
+  }, async ({ name, alias, userPrincipalName, password, organizationalUnit, shared, room, equipment, database, firstName, lastName, primarySmtpAddress, linkedMasterAccount, linkedDomainController, discovery, archive, archiveDatabase, resourceCapacity, enableRoomMailboxAccount, roomPassword }) => {
     const isSharedLike = !!(shared || room || equipment);
-    if (!isSharedLike && !password) {
+    if (!isSharedLike && !password && !linkedMasterAccount && !discovery) {
       throw new Error("Password is required for UserMailbox creation (New-Mailbox -Password). Provide 'password' param, or set shared/room/equipment:true for resource mailboxes.");
     }
-    // Build PowerShell with SecureString handling for password
+    if (linkedMasterAccount && !linkedDomainController) {
+      throw new Error("Linked mailboxes require linkedDomainController (a DC in the account forest) alongside linkedMasterAccount.");
+    }
+    if (enableRoomMailboxAccount && !roomPassword) {
+      throw new Error("Enabling the room mailbox account requires roomPassword.");
+    }
+    // Build PowerShell with SecureString handling for passwords
     let prelude = "";
     let pwVar = "";
     if (password && !isSharedLike) {
@@ -156,15 +171,29 @@ export function registerRecipientAdminTools(server: McpServer, ps: PowerShellPro
       prelude = `$secPw = ConvertTo-SecureString -String '${escPw}' -AsPlainText -Force; `;
       pwVar = " -Password $secPw";
     }
+    let roomPwVar = "";
+    if (enableRoomMailboxAccount && roomPassword) {
+      const escRoomPw = roomPassword.replace(/'/g, "''");
+      prelude += `$secPw2 = ConvertTo-SecureString -String '${escRoomPw}' -AsPlainText -Force; `;
+      roomPwVar = " -RoomMailboxPassword $secPw2";
+    }
     let cmd = `${prelude}New-Mailbox -Name "${name.replace(/"/g, '""')}"${pwVar}`;
     if (alias) cmd += ` -Alias "${alias}"`;
     if (userPrincipalName) cmd += ` -UserPrincipalName "${userPrincipalName}"`;
     if (organizationalUnit) cmd += ` -OrganizationalUnit "${organizationalUnit}"`;
     if (firstName) cmd += ` -FirstName "${firstName}"`;
     if (lastName) cmd += ` -LastName "${lastName}"`;
+    if (primarySmtpAddress) cmd += ` -PrimarySmtpAddress "${primarySmtpAddress}"`;
+    if (linkedMasterAccount) cmd += ` -LinkedMasterAccount "${linkedMasterAccount}" -LinkedDomainController "${linkedDomainController}"`;
+    if (linkedMasterAccount && room) cmd += " -LinkedRoom";
+    if (discovery) cmd += " -Discovery";
+    if (archive) cmd += " -Archive";
+    if (archiveDatabase) cmd += ` -ArchiveDatabase "${archiveDatabase}"`;
+    if (resourceCapacity !== undefined) cmd += ` -ResourceCapacity ${resourceCapacity}`;
     if (shared) cmd += ` -Shared`;
     if (room) cmd += ` -Room`;
     if (equipment) cmd += ` -Equipment`;
+    if (enableRoomMailboxAccount) cmd += ` -EnableRoomMailboxAccount $true${roomPwVar}`;
     if (database) cmd += ` -Database "${database}"`;
     const data = await ps.invokeJson(cmd);
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
