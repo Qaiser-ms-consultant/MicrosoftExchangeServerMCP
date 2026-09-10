@@ -23,6 +23,46 @@ export function registerRecipientAdminTools(server: McpServer, ps: PowerShellPro
     return { content: [{ type: "text", text: JSON.stringify({ mailboxes: items, nextCursor, pageSize: page }, null, 2) }] };
   });
 
+  server.tool("exchange_discover_mailboxes", "Discover mailboxes granularly — total count, per-database breakdown, plus the first page (use cursor for next pages). Use this for 'list all mailboxes' on large orgs instead of fetching everything at once.", {
+    database: z.string().optional().describe("Scope discovery to one mailbox database"),
+    recipientType: z.string().optional().describe("UserMailbox, SharedMailbox, RoomMailbox, EquipmentMailbox, etc."),
+    pageSize: z.number().min(1).max(200).optional().describe("First-page size (default 100)"),
+  }, async ({ database, recipientType, pageSize }) => {
+    const page = pageSize ?? 100;
+    // Small inventory query: database names only.
+    const dbs = await ps.invokeJson(`Get-MailboxDatabase | Select-Object Name`).catch(() => []);
+    const names: string[] = Array.isArray(dbs)
+      ? dbs.map((d: any) => String(d?.Name ?? "")).filter(Boolean)
+      : [];
+    const scoped = database ? names.filter((n) => n.toLowerCase() === database.toLowerCase()) : names;
+    // Per-database light counts: one tiny Alias-only projection per DB, so a
+    // single slow database cannot sink the whole summary.
+    const byDatabase: Array<{ database: string; count: number; error?: string }> = [];
+    for (const name of scoped.slice(0, 20)) {
+      try {
+        const rows = await ps.invokeJson(`Get-Mailbox -Database '${name.replace(/'/g, "''")}' -ResultSize Unlimited | Select-Object Alias`);
+        byDatabase.push({ database: name, count: Array.isArray(rows) ? rows.length : 0 });
+      } catch (err) {
+        byDatabase.push({ database: name, count: 0, error: String((err as Error)?.message ?? err).slice(0, 200) });
+      }
+    }
+    const totalMailboxes = byDatabase.reduce((sum, d) => sum + d.count, 0);
+    const { items, nextCursor } = await ps.listMailboxes(undefined, recipientType, page, database ? { database } : undefined);
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          totalMailboxes,
+          byDatabase,
+          ...(scoped.length > 20 ? { truncated: true } : {}),
+          mailboxes: items,
+          nextCursor,
+          pageSize: page,
+        }, null, 2),
+      }],
+    };
+  });
+
   server.tool("exchange_get_mailbox", "Get mailbox details by identity", { identity: z.string() }, async ({ identity }) => {
     const data = await ps.getMailbox(identity);
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };

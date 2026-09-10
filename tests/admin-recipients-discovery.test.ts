@@ -88,6 +88,50 @@ describe("exchange_list_mailboxes paged envelope", () => {
     });
   });
 
+  it("counts mailboxes per database without fetching them all at once", async () => {
+    const server = makeServer();
+    registerRecipientAdminTools(server as any, {
+      invokeJson: async (cmd: string) => {
+        if (cmd.startsWith("Get-MailboxDatabase")) return [{ Name: "DB1" }, { Name: "DB2" }];
+        if (cmd.includes("-Database 'DB1'")) return [{ Alias: "a" }, { Alias: "b" }];
+        if (cmd.includes("-Database 'DB2'")) return [{ Alias: "c" }];
+        return [];
+      },
+      listMailboxes: async () => ({ items: [{ DisplayName: "A", Alias: "a" }], nextCursor: "a" }),
+    } as any);
+    const res = await server.tools["exchange_discover_mailboxes"]({ pageSize: 100 });
+    expect(JSON.parse(res.content[0].text)).toEqual({
+      totalMailboxes: 3,
+      byDatabase: [
+        { database: "DB1", count: 2 },
+        { database: "DB2", count: 1 },
+      ],
+      mailboxes: [{ DisplayName: "A", Alias: "a" }],
+      nextCursor: "a",
+      pageSize: 100,
+    });
+  });
+
+  it("still summarizes when one database query fails", async () => {
+    const server = makeServer();
+    registerRecipientAdminTools(server as any, {
+      invokeJson: async (cmd: string) => {
+        if (cmd.startsWith("Get-MailboxDatabase")) return [{ Name: "DB1" }, { Name: "DB2" }];
+        if (cmd.includes("-Database 'DB1'")) throw new Error("timeout");
+        if (cmd.includes("-Database 'DB2'")) return [{ Alias: "c" }];
+        return [];
+      },
+      listMailboxes: async () => ({ items: [], nextCursor: null }),
+    } as any);
+    const res = await server.tools["exchange_discover_mailboxes"]({});
+    const body = JSON.parse(res.content[0].text);
+    expect(body.totalMailboxes).toBe(1);
+    expect(body.byDatabase).toEqual([
+      { database: "DB1", count: 0, error: "timeout" },
+      { database: "DB2", count: 1 },
+    ]);
+  });
+
   it("passes cursor and database through to the provider", async () => {
     const server = makeServer();
     let got: any = null;
