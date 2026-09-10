@@ -40,6 +40,26 @@ describe("planWriteStep", () => {
   });
 });
 
+describe("conditional requirement", () => {
+  it("requires a password for user mailboxes", () => {
+    const out = planWriteStep("exchange_create_mailbox", { name: "Alice" }, {});
+    expect(out.needsInfo).toBe(true);
+    if (!out.needsInfo) return;
+    expect(out.missing).toContain("password");
+    expect(out.fields.find((f) => f.name === "password")).toBeDefined();
+  });
+
+  it("drops the password requirement for shared mailboxes", () => {
+    const out = planWriteStep("exchange_create_mailbox", { name: "Helpdesk", shared: true }, {});
+    expect(out.needsInfo).toBe(false);
+  });
+
+  it("drops the password requirement once a password is supplied", () => {
+    const out = planWriteStep("exchange_create_mailbox", { name: "Alice" }, { password: "s3cret!" });
+    expect(out.needsInfo).toBe(false);
+  });
+});
+
 describe("pendingWrite session", () => {
   afterEach(() => {
     vi.unstubAllGlobals();

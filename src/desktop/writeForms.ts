@@ -8,10 +8,24 @@ export interface WriteField {
   label: string;
   kind: "text" | "email" | "number" | "select" | "boolean" | "password";
   required: boolean;
+  // Conditionally required: enforced when NONE of these sibling fields is
+  // truthy (e.g. password unless shared/room/equipment is ticked).
+  requiredUnless?: string[];
   options?: string[];
   placeholder?: string;
   help?: string;
   sensitive?: boolean;
+}
+
+// True when a field must still be filled given the collected args:
+// unfilled required fields, plus unfilled requiredUnless fields whose
+// exemption flags are all unset.
+export function isFieldRequired(field: WriteField, args: Record<string, unknown>): boolean {
+  const filled = (args ?? {})[field.name] !== undefined && (args ?? {})[field.name] !== "";
+  if (filled) return false;
+  if (field.required) return true;
+  if (field.requiredUnless) return !field.requiredUnless.some((k) => (args ?? {})[k]);
+  return false;
 }
 
 export interface WriteForm {
@@ -29,7 +43,7 @@ const FORMS: Record<string, WriteForm> = {
     tool: "exchange_create_mailbox", title: "Create mailbox", fields: [
       f({ name: "name", label: "Display name", kind: "text", required: true, placeholder: "Alice Smith" }),
       f({ name: "userPrincipalName", label: "Email (UPN)", kind: "email", required: false, placeholder: "alice@contoso.com" }),
-      f({ name: "password", label: "Password", kind: "password", required: false, sensitive: true, help: "Required for user mailboxes; skip for shared / room / equipment." }),
+      f({ name: "password", label: "Password", kind: "password", required: false, requiredUnless: ["shared", "room", "equipment"], sensitive: true, help: "Required for user mailboxes; skip for shared / room / equipment." }),
       f({ name: "shared", label: "Shared mailbox", kind: "boolean", required: false }),
       f({ name: "room", label: "Room mailbox", kind: "boolean", required: false }),
       f({ name: "equipment", label: "Equipment mailbox", kind: "boolean", required: false }),

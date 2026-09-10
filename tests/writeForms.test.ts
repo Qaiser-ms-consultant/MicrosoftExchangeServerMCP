@@ -23,6 +23,7 @@ describe("describeWriteForm", () => {
     const pw = form.fields.find((f) => f.name === "password")!;
     expect(pw.kind).toBe("password");
     expect(pw.sensitive).toBe(true);
+    expect(pw.requiredUnless).toEqual(["shared", "room", "equipment"]);
   });
 
   it("describes add_permission with a rights select", () => {

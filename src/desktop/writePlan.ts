@@ -3,7 +3,7 @@
 // (needsConfirm). No Electron imports — unit-testable. main.ts wires it
 // into the exchange:ask handler and owns the pending-write session map.
 
-import { describeWriteForm, type WriteField } from "./writeForms.js";
+import { describeWriteForm, isFieldRequired, type WriteField } from "./writeForms.js";
 
 export const WRITE_REQUIRED_ARGS: Record<string, string[]> = {
   "database.mount": ["identity"],
@@ -55,8 +55,13 @@ export function planWriteStep(
   }
   const required = WRITE_REQUIRED_ARGS[tool] ?? [];
   const missing = required.filter((k) => args[k] === undefined || args[k] === "");
-  if (missing.length === 0) return { needsInfo: false, needsConfirm: true, args };
   const form = describeWriteForm(tool);
+  // Conditionally required fields (e.g. password for user mailboxes) join
+  // the missing list when their exemption flags are all unset.
+  for (const fld of form?.fields ?? []) {
+    if (!missing.includes(fld.name) && isFieldRequired(fld, args)) missing.push(fld.name);
+  }
+  if (missing.length === 0) return { needsInfo: false, needsConfirm: true, args };
   const byName = new Map((form?.fields ?? []).map((fld) => [fld.name, fld]));
   return {
     needsInfo: true,
