@@ -77,9 +77,17 @@ export class PowerShellProvider {
   ) {}
 
   private assertAllowed(cmdlet: string) {
-    const base = cmdlet.trim().split(/\s+/)[0].replace(/-.*/, (m) => m).split("|")[0].trim();
+    // Skip our own generated variable-assignment prelude ($secPw = ...; ...)
+    // so the actual cmdlet is what gets allow-listed. Only plain `$name =`
+    // assignments are skipped; anything else still resolves against the list.
+    let rest = cmdlet.trim();
+    for (let i = 0; i < 5 && /^\$[\w]+\s*=/.test(rest); i++) {
+      const semi = rest.indexOf(";");
+      if (semi < 0) break;
+      rest = rest.slice(semi + 1).trim();
+    }
     // Extract first cmdlet token before space/pipe, ignoring wrappers like @( ) or $( )
-    const token = cmdlet.trim().split(/[\s|;]/)[0].replace(/^[^A-Za-z]+/, "");
+    const token = rest.split(/[\s|;]/)[0].replace(/^[^A-Za-z]+/, "");
     if (!ALLOWED_CMDLETS.has(token)) {
       throw new ExchangeError({ message: `Cmdlet not allowed: ${token}`, code: "PERMISSION_DENIED", provider: "powershell" });
     }
