@@ -251,45 +251,51 @@ try {
   }
 
   // Recipients — fixed OPATH quoting + wildcard handling (Option A)
-  // Paged discovery: Get-Mailbox has no -Skip, so pages advance with an
-  // Alias keyset cursor (Alias -gt '<cursor>') or a -Database scope. Every
-  // query is bounded by -ResultSize so large orgs never fetch all at once.
+  // Paged discovery: neither Get-Mailbox nor Get-Recipient has -Skip, so
+  // pages advance with an Alias keyset cursor (Alias -gt '<cursor>') and/or
+  // a Database scope. Every query is bounded by -ResultSize so large orgs
+  // never fetch all at once.
+  //
+  // NOTE: listing uses Get-Recipient (not Get-Mailbox) with native -SortBy,
+  // because the Exchange constrained remoting endpoint does not expose
+  // Sort-Object ("not recognized"). -RecipientType UserMailbox preserves the
+  // Get-Mailbox default result set (all mailbox subtypes share it).
   async listMailboxes(
     filter?: string, recipientType?: string, resultSize: number = 20,
     opts?: { cursor?: string; database?: string },
   ): Promise<{ items: any[]; nextCursor: string | null }> {
     const page = Math.min(Math.max(resultSize ?? 20, 1), 1000);
-    const db = opts?.database ? ` -Database '${escapePsSingle(opts.database)}'` : "";
-    const type = recipientType ? ` -RecipientTypeDetails ${recipientType}` : "";
+    // -RecipientTypeDetails implies its coarse type; otherwise scope to
+    // mailboxes so discovery never returns contacts/groups/users.
+    const type = recipientType ? `-RecipientTypeDetails ${recipientType}` : `-RecipientType UserMailbox`;
+    const dbClause = opts?.database ? `Database -eq '${escapePsSingle(opts.database)}'` : "";
+    const and = (clauses: string[]) => clauses.filter(Boolean).join(" -and ");
     const cols = "DisplayName,PrimarySmtpAddress,RecipientType,Name,Alias,Identity";
     if (filter) {
       const raw = filter.trim();
       // If filter already contains wildcard (*), use as-is (e.g. Ali*), else wrap with *filter*
       const pattern = raw.includes("*") ? raw : `*${raw}*`;
       const escPattern = escapePsSingle(pattern);
-      const filterCmd = `Get-Mailbox${db} -Filter "Name -like '${escPattern}'"`;
-      const base = recipientType ? `${filterCmd} -RecipientTypeDetails ${recipientType}` : filterCmd;
       // No client-side -First: -Filter narrows server-side; the UI pages full sets.
-      const cmd = `${base} -ResultSize ${page} | Sort-Object Alias | Select-Object ${cols}`;
+      const cmd = `Get-Recipient ${type} -Filter "${and([dbClause, `Name -like '${escPattern}'`])}" -ResultSize ${page} -SortBy Alias | Select-Object ${cols}`;
       const result = await this.invokeJson(cmd);
       if (result.length > 0) return pageOf(result, page);
       // Fallback 1: ANR (handles Ali* prefix well)
       const anrPattern = escapePsSingle(raw.replace(/\*/g, ""));
       if (anrPattern) {
-        const anr = await this.invokeJson(`Get-Mailbox${db} -Anr "${anrPattern}" -ResultSize ${page} | Sort-Object Alias | Select-Object ${cols}`).catch(() => []);
+        const anr = await this.invokeJson(`Get-Recipient ${type} -Anr "${anrPattern}" -ResultSize ${page} -SortBy Alias | Select-Object ${cols}`).catch(() => []);
         if (anr.length > 0) return pageOf(anr, page);
       }
       // Fallback 2: client-side Where-Object over one bounded page
       const wherePattern = escapePsSingle(pattern);
-      const where = await this.invokeJson(`Get-Mailbox${db} -ResultSize ${page} | Where-Object { $_.Name -like '${wherePattern}' } | Select-Object ${cols}`);
+      const where = await this.invokeJson(`Get-Recipient ${type} -ResultSize ${page} | Where-Object { $_.Name -like '${wherePattern}' } | Select-Object ${cols}`);
       return pageOf(where, page);
     }
-    let cmd = `Get-Mailbox${db}${type}`;
-    if (opts?.cursor) {
-      cmd += ` -Filter "Alias -gt '${escapePsSingle(opts.cursor)}'"`;
-    }
+    const clauses = [dbClause];
+    if (opts?.cursor) clauses.push(`Alias -gt '${escapePsSingle(opts.cursor)}'`);
+    const filterPart = and(clauses) ? ` -Filter "${and(clauses)}"` : "";
     // -ResultSize bounds the scan server-side; no client-side truncation.
-    cmd += ` -ResultSize ${page} | Sort-Object Alias | Select-Object ${cols}`;
+    const cmd = `Get-Recipient ${type}${filterPart} -ResultSize ${page} -SortBy Alias | Select-Object ${cols}`;
     const items = await this.invokeJson(cmd);
     return pageOf(items, page);
   }
@@ -332,13 +338,17 @@ function escapePsSingle(s: string): string {
 
 // A full page (items.length === page) means more rows may follow; the
 // nextCursor is the last row's Alias (Name fallback). A partial page is
-// the final page (nextCursor null).
+// the final page (nextCursor null). Rows are sorted client-side by Alias so
+// display order (and the cursor) never depends on server enumeration order.
 function pageOf(items: any[], page: number): { items: any[]; nextCursor: string | null } {
   if (!Array.isArray(items) || items.length === 0) return { items: [], nextCursor: null };
-  if (items.length < page) return { items, nextCursor: null };
-  const last = items[items.length - 1] ?? {};
+  const sorted = [...items].sort((a, b) =>
+    String(a?.Alias ?? a?.Name ?? "").localeCompare(String(b?.Alias ?? b?.Name ?? "")),
+  );
+  if (sorted.length < page) return { items: sorted, nextCursor: null };
+  const last = sorted[sorted.length - 1] ?? {};
   const cursor = String(last.Alias ?? last.Name ?? "");
-  return { items, nextCursor: cursor || null };
+  return { items: sorted, nextCursor: cursor || null };
 }
 
 const PS_NOISE_KEYS = new Set(["PSComputerName", "PSShowComputerName", "RunspaceId"]);

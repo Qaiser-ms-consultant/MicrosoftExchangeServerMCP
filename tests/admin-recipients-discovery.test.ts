@@ -23,10 +23,17 @@ function providerWithSpy() {
 }
 
 describe("listMailboxes honors resultSize without filter", () => {
-  it("appends -ResultSize to the unfiltered Get-Mailbox", async () => {
+  it("appends -ResultSize to the unfiltered query", async () => {
     const { ps, seen } = providerWithSpy();
     await ps.listMailboxes(undefined, undefined, 100);
     expect(seen[0]).toContain("-ResultSize 100");
+  });
+
+  it("sorts server-side with -SortBy (no Sort-Object: blocked on constrained endpoints)", async () => {
+    const { ps, seen } = providerWithSpy();
+    await ps.listMailboxes(undefined, undefined, 100);
+    expect(seen[0]).toContain("-SortBy Alias");
+    expect(seen[0]).not.toContain("Sort-Object");
   });
 
   it("clamps resultSize to a maximum of 1000", async () => {
@@ -54,7 +61,8 @@ describe("listMailboxes keyset pagination", () => {
     ]);
     const res = await ps.listMailboxes(undefined, undefined, 2, { cursor: "a" });
     expect(seen[0]).toContain("Alias -gt 'a'");
-    expect(seen[0]).toContain("Sort-Object Alias");
+    expect(seen[0]).toContain("-SortBy Alias");
+    expect(seen[0]).not.toContain("Sort-Object");
     expect(res.items).toHaveLength(2);
     expect(res.nextCursor).toBe("c");
   });
@@ -66,10 +74,20 @@ describe("listMailboxes keyset pagination", () => {
     expect(res.nextCursor).toBeNull();
   });
 
-  it("scopes the query to one database", async () => {
+  it("scopes the query to one database via -Filter (no -Database param on Get-Recipient)", async () => {
     const { ps, seen } = providerWithRows([]);
     await ps.listMailboxes(undefined, undefined, 100, { database: "DB01" });
-    expect(seen[0]).toContain("-Database 'DB01'");
+    expect(seen[0]).toContain("Database -eq 'DB01'");
+  });
+
+  it("sorts fallback pages client-side by Alias", async () => {
+    const { ps } = providerWithRows([
+      { DisplayName: "C", Alias: "c" },
+      { DisplayName: "B", Alias: "b" },
+    ]);
+    const res = await ps.listMailboxes(undefined, undefined, 2);
+    expect(res.items.map((i: any) => i.Alias)).toEqual(["b", "c"]);
+    expect(res.nextCursor).toBe("c");
   });
 });
 
