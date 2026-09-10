@@ -703,11 +703,15 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
     if ("help" in route && !aiRouted) {
       logOp("route", "help card (no tool matched)", { aiMode });
       logOp("result", "help card shown", { outcome: "help" });
+      const learnUrl = modelCfg && modelCfg.learnMoreUrl
+        ? modelCfg.learnMoreUrl
+        : "https://learn.microsoft.com/en-us/exchange/exchange-server";
       return { prompt, tool: "help", result: {
       message: "I can run Exchange queries. Try one of these:",
       examples: helpExamplesFor(prompt),
       ...(helpHintFor(prompt) ? { hint: helpHintFor(prompt) } : {}),
       ...(modelCfg && !isAiProvider(modelCfg.provider) ? { note: "Tip: AI answers need an OpenAI-compatible provider (OpenAI, Groq, Together, OpenRouter, Mistral, Ollama, Custom)." } : {}),
+      ...(modelCfg ? { learnMore: learnUrl } : {}),
     },
     ...((aiMode && modelCfg) ? { aiNote: "Model could not interpret this request — keyword help below." } : {}) };
     }
