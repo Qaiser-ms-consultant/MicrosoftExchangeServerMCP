@@ -1,5 +1,12 @@
-import { describe, expect, it } from "vitest";
-import { planWriteStep } from "../src/desktop/writePlan.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  clearPendingWrite,
+  getPendingWrite,
+  planWriteStep,
+  redactPromptText,
+  redactSensitiveArgs,
+  setPendingWrite,
+} from "../src/desktop/writePlan.js";
 
 describe("planWriteStep", () => {
   it("returns fields for missing args with collected values preserved", () => {
@@ -30,5 +37,50 @@ describe("planWriteStep", () => {
     if (out.needsInfo) return;
     expect(out.needsConfirm).toBe(true);
     expect(out.args).toEqual({});
+  });
+});
+
+describe("pendingWrite session", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+    clearPendingWrite("t1");
+  });
+
+  it("returns entries set in the same session", () => {
+    setPendingWrite("t1", { tool: "database.dismount", args: { identity: "DB01" }, prompt: "dismount DB01" });
+    expect(getPendingWrite("t1")).toEqual({ tool: "database.dismount", args: { identity: "DB01" }, prompt: "dismount DB01" });
+  });
+
+  it("expires entries older than 15 minutes", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    setPendingWrite("t1", { tool: "database.dismount", args: { identity: "DB01" }, prompt: "x" });
+    vi.setSystemTime(15 * 60 * 1000 + 1);
+    expect(getPendingWrite("t1")).toBeNull();
+  });
+
+  it("keeps entries within the TTL", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    setPendingWrite("t1", { tool: "database.dismount", args: { identity: "DB01" }, prompt: "x" });
+    vi.setSystemTime(14 * 60 * 1000);
+    expect(getPendingWrite("t1")).not.toBeNull();
+  });
+});
+
+describe("redaction", () => {
+  it("masks password-like arg values without touching the rest", () => {
+    expect(redactSensitiveArgs({ identity: "a@contoso.com", password: "s3cret!", apiKey: "k" })).toEqual({
+      identity: "a@contoso.com",
+      password: "***",
+      apiKey: "***",
+    });
+  });
+
+  it("masks password assignments in prose but leaves explanations alone", () => {
+    expect(redactPromptText("create mailbox with password: S3cret!")).toBe("create mailbox with password: ***");
+    expect(redactPromptText("set -Password 'S3cret!'")).toBe("set -Password '***'");
+    expect(redactPromptText("Password is required for user mailboxes")).toBe("Password is required for user mailboxes");
   });
 });

@@ -15,7 +15,7 @@ import { checkForUpdates, checkZipUpdate, isGitCheckout, performUpdate, performZ
 import { enhancePrompt, enhancePromptWithModel, guardResult } from "./promptGuard.js";
 import { getFollowUps } from "./followUps.js";
 import { describeWriteForm } from "./writeForms.js";
-import { WRITE_REQUIRED_ARGS, clearPendingWrite, getPendingWrite, pendingKey, planWriteStep, setPendingWrite } from "./writePlan.js";
+import { WRITE_REQUIRED_ARGS, clearPendingWrite, getPendingWrite, pendingKey, planWriteStep, redactPromptText, redactSensitiveArgs, setPendingWrite } from "./writePlan.js";
 import {
   consumeRecoveryCode,
   generateEnrollment,
@@ -577,12 +577,19 @@ function contextFor(conversationId: string | undefined): string {
 }
 function rememberConversation(conversationId: string | undefined, record: ExchangeRecord): void {
   if (!conversationId) return;
+  // Credentials never reach memory (and therefore never reach the model).
+  record = {
+    ...record,
+    prompt: redactPromptText(record.prompt ?? ""),
+    resultJson: redactPromptText(record.resultJson ?? ""),
+    ...(record.aiAnswer ? { aiAnswer: redactPromptText(record.aiAnswer) } : {}),
+  };
   conversationMemory.set(conversationId, appendExchange(conversationMemory.get(conversationId) ?? [], record));
 }
 
 ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?: boolean; tool?: string; args?: any; formPatch?: Record<string, unknown>; conversationId?: string }) => {
   if (gateLocked) throw new Error("App is locked — unlock to continue.");
-  console.log("exchange:ask invoked", payload);
+  console.log("exchange:ask invoked", { ...payload, args: redactSensitiveArgs(payload.args ?? {}), formPatch: redactSensitiveArgs((payload.formPatch ?? {}) as Record<string, unknown>) });
   const prompt = payload.prompt ?? "";
   if(!prompt.trim()) throw new Error("Type a prompt first");
   // AI mode: a configured OpenAI-compatible model interprets unknown prompts

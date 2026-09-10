@@ -103,3 +103,23 @@ export function getPendingWrite(key: string): Omit<PendingWrite, "touchedAt"> | 
 export function clearPendingWrite(key: string): void {
   pendingWrites.delete(key);
 }
+
+const SENSITIVE_ARG_RE = /^(password|passwd|secret|apikey|api_key|token|pin)$/i;
+
+// Mask credential values in arg bags before they reach logs, memory, or the
+// model. Non-matching keys pass through untouched.
+export function redactSensitiveArgs(args: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(args ?? {})) {
+    out[k] = SENSITIVE_ARG_RE.test(k) ? "***" : v;
+  }
+  return out;
+}
+
+// Mask `password: X`, `password=X`, `password 'X'` assignments in prose.
+// Bare `password X` (no delimiter) is left alone so explanations like
+// "Password is required for user mailboxes" survive verbatim.
+export function redactPromptText(text: string): string {
+  if (!text) return text;
+  return String(text).replace(/(password\s*[:=]\s*["']?|password\s+["'])([^\s"';,]+)/gi, "$1***");
+}

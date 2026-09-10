@@ -888,7 +888,7 @@ window.__promptHistory = [];
 window.__histIdx = -1;
 window.__histDraft = "";
 function aiRecordStart(prompt){
-  const entry = { at: new Date().toISOString(), prompt: prompt, tool: "", status: "running" };
+  const entry = { at: new Date().toISOString(), prompt: redactSecrets(prompt), tool: "", status: "running" };
   window.__promptHistory.push(entry);
   if(window.__promptHistory.length > 100) window.__promptHistory.shift();
   window.__histIdx = -1; window.__histDraft = "";
@@ -1367,6 +1367,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
 function esc(s){ return String(s ?? "").replace(/[&<>"']/g, (c)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+// Credentials must never persist in session history, chat transcripts, or
+// re-fillable prompts. Mirrors redactPromptText in src/desktop/writePlan.ts.
+function redactSecrets(s){ if(!s) return s; return String(s).replace(/(password\s*[:=]\s*["']?|password\s+["'])([^\s"';,]+)/gi, "$1***"); }
 function pill(text, ok){ return `<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${ok===true?"bg-emerald-500/10 text-emerald-400 border border-emerald-500/30":ok===false?"bg-red-500/10 text-red-400 border border-red-500/30":"bg-slate-500/10 text-slate-300 border border-slate-500/30"}">${esc(text)}</span>`; }
 function humanize(k){ return String(k).replace(/[_-]+/g," ").replace(/([a-z0-9])([A-Z])/g,"$1 $2").replace(/\s+/g," ").trim().replace(/^./,(c)=>c.toUpperCase()); }
 function fmtVal(v){
@@ -2270,8 +2273,8 @@ async function aiSendMessage(text) {
     window.__pendingChatConfirm = null;
     let conv0 = aiGetCurrentConversation();
     if (!conv0) conv0 = aiCreateNewConversation();
-    conv0.messages.push({ role: 'user', content: text.trim() });
-    aiRenderMessage({ role: 'user', content: text.trim() });
+    conv0.messages.push({ role: 'user', content: redactSecrets(text.trim()) });
+    aiRenderMessage({ role: 'user', content: redactSecrets(text.trim()) });
     if (denyRe.test(text.trim())) {
       conv0.messages.push({ role: 'assistant', content: 'Action cancelled. Nothing was changed.' });
       aiRenderMessage({ role: 'assistant', content: 'Action cancelled. Nothing was changed.' });
@@ -2304,16 +2307,16 @@ async function aiSendMessage(text) {
   if (!conv) {
     conv = aiCreateNewConversation();
   }
-  conv.messages.push({ role: 'user', content: text.trim() });
+  conv.messages.push({ role: 'user', content: redactSecrets(text.trim()) });
   conv.updatedAt = new Date().toISOString();
   if (conv.title === 'New Conversation') {
-    conv.title = aiGenerateTitle(text);
+    conv.title = aiGenerateTitle(redactSecrets(text));
     const title = document.getElementById('aiConversationTitle');
     if (title) title.textContent = conv.title;
   }
   aiSaveConversations();
   aiRenderConversationList();
-  aiRenderMessage({ role: 'user', content: text.trim() });
+  aiRenderMessage({ role: 'user', content: redactSecrets(text.trim()) });
   const input = document.getElementById('aiChatInput');
   if (input) input.value = '';
   window.__aiGenerating = true;
