@@ -4,10 +4,13 @@ import type { PowerShellProvider } from "../clients/powershell-provider.js";
 
 // Recipient Administration — covers EAC Recipients + Permissions (per learn.microsoft.com Exchange admin center)
 export function registerRecipientAdminTools(server: McpServer, ps: PowerShellProvider) {
-  server.tool("exchange_list_mailboxes", "List mailboxes (admin) — supports filter and RecipientTypeDetails", {
+  server.tool("exchange_list_mailboxes", "List mailboxes (admin) — paged discovery; pass cursor for the next page, database to scope to one DB", {
     filter: z.string().optional().describe("Name filter (wildcard)"), recipientType: z.string().optional().describe("UserMailbox, SharedMailbox, RoomMailbox, EquipmentMailbox, etc."), resultSize: z.number().min(1).max(1000).optional(),
+    pageSize: z.number().min(1).max(200).optional().describe("Page size for discovery (default 100)"),
+    cursor: z.string().optional().describe("Alias cursor from a previous page's nextCursor — omit for the first page"),
+    database: z.string().optional().describe("Scope to one mailbox database (e.g. DB01)"),
     countOnly: z.boolean().optional().describe("Return only the total mailbox count (ignores filter) — use for 'how many mailboxes'"),
-  }, async ({ filter, recipientType, resultSize, countOnly }) => {
+  }, async ({ filter, recipientType, resultSize, pageSize, cursor, database, countOnly }) => {
     if (countOnly) {
       // Count client-side from a light DisplayName-only fetch: Measure-Object /
       // Select -ExpandProperty are unreliable on constrained endpoints (yield 0).
@@ -15,8 +18,9 @@ export function registerRecipientAdminTools(server: McpServer, ps: PowerShellPro
       const n = Array.isArray(all) ? all.length : 0;
       return { content: [{ type: "text", text: JSON.stringify({ totalMailboxes: n }, null, 2) }] };
     }
-    const { items } = await ps.listMailboxes(filter, recipientType, resultSize ?? 20);
-    return { content: [{ type: "text", text: JSON.stringify(items, null, 2) }] };
+    const page = pageSize ?? Math.min(resultSize ?? 100, 200);
+    const { items, nextCursor } = await ps.listMailboxes(filter, recipientType, page, { cursor, database });
+    return { content: [{ type: "text", text: JSON.stringify({ mailboxes: items, nextCursor, pageSize: page }, null, 2) }] };
   });
 
   server.tool("exchange_get_mailbox", "Get mailbox details by identity", { identity: z.string() }, async ({ identity }) => {

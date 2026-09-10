@@ -1,5 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import { PowerShellProvider } from "../src/clients/powershell-provider.js";
+import { registerRecipientAdminTools } from "../src/tools/admin-recipients.js";
+
+function makeServer() {
+  const tools: Record<string, (...args: any[]) => Promise<any>> = {};
+  return {
+    tool: (name: string, _desc: string, _schema: any, fn: (...args: any[]) => Promise<any>) => {
+      tools[name] = fn;
+    },
+    tools,
+  };
+}
 
 function providerWithSpy() {
   const ps = new PowerShellProvider({ exchange: {}, auth: {} } as any, {} as any);
@@ -59,5 +70,35 @@ describe("listMailboxes keyset pagination", () => {
     const { ps, seen } = providerWithRows([]);
     await ps.listMailboxes(undefined, undefined, 100, { database: "DB01" });
     expect(seen[0]).toContain("-Database 'DB01'");
+  });
+});
+
+describe("exchange_list_mailboxes paged envelope", () => {
+  it("returns mailboxes with nextCursor and pageSize", async () => {
+    const server = makeServer();
+    registerRecipientAdminTools(server as any, {
+      invokeJson: async () => [],
+      listMailboxes: async () => ({ items: [{ DisplayName: "B", Alias: "b" }], nextCursor: "b" }),
+    } as any);
+    const res = await server.tools["exchange_list_mailboxes"]({ pageSize: 100 });
+    expect(JSON.parse(res.content[0].text)).toEqual({
+      mailboxes: [{ DisplayName: "B", Alias: "b" }],
+      nextCursor: "b",
+      pageSize: 100,
+    });
+  });
+
+  it("passes cursor and database through to the provider", async () => {
+    const server = makeServer();
+    let got: any = null;
+    registerRecipientAdminTools(server as any, {
+      invokeJson: async () => [],
+      listMailboxes: async (_f: any, _t: any, n: number, opts: any) => {
+        got = { n, opts };
+        return { items: [], nextCursor: null };
+      },
+    } as any);
+    await server.tools["exchange_list_mailboxes"]({ cursor: "m", database: "DB01", pageSize: 50 });
+    expect(got).toEqual({ n: 50, opts: { cursor: "m", database: "DB01" } });
   });
 });
