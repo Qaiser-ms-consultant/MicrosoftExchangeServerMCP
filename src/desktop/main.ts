@@ -14,6 +14,7 @@ import { appendExchange, buildContextBlocks, clipText, fillMissingArgs, narrowCa
 import { checkForUpdates, checkZipUpdate, isGitCheckout, performUpdate, performZipUpdate } from "./updater.js";
 import { enhancePrompt, enhancePromptWithModel, guardResult } from "./promptGuard.js";
 import { getFollowUps } from "./followUps.js";
+import { WRITE_REQUIRED_ARGS, clearPendingWrite, getPendingWrite, pendingKey, planWriteStep, setPendingWrite } from "./writePlan.js";
 import {
   consumeRecoveryCode,
   generateEnrollment,
@@ -511,28 +512,6 @@ ipcMain.handle("mcp:start", async () => {
 ipcMain.handle("mcp:stop", async () => { try { mcpProc?.kill(); } catch {} mcpProc = null; mcpInitialized = false; return { ok:true }; });
 
 ipcMain.handle("mcp:isRunning", async () => !!mcpProc);
-const WRITE_REQUIRED_ARGS: Record<string, string[]> = {
-  "database.mount": ["identity"],
-  "database.dismount": ["identity"],
-  "exchange_retry_queue": ["identity"],
-  "exchange_suspend_queue": ["identity"],
-  "server.restart_service": ["name"],
-  "mailbox.new_move_request": ["identity", "targetDatabase"],
-  "mailbox.set_quota": ["identity"],
-  "exchange_remove_mailbox": ["identity"],
-  "exchange_set_mailbox": ["identity"],
-  "exchange_create_mailbox": ["name"],
-  "mailbox.remove_permission": ["identity", "user"],
-  "exchange_remove_transport_rule": ["identity"],
-  "exchange_set_transport_rule": ["identity"],
-  "group.new": ["name"],
-  "group.add_member": ["identity", "member"],
-  "mailflow.resume_queue": ["identity"],
-  "mailflow.set_receive_connector": ["identity"],
-  "mailflow.set_send_connector": ["identity"],
-  "database.new_repair_request": ["database"],
-  "mailbox.add_permission": ["identity", "user"],
-};
 
 // Model settings live in the desktop config file (provider/apiKey/baseUrl/model/systemPrompt).
 function readModelConfig(): { provider: string; apiKey: string; baseUrl?: string; model: string; systemPrompt?: string } | null {
@@ -600,7 +579,7 @@ function rememberConversation(conversationId: string | undefined, record: Exchan
   conversationMemory.set(conversationId, appendExchange(conversationMemory.get(conversationId) ?? [], record));
 }
 
-ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?: boolean; tool?: string; args?: any; conversationId?: string }) => {
+ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?: boolean; tool?: string; args?: any; formPatch?: Record<string, unknown>; conversationId?: string }) => {
   if (gateLocked) throw new Error("App is locked — unlock to continue.");
   console.log("exchange:ask invoked", payload);
   const prompt = payload.prompt ?? "";
@@ -656,18 +635,32 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
   // Safety gate for writes. Missing args are first resolved from the
   // conversation (e.g. "dismount the database" after talking about DB01),
   // so a follow-up "yes" confirms the intended target instead of stalling.
+  // Unresolved args come back as an interactive form (needsInfo + fields);
+  // form resubmits arrive as formPatch and merge into the pending session.
   if(write && !payload.confirmed){
+    const key = pendingKey(conversationId);
+    const pending = getPendingWrite(key);
+    if (pending && pending.tool === tool) args = { ...pending.args, ...args };
+    if (payload.formPatch && typeof payload.formPatch === "object") {
+      args = { ...(pending?.tool === tool ? pending.args : args), ...(payload.formPatch as Record<string, unknown>) };
+    }
     const required = WRITE_REQUIRED_ARGS[tool] ?? [];
     const unfilled = required.filter((k) => args[k] === undefined || args[k] === "");
     const remembered = conversationMemory.get(conversationId ?? "") ?? [];
     const filled = fillMissingArgs(tool, args, unfilled, recallIdentities(remembered));
     const assumed = Object.keys(filled).filter((k) => (args[k] === undefined || args[k] === "") && filled[k] !== undefined && filled[k] !== "");
     args = filled;
-    const missing = required.filter((k) => args[k] === undefined || args[k] === "");
-    if(missing.length) return { prompt, tool, args, needsInfo: true, missing, result: { message: `To run ${tool} I still need: ${missing.join(", ")}. Add it to your prompt and run again.` } };
+    const plan = planWriteStep(tool, args, {});
+    if (plan.needsInfo) {
+      setPendingWrite(key, { tool, args: plan.args, prompt });
+      return { prompt, tool, args: plan.args, needsInfo: true, missing: plan.missing, fields: plan.fields, collected: plan.collected, formTitle: plan.formTitle, result: { message: `To run ${tool} I still need: ${plan.missing.join(", ")}. Fill the form below — what you already told me is kept.` } };
+    }
+    args = plan.args;
+    setPendingWrite(key, { tool, args, prompt });
     const assumedNote = assumed.length ? ` (assuming ${assumed.map((k) => `${k} = ${args[k]}`).join(", ")} from earlier in this conversation — say no to cancel)` : "";
     return { prompt, tool, args, needsConfirm: true, result: { message: `Ready to run ${tool}${assumedNote}`, parameters: args } };
   }
+  if(write && payload.confirmed) clearPendingWrite(pendingKey(conversationId));
   if(write) args = { ...args, confirm: true };
 
   // Live MCP capability catalog (protocol tools/list) for "what tools..." prompts.

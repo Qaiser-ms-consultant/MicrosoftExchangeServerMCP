@@ -1,0 +1,105 @@
+// Pure write-operation planning: merge collected args, decide whether the
+// user still owes fields (needsInfo + descriptors) or is ready to review
+// (needsConfirm). No Electron imports — unit-testable. main.ts wires it
+// into the exchange:ask handler and owns the pending-write session map.
+
+import { describeWriteForm, type WriteField } from "./writeForms.js";
+
+export const WRITE_REQUIRED_ARGS: Record<string, string[]> = {
+  "database.mount": ["identity"],
+  "database.dismount": ["identity"],
+  "exchange_retry_queue": ["identity"],
+  "exchange_suspend_queue": ["identity"],
+  "server.restart_service": ["name"],
+  "mailbox.new_move_request": ["identity", "targetDatabase"],
+  "mailbox.set_quota": ["identity"],
+  "exchange_remove_mailbox": ["identity"],
+  "exchange_set_mailbox": ["identity"],
+  "exchange_create_mailbox": ["name"],
+  "mailbox.remove_permission": ["identity", "user"],
+  "exchange_remove_transport_rule": ["identity"],
+  "exchange_set_transport_rule": ["identity"],
+  "group.new": ["name"],
+  "group.add_member": ["identity", "member"],
+  "mailflow.resume_queue": ["identity"],
+  "mailflow.set_receive_connector": ["identity"],
+  "mailflow.set_send_connector": ["identity"],
+  "database.new_repair_request": ["database"],
+  "mailbox.add_permission": ["identity", "user"],
+};
+
+export type WritePlan =
+  | {
+      needsInfo: true;
+      missing: string[];
+      args: Record<string, unknown>;
+      fields: WriteField[];
+      collected: Record<string, unknown>;
+      formTitle: string;
+    }
+  | { needsInfo: false; needsConfirm: true; args: Record<string, unknown> };
+
+function genericField(name: string): WriteField {
+  return { name, label: name, kind: "text", required: true };
+}
+
+export function planWriteStep(
+  tool: string,
+  baseArgs: Record<string, unknown>,
+  patch: Record<string, unknown>,
+): WritePlan {
+  const args: Record<string, unknown> = { ...baseArgs };
+  for (const [k, v] of Object.entries(patch ?? {})) {
+    // Blanks never overwrite already-collected values.
+    if (v !== undefined && v !== "") args[k] = v;
+  }
+  const required = WRITE_REQUIRED_ARGS[tool] ?? [];
+  const missing = required.filter((k) => args[k] === undefined || args[k] === "");
+  if (missing.length === 0) return { needsInfo: false, needsConfirm: true, args };
+  const form = describeWriteForm(tool);
+  const byName = new Map((form?.fields ?? []).map((fld) => [fld.name, fld]));
+  return {
+    needsInfo: true,
+    missing,
+    args,
+    fields: missing.map((m) => byName.get(m) ?? genericField(m)),
+    collected: args,
+    formTitle: form?.title ?? tool,
+  };
+}
+
+// Server-side pending writes: survives across turns (unlike renderer-only
+// state) so a form resubmit continues instead of restarting. Entries expire
+// after 15 minutes so a stale "yes" can never confirm an old request.
+export interface PendingWrite {
+  tool: string;
+  args: Record<string, unknown>;
+  prompt: string;
+  touchedAt: number;
+}
+
+export const PENDING_WRITE_TTL_MS = 15 * 60 * 1000;
+
+const pendingWrites = new Map<string, PendingWrite>();
+
+export function pendingKey(conversationId?: string): string {
+  return conversationId || "default";
+}
+
+export function setPendingWrite(key: string, entry: Omit<PendingWrite, "touchedAt">): void {
+  pendingWrites.set(key, { ...entry, touchedAt: Date.now() });
+}
+
+export function getPendingWrite(key: string): Omit<PendingWrite, "touchedAt"> | null {
+  const p = pendingWrites.get(key);
+  if (!p) return null;
+  if (Date.now() - p.touchedAt > PENDING_WRITE_TTL_MS) {
+    pendingWrites.delete(key);
+    return null;
+  }
+  return { tool: p.tool, args: p.args, prompt: p.prompt };
+}
+
+export function clearPendingWrite(key: string): void {
+  pendingWrites.delete(key);
+}
