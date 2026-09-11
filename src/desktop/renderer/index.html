@@ -917,7 +917,7 @@ function renderDocs(){
   const groups = {};
   tools.forEach((t) => { const g = docToolGroup(t.name); (groups[g] = groups[g] || []).push(t); });
   el.innerHTML = Object.keys(groups).sort((a, b) => groups[b].length - groups[a].length || (a < b ? -1 : 1)).map((g) => {
-    const collapsed = !!window.__docCollapsed[g];
+    const collapsed = window.__docCollapsed[g] !== true;
     return `<div class="rounded-lg border border-[#1d2a42] bg-[#111726] overflow-hidden">
       <div class="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-[#1a2538]" data-doc-toggle="${esc(g)}">
         <span class="text-slate-500 text-xs">${collapsed ? "▸" : "▾"}</span>
