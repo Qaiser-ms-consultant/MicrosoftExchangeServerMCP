@@ -721,7 +721,9 @@ function opFilteredRuns(){
 function renderOpLogs(){
   const el = document.getElementById("logsView");
   if (!el) return;
-  const filtered = opFilteredRuns();
+  let filtered = opFilteredRuns();
+  // Reverse so newest runs appear on top
+  filtered = filtered.slice().reverse();
   const totalEntries = (window.__opRuns || []).reduce((n, r) => n + (r.entries || []).length, 0);
   const count = document.getElementById("logCount");
   if (count) count.textContent = `${(window.__opRuns || []).length} runs • ${totalEntries} entries`;
@@ -730,7 +732,10 @@ function renderOpLogs(){
     return;
   }
   el.innerHTML = filtered.map(({ run, entries }) => {
-    const collapsed = !!window.__opCollapsed[run.runId];
+    // Default to collapsed only if this run has never been toggled (undefined)
+    const collapsed = window.__opCollapsed[run.runId] !== false;
+    // Set default collapsed only once (when undefined) — don't overwrite user choice
+    if (window.__opCollapsed[run.runId] === undefined) window.__opCollapsed[run.runId] = true;
     const outcome = opRunOutcome(run);
     const t = run.startedAt ? new Date(run.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
     return `<div class="rounded-lg border border-[#1d2a42] bg-[#111726] overflow-hidden" data-op-run="${esc(run.runId)}">
