@@ -290,7 +290,34 @@ export function routeQuery(prompt: string): Route {
   if (has("litigation hold") && email) return { tool: "exchange_get_litigation_hold", args: { identity: email }, write: false };
   if (has("in-place hold", "inplace hold", "ediscovery", "e-discovery") && email) return { tool: "exchange_get_inplace_hold", args: { identity: email }, write: false };
   if (has("oof", "out of office", "automatic repl") && email) return { tool: "exchange_get_oof", args: { identity: email }, write: false };
+  // Inbox rule / sweep / folder writes must precede the inbox-rules read below
+  if (has("inbox rule") && has("disable")) { const q = QUOTED_RE.exec(prompt)?.[1]; return { tool: "exchange_disable_inboxrule", args: { ...(q ? { identity: q } : {}), ...(email ? { mailbox: email } : {}) }, write: true }; }
+  if (has("inbox rule") && has("enable")) { const q = QUOTED_RE.exec(prompt)?.[1]; return { tool: "exchange_enable_inboxrule", args: { ...(q ? { identity: q } : {}), ...(email ? { mailbox: email } : {}) }, write: true }; }
+  if (has("inbox rule") && has("remove", "delete")) { const q = QUOTED_RE.exec(prompt)?.[1]; return { tool: "exchange_remove_inboxrule", args: { ...(q ? { identity: q } : {}), ...(email ? { mailbox: email } : {}) }, write: true }; }
+  if (has("inbox rule") && has("edit", "set", "update", "change")) { const q = QUOTED_RE.exec(prompt)?.[1]; return { tool: "exchange_set_inboxrule", args: { ...(q ? { identity: q } : {}), ...(email ? { mailbox: email } : {}) }, write: true }; }
   if (has("inbox rule") && email) return { tool: "exchange_get_inbox_rules", args: { mailbox: email }, write: false };
+  if (has("sweep") && has("create", "new", "add")) return { tool: "exchange_new_sweeprule", args: email ? { mailbox: email } : {}, write: true };
+  if (has("sweep") && has("remove", "delete")) return { tool: "exchange_remove_sweeprule", args: {}, write: true };
+  if (has("sweep") && has("disable")) return { tool: "exchange_disable_sweeprule", args: {}, write: true };
+  if (has("sweep") && has("enable")) return { tool: "exchange_enable_sweeprule", args: {}, write: true };
+  if (has("sweep") && has("edit", "set", "update")) return { tool: "exchange_set_sweeprule", args: {}, write: true };
+  if (has("sweep") && email) return { tool: "exchange_get_sweeprule", args: { mailbox: email }, write: false };
+  if (has("folder permission", "folder access", "calendar sharing", "calendar permission") && has("grant", "give", "add", "share")) return { tool: "exchange_add_mailboxfolderpermission", args: {}, write: true };
+  if (has("folder permission", "folder access", "calendar sharing", "calendar permission") && has("remove", "revoke", "delete")) return { tool: "exchange_remove_mailboxfolderpermission", args: {}, write: true };
+  if (has("folder permission", "folder access") && has("set", "edit", "change")) return { tool: "exchange_set_mailboxfolderpermission", args: {}, write: true };
+  if (has("folder permission", "folder access", "calendar sharing") && email) return { tool: "exchange_get_mailbox_folder_permission", args: { identity: `${email}:\\Calendar` }, write: false };
+  if (has("subfolder", "mailbox folder") && has("create", "new", "add")) { const q = QUOTED_RE.exec(prompt)?.[1]; return { tool: "exchange_new_mailboxfolder", args: { ...(q ? { name: q } : {}) }, write: true }; }
+  if (has("subfolder", "mailbox folder") && has("show", "list", "get")) return { tool: "exchange_get_mailboxfolder", args: {}, write: false };
+  // Mailbox extended: calendar/resource/diagnostics/photos
+  if (has("calendar processing", "room booking", "booking polic") && email) return { tool: "exchange_get_calendarprocessing", args: { identity: email }, write: false };
+  if (has("calendar processing", "room booking", "auto-accept", "autoaccept") && has("set", "edit", "enable", "allow")) return { tool: "exchange_set_calendarprocessing", args: {}, write: true };
+  if (has("calendar publish", "calendar sharing setting") && email) return { tool: "exchange_get_mailboxcalendarfolder", args: { identity: `${email}:\\Calendar` }, write: false };
+  if (has("resource propert", "room propert", "custom resource") && has("set", "add", "create")) return { tool: "exchange_set_resourceconfig", args: {}, write: true };
+  if (has("resource propert", "room propert", "custom resource")) return { tool: "exchange_get_resourceconfig", args: {}, write: false };
+  if (has("user photo", "profile photo", "profile picture") && has("remove", "delete")) return { tool: "exchange_remove_userphoto", args: {}, write: true };
+  if (has("user photo", "profile photo", "profile picture") && has("set", "upload", "change")) return { tool: "exchange_set_userphoto", args: {}, write: true };
+  if (has("user photo", "profile photo", "profile picture") && email) return { tool: "exchange_get_userphoto", args: { identity: email }, write: false };
+  if (has("diagnostic log") && email) return { tool: "exchange_export_mailboxdiagnosticlogs", args: { identity: email }, write: false };
   if (has("mailbox audit") && email) return { tool: "security.get_mailbox_audit_log", args: { identity: email }, write: false };
   if (has("audit log")) return { tool: "exchange_search_admin_audit_log", args: {}, write: false };
   if (has("archive") && email) return { tool: "exchange_get_archive_status", args: { identity: email }, write: false };
@@ -301,8 +328,27 @@ export function routeQuery(prompt: string): Route {
   if (has("folder statistic") && email) return { tool: "mailbox.get_folder_statistics", args: { identity: email }, write: false };
   if (has("move request") && has("all", "board", "list", "overview", "dashboard")) return { tool: "report.generate_move_request_report", args: {}, write: false };
   if (has("move request status", "move status")) return { tool: "mailbox.get_move_request_status", args: {}, write: false };
+  // Mailbox request lifecycle (specific verbs precede the generic get routes)
+  if (has("export request") && has("suspend", "pause", "hold")) return { tool: "exchange_suspend_mailboxexportrequest", args: {}, write: true };
+  if (has("export request") && has("resume", "retry", "restart")) return { tool: "exchange_resume_mailboxexportrequest", args: {}, write: true };
+  if (has("export request") && has("remove", "delete", "cancel", "clear")) return { tool: "exchange_remove_mailboxexportrequest", args: {}, write: true };
+  if (has("export request") && has("set", "edit", "change", "bad item")) return { tool: "exchange_set_mailboxexportrequest", args: {}, write: true };
+  if (has("export request") && has("statistic", "progress", "detail", "report")) return { tool: "exchange_get_mailboxexportrequeststatistics", args: {}, write: false };
+  if (has("import request") && has("suspend", "pause", "hold")) return { tool: "exchange_suspend_mailboximportrequest", args: {}, write: true };
+  if (has("import request") && has("resume", "retry", "restart")) return { tool: "exchange_resume_mailboximportrequest", args: {}, write: true };
+  if (has("import request") && has("set", "edit", "change", "bad item")) return { tool: "exchange_set_mailboximportrequest", args: {}, write: true };
   if (has("import request")) return { tool: "exchange_get_mailbox_import_request", args: {}, write: false };
+  if (has("restore request") && has("suspend", "pause", "hold")) return { tool: "exchange_suspend_mailboxrestorerequest", args: {}, write: true };
+  if (has("restore request") && has("resume", "retry", "restart")) return { tool: "exchange_resume_mailboxrestorerequest", args: {}, write: true };
+  if (has("restore request") && has("remove", "delete", "cancel", "clear")) return { tool: "exchange_remove_mailboxrestorerequest", args: {}, write: true };
+  if (has("restore request") && has("set", "edit", "change", "bad item")) return { tool: "exchange_set_mailboxrestorerequest", args: {}, write: true };
+  if (has("restore request") && has("statistic", "progress", "detail", "report")) return { tool: "exchange_get_mailboxrestorerequeststatistics", args: {}, write: false };
   if (has("restore request")) return { tool: "exchange_get_mailbox_restore_request", args: {}, write: false };
+  if (has("service email channel", "service channel") && has("disable")) return { tool: "exchange_disable_serviceemailchannel", args: email ? { identity: email } : {}, write: true };
+  if (has("service email channel", "service channel") && has("enable")) return { tool: "exchange_enable_serviceemailchannel", args: email ? { identity: email } : {}, write: true };
+  if (has("draft") && has("create", "new", "write", "compose")) { const q = QUOTED_RE.exec(prompt)?.[1]; return { tool: "exchange_new_mailmessage", args: q ? { subject: q } : {}, write: true }; }
+  if (has("cancel") && has("meeting", "calendar event") && email) return { tool: "exchange_remove_calendarevents", args: { identity: email }, write: true };
+  if (has("recoverable", "deleted item") && has("find", "show", "list", "search", "get") && email) return { tool: "exchange_get_recoverableitems", args: { identity: email }, write: false };
   if (has("soft-deleted", "soft deleted", "disconnected mailbox")) return { tool: "exchange_get_softdeleted_mailbox", args: {}, write: false };
   // Per-mailbox deep reports (email-gated)
   if (has("mailbox detail", "detailed mailbox report", "full configuration", "full details", "complete details", "configuration details", "full config", "details of", "get details", "show details", "detail of") && has("mailbox") && email) return { tool: "report.mailbox_detail", args: { identity: email }, write: false };
@@ -350,6 +396,7 @@ export function routeQuery(prompt: string): Route {
   if (has("test imap", "imap connect")) return { tool: "exchange_test_imapconnectivity", args: {}, write: false };
   if (has("test pop", "pop connect", "pop3 connect")) return { tool: "exchange_test_popconnectivity", args: {}, write: false };
   if (has("test outlook connect", "outlook probe", "mapi probe")) return { tool: "exchange_test_outlookconnectivity", args: {}, write: false };
+  if (has("test mapi", "mapi connect", "mapi logon")) return { tool: "exchange_test_mapiconnectivity", args: {}, write: false };
   if (has("test powershell", "powershell vdir", "remote powershell connect")) return { tool: "exchange_test_powershellconnectivity", args: {}, write: false };
   if (has("test ews", "test webservices", "ews connect")) return { tool: "exchange_test_webservicesconnectivity", args: {}, write: false };
   if (has("test client access", "which rule blocks", "which rules match")) return { tool: "exchange_test_clientaccessrule", args: {}, write: false };

@@ -332,6 +332,222 @@ const FORMS: Record<string, WriteForm> = {
       f({ name: "x509CertificateName", label: "Certificate FQDN", kind: "text", required: false, placeholder: "mail.contoso.com" }),
     ],
   },
+  "exchange_disable_inboxrule": {
+    tool: "exchange_disable_inboxrule", title: "Disable inbox rule", fields: [
+      f({ name: "identity", label: "Rule name", kind: "text", required: true, placeholder: "MoveAnnouncements" }),
+      f({ name: "mailbox", label: "Mailbox", kind: "email", required: false, placeholder: "alice@contoso.com" }),
+    ],
+  },
+  "exchange_enable_inboxrule": {
+    tool: "exchange_enable_inboxrule", title: "Enable inbox rule", fields: [
+      f({ name: "identity", label: "Rule name", kind: "text", required: true, placeholder: "MoveAnnouncements" }),
+      f({ name: "mailbox", label: "Mailbox", kind: "email", required: false, placeholder: "alice@contoso.com" }),
+    ],
+  },
+  "exchange_set_inboxrule": {
+    tool: "exchange_set_inboxrule", title: "Edit inbox rule", fields: [
+      f({ name: "identity", label: "Rule name/ID", kind: "text", required: false, placeholder: "ProjectContoso" }),
+      f({ name: "mailbox", label: "Mailbox", kind: "email", required: false, placeholder: "alice@contoso.com" }),
+      f({ name: "markImportance", label: "Importance", kind: "select", required: false, options: ["High", "Normal", "Low"] }),
+      f({ name: "priority", label: "Priority", kind: "number", required: false, placeholder: "0" }),
+    ],
+  },
+  "exchange_remove_inboxrule": {
+    tool: "exchange_remove_inboxrule", title: "Remove inbox rule", fields: [
+      f({ name: "identity", label: "Rule name", kind: "text", required: true, placeholder: "ProjectA-MoveToFolderA" }),
+      f({ name: "mailbox", label: "Mailbox", kind: "email", required: false, placeholder: "alice@contoso.com" }),
+    ],
+  },
+  "exchange_add_mailboxfolderpermission": {
+    tool: "exchange_add_mailboxfolderpermission", title: "Grant folder permission", fields: [
+      f({ name: "identity", label: "Folder", kind: "text", required: true, placeholder: "alice@contoso.com:\\Calendar" }),
+      f({ name: "user", label: "Grantee", kind: "email", required: true, placeholder: "bob@contoso.com" }),
+      f({ name: "accessRights", label: "Rights", kind: "text", required: true, placeholder: "Editor" }),
+    ],
+  },
+  "exchange_remove_mailboxfolderpermission": {
+    tool: "exchange_remove_mailboxfolderpermission", title: "Remove folder permission", fields: [
+      f({ name: "identity", label: "Folder", kind: "text", required: true, placeholder: "alice@contoso.com:\\Calendar" }),
+      f({ name: "user", label: "Grantee", kind: "email", required: false, placeholder: "bob@contoso.com" }),
+    ],
+  },
+  "exchange_set_mailboxfolderpermission": {
+    tool: "exchange_set_mailboxfolderpermission", title: "Edit folder permission", fields: [
+      f({ name: "identity", label: "Folder", kind: "text", required: true, placeholder: "alice@contoso.com:\\Calendar" }),
+      f({ name: "user", label: "Grantee", kind: "email", required: true, placeholder: "bob@contoso.com" }),
+      f({ name: "accessRights", label: "Rights", kind: "text", required: true, placeholder: "Editor" }),
+    ],
+  },
+  "exchange_new_mailboxfolder": {
+    tool: "exchange_new_mailboxfolder", title: "New mailbox folder", fields: [
+      f({ name: "name", label: "Folder name", kind: "text", required: true, placeholder: "Personal" }),
+      f({ name: "parent", label: "Parent path", kind: "text", required: true, placeholder: ":\\Inbox" }),
+    ],
+  },
+  "exchange_new_sweeprule": {
+    tool: "exchange_new_sweeprule", title: "New sweep rule", fields: [
+      f({ name: "name", label: "Rule name", kind: "text", required: true, placeholder: "From Michelle" }),
+      f({ name: "provider", label: "Provider", kind: "text", required: true, placeholder: "Exchange16" }),
+      f({ name: "mailbox", label: "Mailbox", kind: "email", required: false, placeholder: "alice@contoso.com" }),
+      f({ name: "sender", label: "Sender filter", kind: "email", required: false }),
+      f({ name: "keepLatest", label: "Keep newest N", kind: "number", required: false }),
+      f({ name: "keepForDays", label: "Keep days", kind: "number", required: false }),
+    ],
+  },
+  "exchange_set_sweeprule": {
+    tool: "exchange_set_sweeprule", title: "Edit sweep rule", fields: [
+      f({ name: "identity", label: "Rule ID", kind: "text", required: true }),
+      f({ name: "keepForDays", label: "Keep days", kind: "number", required: false }),
+      f({ name: "keepLatest", label: "Keep newest N", kind: "number", required: false }),
+    ],
+  },
+  "exchange_remove_sweeprule": {
+    tool: "exchange_remove_sweeprule", title: "Remove sweep rule", fields: [
+      f({ name: "identity", label: "Rule ID", kind: "text", required: true }),
+    ],
+  },
+  "exchange_enable_sweeprule": {
+    tool: "exchange_enable_sweeprule", title: "Enable sweep rule", fields: [
+      f({ name: "identity", label: "Rule ID", kind: "text", required: true }),
+    ],
+  },
+  "exchange_disable_sweeprule": {
+    tool: "exchange_disable_sweeprule", title: "Disable sweep rule", fields: [
+      f({ name: "identity", label: "Rule ID", kind: "text", required: true }),
+    ],
+  },
+  "exchange_set_calendarprocessing": {
+    tool: "exchange_set_calendarprocessing", title: "Edit room booking", fields: [
+      f({ name: "identity", label: "Room/equipment mailbox", kind: "text", required: true, placeholder: "Conf 212" }),
+      f({ name: "automateProcessing", label: "Automation", kind: "select", required: false, options: ["None", "AutoUpdate", "AutoAccept"] }),
+      f({ name: "allowConflicts", label: "Allow conflicts", kind: "boolean", required: false }),
+      f({ name: "bookingWindowInDays", label: "Booking window (days)", kind: "number", required: false, placeholder: "180" }),
+    ],
+  },
+  "exchange_set_calendarnotification": {
+    tool: "exchange_set_calendarnotification", title: "Edit calendar text notifications", fields: [
+      f({ name: "identity", label: "Mailbox", kind: "text", required: true, placeholder: "TonySmith" }),
+      f({ name: "calendarUpdateNotification", label: "Calendar updates", kind: "boolean", required: false }),
+      f({ name: "meetingReminderNotification", label: "Meeting reminders", kind: "boolean", required: false }),
+      f({ name: "dailyAgendaNotification", label: "Daily agenda", kind: "boolean", required: false }),
+    ],
+  },
+  "exchange_set_resourceconfig": {
+    tool: "exchange_set_resourceconfig", title: "Edit resource properties", fields: [
+      f({ name: "resourcePropertySchema", label: "Properties", kind: "text", required: true, placeholder: "Room/Whiteboard,Equipment/Van" }),
+    ],
+  },
+  "exchange_remove_mailboxuserconfiguration": {
+    tool: "exchange_remove_mailboxuserconfiguration", title: "Remove user configuration", fields: [
+      f({ name: "mailbox", label: "Mailbox", kind: "email", required: true, placeholder: "julia@contoso.com" }),
+      f({ name: "identity", label: "Item", kind: "text", required: true, placeholder: "Configuration\\IPM.Configuration.Aggregated.OwaUserConfiguration" }),
+    ],
+  },
+  "exchange_import_recipientdataproperty": {
+    tool: "exchange_import_recipientdataproperty", title: "Import picture/spoken name", fields: [
+      f({ name: "identity", label: "Recipient", kind: "text", required: true, placeholder: "Ayla" }),
+      f({ name: "filePath", label: "Server file path", kind: "text", required: true, placeholder: "M:\\Employee Photos\\AylaKol.jpg" }),
+      f({ name: "picture", label: "Picture (else spoken name)", kind: "boolean", required: false }),
+    ],
+  },
+  "exchange_remove_userphoto": {
+    tool: "exchange_remove_userphoto", title: "Remove user photo", fields: [
+      f({ name: "identity", label: "User", kind: "text", required: true, placeholder: "Ann Beebe" }),
+    ],
+  },
+  "exchange_set_userphoto": {
+    tool: "exchange_set_userphoto", title: "Set user photo", fields: [
+      f({ name: "identity", label: "User", kind: "text", required: true, placeholder: "Paul Cannon" }),
+      f({ name: "picturePath", label: "Server JPEG path", kind: "text", required: false, placeholder: "C:\\Photos\\PaulCannon.jpg" }),
+      f({ name: "save", label: "Save preview", kind: "boolean", required: false }),
+      f({ name: "cancel", label: "Cancel preview", kind: "boolean", required: false }),
+    ],
+  },
+  "exchange_set_mailboxexportrequest": {
+    tool: "exchange_set_mailboxexportrequest", title: "Edit export request", fields: [
+      f({ name: "identity", label: "Request", kind: "text", required: true, placeholder: "Ayla\\MailboxExport1" }),
+      f({ name: "badItemLimit", label: "Bad item limit", kind: "text", required: false, placeholder: "10" }),
+      f({ name: "priority", label: "Priority", kind: "text", required: false, placeholder: "High" }),
+    ],
+  },
+  "exchange_suspend_mailboxexportrequest": {
+    tool: "exchange_suspend_mailboxexportrequest", title: "Suspend export request", fields: [
+      f({ name: "identity", label: "Request", kind: "text", required: true, placeholder: "Ayla\\MailboxExport1" }),
+      f({ name: "suspendComment", label: "Comment", kind: "text", required: false }),
+    ],
+  },
+  "exchange_resume_mailboxexportrequest": {
+    tool: "exchange_resume_mailboxexportrequest", title: "Resume export request", fields: [
+      f({ name: "identity", label: "Request", kind: "text", required: true, placeholder: "kweku\\export" }),
+    ],
+  },
+  "exchange_remove_mailboxexportrequest": {
+    tool: "exchange_remove_mailboxexportrequest", title: "Remove export request", fields: [
+      f({ name: "identity", label: "Request", kind: "text", required: false, placeholder: "Ayla\\MailboxExport1" }),
+    ],
+  },
+  "exchange_set_mailboximportrequest": {
+    tool: "exchange_set_mailboximportrequest", title: "Edit import request", fields: [
+      f({ name: "identity", label: "Request", kind: "text", required: true, placeholder: "Kweku\\Import" }),
+      f({ name: "badItemLimit", label: "Bad item limit", kind: "text", required: false, placeholder: "5" }),
+    ],
+  },
+  "exchange_suspend_mailboximportrequest": {
+    tool: "exchange_suspend_mailboximportrequest", title: "Suspend import request", fields: [
+      f({ name: "identity", label: "Request", kind: "text", required: true, placeholder: "Ayla\\MailboxImport1" }),
+    ],
+  },
+  "exchange_resume_mailboximportrequest": {
+    tool: "exchange_resume_mailboximportrequest", title: "Resume import request", fields: [
+      f({ name: "identity", label: "Request", kind: "text", required: true, placeholder: "kweku\\MailboxImport1" }),
+    ],
+  },
+  "exchange_set_mailboxrestorerequest": {
+    tool: "exchange_set_mailboxrestorerequest", title: "Edit restore request", fields: [
+      f({ name: "identity", label: "Request", kind: "text", required: true, placeholder: "Ayla\\MailboxRestore1" }),
+      f({ name: "badItemLimit", label: "Bad item limit", kind: "text", required: false, placeholder: "10" }),
+    ],
+  },
+  "exchange_suspend_mailboxrestorerequest": {
+    tool: "exchange_suspend_mailboxrestorerequest", title: "Suspend restore request", fields: [
+      f({ name: "identity", label: "Request", kind: "text", required: true, placeholder: "Ayla\\MailboxRestore1" }),
+    ],
+  },
+  "exchange_resume_mailboxrestorerequest": {
+    tool: "exchange_resume_mailboxrestorerequest", title: "Resume restore request", fields: [
+      f({ name: "identity", label: "Request", kind: "text", required: true, placeholder: "kweku\\RestoreFromDB01" }),
+    ],
+  },
+  "exchange_remove_mailboxrestorerequest": {
+    tool: "exchange_remove_mailboxrestorerequest", title: "Remove restore request", fields: [
+      f({ name: "identity", label: "Request", kind: "text", required: false, placeholder: "Ayla\\MailboxRestore1" }),
+    ],
+  },
+  "exchange_disable_serviceemailchannel": {
+    tool: "exchange_disable_serviceemailchannel", title: "Disable service channel", fields: [
+      f({ name: "identity", label: "Mailbox", kind: "text", required: true, placeholder: "JeffHay" }),
+    ],
+  },
+  "exchange_enable_serviceemailchannel": {
+    tool: "exchange_enable_serviceemailchannel", title: "Enable service channel", fields: [
+      f({ name: "identity", label: "Mailbox", kind: "text", required: true, placeholder: "tony@contoso.com" }),
+    ],
+  },
+  "exchange_new_mailmessage": {
+    tool: "exchange_new_mailmessage", title: "New draft message", fields: [
+      f({ name: "subject", label: "Subject", kind: "text", required: false, placeholder: "Delivery Report" }),
+      f({ name: "body", label: "Body", kind: "text", required: false }),
+      f({ name: "bodyFormat", label: "Format", kind: "select", required: false, options: ["PlainText", "Rtf", "Html"] }),
+    ],
+  },
+  "exchange_remove_calendarevents": {
+    tool: "exchange_remove_calendarevents", title: "Cancel future meetings", fields: [
+      f({ name: "identity", label: "Organizer mailbox", kind: "email", required: true, placeholder: "chris@contoso.com" }),
+      f({ name: "queryWindowInDays", label: "Window (days, max 1825)", kind: "number", required: true, placeholder: "120" }),
+      f({ name: "cancelOrganizedMeetings", label: "Actually cancel (else no-op)", kind: "boolean", required: false }),
+      f({ name: "previewOnly", label: "Preview only", kind: "boolean", required: false }),
+    ],
+  },
 };
 
 export const WRITE_FORM_TOOLS = Object.keys(FORMS);

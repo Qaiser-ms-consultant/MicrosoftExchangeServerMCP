@@ -30,6 +30,7 @@ import { registerPsTrace } from "./tools/ps-trace.js";
 import { registerOrganizationTools } from "./tools/admin-organization.js";
 import { registerDiagnosticsExtended } from "./tools/admin-diagnostics-extended.js";
 import { registerClientAccessTools } from "./tools/admin-clientaccess.js";
+import { registerMailboxExtendedTools } from "./tools/admin-mailbox-extended.js";
 import { registerResources } from "./resources/folder-resource.js";
 import { registerPrompts } from "./prompts/index.js";
 
@@ -70,6 +71,7 @@ async function main() {
   registerOrganizationTools(server, client.ps);
   registerDiagnosticsExtended(server, client.ps);
   registerClientAccessTools(server, client.ps);
+  registerMailboxExtendedTools(server, client.ps);
   registerDiagnosticTools(server, config, client.auth);
   registerResources(server, client);
   registerPrompts(server);

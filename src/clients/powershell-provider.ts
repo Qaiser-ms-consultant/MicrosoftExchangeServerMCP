@@ -10,7 +10,12 @@ const ALLOWED_CMDLETS = new Set([
   "Get-Mailbox", "New-Mailbox", "Set-Mailbox", "Remove-Mailbox", "Enable-Mailbox", "Disable-Mailbox",
   "New-RemoteMailbox", "Enable-RemoteMailbox", "New-MailUser", "Enable-MailUser", "New-MailContact",
   "New-DynamicDistributionGroup", "New-MailboxExportRequest", "Get-MailboxExportRequest",
-  "New-InboxRule", "Enable-MailPublicFolder",
+  "New-InboxRule", "Enable-InboxRule", "Disable-InboxRule", "Set-InboxRule", "Remove-InboxRule", "Enable-MailPublicFolder",
+  "Add-MailboxFolderPermission", "Remove-MailboxFolderPermission", "Set-MailboxFolderPermission", "Get-MailboxFolder", "New-MailboxFolder",
+  "Get-SweepRule", "New-SweepRule", "Set-SweepRule", "Remove-SweepRule", "Enable-SweepRule", "Disable-SweepRule",
+  "Get-CalendarProcessing", "Set-CalendarProcessing", "Get-MailboxCalendarFolder", "Get-CalendarNotification", "Set-CalendarNotification",
+  "Get-ResourceConfig", "Set-ResourceConfig", "Get-MessageCategory", "Get-MailboxLocation", "Get-MailboxUserConfiguration", "Remove-MailboxUserConfiguration",
+  "Export-MailboxDiagnosticLogs", "Export-RecipientDataProperty", "Import-RecipientDataProperty", "Get-UserPhoto", "Remove-UserPhoto", "Set-UserPhoto",
   "Get-MailboxStatistics", "Get-MailboxPermission", "Add-MailboxPermission", "Remove-MailboxPermission",
   "Get-Recipient", "Get-User", "Get-MailUser", "Get-MailContact", "Get-Contact",
   "Get-DistributionGroup", "New-DistributionGroup", "Set-DistributionGroup", "Remove-DistributionGroup",
@@ -49,7 +54,7 @@ const ALLOWED_CMDLETS = new Set([
   "Get-OwaVirtualDirectory", "Test-OwaConnectivity", "Enable-ExchangeCertificate", "Import-ExchangeCertificate", "New-ExchangeCertificate", "Search-MailboxAuditLog", "Get-DlpPolicy", "Test-MAPIConnectivity",
   // Mailbox lifecycle / recovery
   "Disable-Mailbox", "Connect-Mailbox", "Undo-SoftDeletedMailbox", "Get-Mailbox", "Remove-Mailbox", "Restore-RecoverableItems",
-  "Get-CASMailbox", "Set-CASMailbox", "Get-MailboxRestoreRequest", "New-MailboxRestoreRequest", "New-MailboxImportRequest", "Get-MailboxImportRequest",
+  "Get-CASMailbox", "Set-CASMailbox", "Get-MailboxRestoreRequest", "New-MailboxRestoreRequest", "Set-MailboxRestoreRequest", "Suspend-MailboxRestoreRequest", "Resume-MailboxRestoreRequest", "Remove-MailboxRestoreRequest", "Get-MailboxRestoreRequestStatistics", "New-MailboxImportRequest", "Get-MailboxImportRequest", "Set-MailboxImportRequest", "Suspend-MailboxImportRequest", "Resume-MailboxImportRequest", "Set-MailboxExportRequest", "Suspend-MailboxExportRequest", "Resume-MailboxExportRequest", "Remove-MailboxExportRequest", "Get-MailboxExportRequestStatistics", "Disable-ServiceEmailChannel", "Enable-ServiceEmailChannel", "New-MailMessage", "Remove-CalendarEvents", "Get-RecoverableItems",
   // Infra reports + diagnostics
   "Get-OrganizationConfig", "Get-AdSite", "Get-ADSite", "Set-ADSite", "Get-ADServerSettings", "Set-ADServerSettings", "Get-DomainController", "Get-OrganizationalUnit", "Get-Trust", "Get-UserPrincipalNamesSuffix", "Get-ADPermission", "Add-ADPermission", "Remove-ADPermission", "Dump-ProvisioningCache", "Reset-ProvisioningCache", "Get-ClientAccessRule", "New-ClientAccessRule", "Set-ClientAccessRule", "Remove-ClientAccessRule", "Test-ClientAccessRule", "Get-ImapSettings", "Set-ImapSettings", "Get-MailboxCalendarConfiguration", "Set-MailboxCalendarConfiguration", "Get-MailboxMessageConfiguration", "Set-MailboxMessageConfiguration", "Get-MailboxRegionalConfiguration", "Set-MailboxRegionalConfiguration", "Get-MailboxSpellingConfiguration", "Set-MailboxSpellingConfiguration", "Get-OutlookProvider", "New-OutlookProvider", "Set-OutlookProvider", "Remove-OutlookProvider", "Get-OwaMailboxPolicy", "New-OwaMailboxPolicy", "Set-OwaMailboxPolicy", "Remove-OwaMailboxPolicy", "Get-PopSettings", "Set-PopSettings", "Disable-PushNotificationProxy", "Enable-PushNotificationProxy", "Export-AutoDiscoverConfig", "Test-CalendarConnectivity", "Test-EcpConnectivity", "Test-ImapConnectivity", "Test-OutlookConnectivity", "Test-PopConnectivity", "Test-PowerShellConnectivity", "Test-WebServicesConnectivity", "Get-CimInstance", "Get-WmiObject", "Test-ExchangeSearch", "Get-MoveRequestStatistics",
 ]);
