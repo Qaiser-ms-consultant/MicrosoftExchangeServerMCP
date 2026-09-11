@@ -248,6 +248,11 @@
     main[data-purpose="split-pane-workflow"] { overflow: hidden !important; }
     main[data-purpose="split-pane-workflow"] > section[data-view="home"] { min-height: 0 !important; }
   }
+  /* Collapsible prompt console: hiding the left panel gives Output full width */
+  main[data-purpose="split-pane-workflow"].left-collapsed > section#promptPanel { display: none !important; }
+  @media (min-width: 1024px) {
+    main[data-purpose="split-pane-workflow"].left-collapsed > section#outputPanel { grid-column: span 12 / span 12 !important; }
+  }
   /* Short viewports: let the whole page scroll so no panel is ever unreachable */
   @media (max-height: 719px) {
     html body { overflow-y: auto !important; }
@@ -300,10 +305,11 @@
 
 <main class="flex-1 min-h-0 p-3 sm:p-4 lg:p-5 overflow-y-auto flex flex-col lg:grid lg:grid-cols-12 lg:auto-rows-fr gap-3 lg:gap-5 bg-gradient-to-b from-[#090d16] to-[#0d1322]" data-purpose="split-pane-workflow">
 <!-- LEFT: Prompt Console -->
-<section class="col-span-12 lg:col-span-5 flex flex-col gap-4 h-auto lg:h-full min-h-0 overflow-visible lg:overflow-y-auto flex-none" data-view="home">
+<section id="promptPanel" class="col-span-12 lg:col-span-5 flex flex-col gap-4 h-auto lg:h-full min-h-0 overflow-visible lg:overflow-y-auto flex-none" data-view="home">
 <div class="flex-1 min-h-min bg-[#121829]/95 backdrop-blur-md border border-[#1f2d48] rounded-xl flex flex-col shadow-xl shadow-black/40 overflow-hidden">
 <div class="px-4 py-3 bg-[#151c30]/70 border-b border-[#1f2d48] flex items-center justify-between">
 <div class="flex items-center gap-2"><span class="text-xs font-bold uppercase tracking-wider text-slate-400">BYOM — Bring Your Own Model</span></div>
+<button class="p-1.5 rounded-md hover:bg-[#1a2338] text-slate-400 hover:text-slate-200 border border-transparent hover:border-[#2b3a58] text-xs" id="collapsePrompt" title="Collapse panel — give Output full width">«</button>
 </div>
 <div class="p-4 flex-1 flex flex-col gap-3">
 <div class="flex items-center justify-between"><label for="systemPrompt" class="text-xs font-medium text-slate-300">SYSTEM PROMPT</label></div>
@@ -348,10 +354,11 @@
 
 <!-- AI Chat Tab -->
 <!-- RIGHT: Output & Analysis -->
-<section class="col-span-12 lg:col-span-7 flex flex-col h-auto lg:h-full min-h-0 overflow-visible lg:overflow-hidden flex-1" data-view="home">
+<section id="outputPanel" class="col-span-12 lg:col-span-7 flex flex-col h-auto lg:h-full min-h-0 overflow-visible lg:overflow-hidden flex-1" data-view="home">
 <div class="flex-1 min-h-0 bg-[#121829]/95 backdrop-blur-md border border-[#1f2d48] rounded-xl flex flex-col shadow-xl shadow-black/40 overflow-hidden">
 <div class="px-4 py-3 bg-[#151c30]/70 border-b border-[#1f2d48] flex items-center justify-between flex-wrap gap-2 flex-shrink-0">
 <div class="flex items-center gap-3 flex-wrap min-w-0">
+<button class="hidden p-1.5 rounded-md hover:bg-[#1a2338] text-slate-400 hover:text-slate-200 border border-[#2b3a58] text-xs" id="expandPrompt" title="Show prompt console">»</button>
 <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Output & Analysis</span>
 <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" id="execBadge"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> <span id="execText">Idle</span></span>
 </div>
@@ -992,6 +999,26 @@ if(themeBtn) themeBtn.addEventListener("click", function(){
 });
 var settingsBtn=document.getElementById("openSettings");
 if(settingsBtn) settingsBtn.addEventListener('click',()=>{ var tab=document.querySelector('[data-tab="logs"]'); if(tab) tab.click(); });
+
+// Collapsible prompt console — horizontal collapse gives Output full width
+function setPromptCollapsed(collapsed){
+  var main=document.querySelector('main[data-purpose="split-pane-workflow"]');
+  var expandBtn=document.getElementById("expandPrompt");
+  var collapseBtn=document.getElementById("collapsePrompt");
+  if(main) main.classList.toggle("left-collapsed", !!collapsed);
+  if(expandBtn) expandBtn.classList.toggle("hidden", !collapsed);
+  if(collapseBtn) collapseBtn.textContent = collapsed ? "»" : "«";
+  if(collapseBtn) collapseBtn.title = collapsed ? "Show prompt console" : "Collapse panel — give Output full width";
+  try{ localStorage.setItem("byomCollapsed", collapsed ? "1" : "0"); }catch(e){}
+}
+var collapseBtn=document.getElementById("collapsePrompt");
+if(collapseBtn) collapseBtn.addEventListener("click", function(){
+  var main=document.querySelector('main[data-purpose="split-pane-workflow"]');
+  setPromptCollapsed(!(main && main.classList.contains("left-collapsed")));
+});
+var expandBtn=document.getElementById("expandPrompt");
+if(expandBtn) expandBtn.addEventListener("click", function(){ setPromptCollapsed(false); });
+try{ if(localStorage.getItem("byomCollapsed")==="1") setPromptCollapsed(true); }catch(e){}
 
 // Provider models — fallback for all 13
 const fallbackModels = {
