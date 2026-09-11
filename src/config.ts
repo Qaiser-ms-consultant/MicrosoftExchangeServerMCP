@@ -27,6 +27,7 @@ export type ExchangeVersion = "2013" | "2016" | "2019" | "auto";
 export type ProviderType = "ews" | "rest" | "powershell" | "auto";
 export type AuthMethod = "basic" | "oauth" | "certificate";
 export type TransportType = "stdio" | "http";
+export type HttpAuthMethod = "apikey" | "bearer" | "basic" | "none";
 
 export interface AppConfig {
   exchange: {
@@ -66,6 +67,21 @@ export interface AppConfig {
     // Deprecated: all 128 tools now always enabled; these flags are ignored but kept for backward compat
     enableAdminTools?: boolean;
     enableMailboxTools?: boolean;
+    // HTTP Transport Authentication — SECURITY: Enable for production!
+    httpAuth?: {
+      enabled?: boolean;                    // default: true (secure by default)
+      method?: HttpAuthMethod | HttpAuthMethod[]; // default: "apikey"
+      apiKeys?: string[];                   // from MCP_API_KEYS env (comma-separated)
+      bearerTokens?: string[];              // from MCP_BEARER_TOKENS env (comma-separated)
+      basicAuth?: { username: string; password: string }; // from MCP_BASIC_USER / MCP_BASIC_PASS
+      allowlist?: string[];                 // IP/CIDR allowlist from MCP_ALLOWLIST env
+      denylist?: string[];                  // IP/CIDR denylist from MCP_DENYLIST env
+      rateLimit?: {
+        windowMs?: number;                  // default: 60000 (1 minute)
+        maxRequests?: number;               // default: 100
+      };
+      protectHealth?: boolean;              // default: false (health checks public for LB)
+    };
   };
   logging: { level: string; file: string };
 }
@@ -82,7 +98,23 @@ const defaults: AppConfig = {
     tls: { rejectUnauthorized: true },
   },
   auth: { method: "basic" },
-  server: { transport: "stdio", port: 3000, host: "0.0.0.0", enableAdminTools: true, enableMailboxTools: false },
+  server: {
+    transport: "stdio",
+    port: 3000,
+    host: "0.0.0.0",
+    enableAdminTools: true,
+    enableMailboxTools: false,
+    httpAuth: {
+      enabled: true,
+      method: "apikey",
+      apiKeys: [],
+      bearerTokens: [],
+      allowlist: [],
+      denylist: [],
+      rateLimit: { windowMs: 60000, maxRequests: 100 },
+      protectHealth: false,
+    },
+  },
   logging: { level: "info", file: "" },
 };
 
@@ -164,6 +196,24 @@ export function loadConfig(configPath?: string): AppConfig {
   if (process.env.ENABLE_ADMIN_TOOLS) cfg.server.enableAdminTools = process.env.ENABLE_ADMIN_TOOLS === "true";
   if (process.env.ENABLE_MAILBOX_TOOLS) cfg.server.enableMailboxTools = process.env.ENABLE_MAILBOX_TOOLS === "true";
   if (process.env.EXCHANGE_INSECURE) cfg.exchange.insecure = process.env.EXCHANGE_INSECURE === "true" || process.env.EXCHANGE_INSECURE === "1";
+  
+  // HTTP Auth env var overrides
+  if (process.env.MCP_HTTP_AUTH_ENABLED !== undefined) cfg.server.httpAuth!.enabled = process.env.MCP_HTTP_AUTH_ENABLED === "true";
+  if (process.env.MCP_HTTP_AUTH_METHOD) {
+    const methods = process.env.MCP_HTTP_AUTH_METHOD.split(",").map((s) => s.trim()).filter(Boolean) as HttpAuthMethod[];
+    cfg.server.httpAuth!.method = methods.length === 1 ? methods[0] : methods;
+  }
+  if (process.env.MCP_API_KEYS) cfg.server.httpAuth!.apiKeys = process.env.MCP_API_KEYS.split(",").map((s) => s.trim()).filter(Boolean);
+  if (process.env.MCP_BEARER_TOKENS) cfg.server.httpAuth!.bearerTokens = process.env.MCP_BEARER_TOKENS.split(",").map((s) => s.trim()).filter(Boolean);
+  if (process.env.MCP_BASIC_USER && process.env.MCP_BASIC_PASS) {
+    cfg.server.httpAuth!.basicAuth = { username: process.env.MCP_BASIC_USER, password: process.env.MCP_BASIC_PASS };
+  }
+  if (process.env.MCP_ALLOWLIST) cfg.server.httpAuth!.allowlist = process.env.MCP_ALLOWLIST.split(",").map((s) => s.trim()).filter(Boolean);
+  if (process.env.MCP_DENYLIST) cfg.server.httpAuth!.denylist = process.env.MCP_DENYLIST.split(",").map((s) => s.trim()).filter(Boolean);
+  if (process.env.MCP_RATE_LIMIT_WINDOW_MS) cfg.server.httpAuth!.rateLimit!.windowMs = parseInt(process.env.MCP_RATE_LIMIT_WINDOW_MS, 10);
+  if (process.env.MCP_RATE_LIMIT_MAX_REQUESTS) cfg.server.httpAuth!.rateLimit!.maxRequests = parseInt(process.env.MCP_RATE_LIMIT_MAX_REQUESTS, 10);
+  if (process.env.MCP_PROTECT_HEALTH !== undefined) cfg.server.httpAuth!.protectHealth = process.env.MCP_PROTECT_HEALTH === "true";
+
   if (process.env.NODE_ENV === "development" && process.env.EXCHANGE_INSECURE === undefined && cfg.exchange.insecure === false) {
     // auto-detect dev hint — no auto-enable, just note
   }

@@ -124,6 +124,8 @@ claude mcp list          # Should show connected
 
 The repo ships a multi-stage `Dockerfile` (Node 20 Alpine) and a `docker-compose.yml`. The container runs the server with HTTP transport on port 3000, so multiple clients can share one server (stdio mode is per-client and does not apply in Docker).
 
+**Important:** HTTP transport now requires authentication (see [Security Notes](#security-notes)). Configure `MCP_API_KEYS` or other auth methods before starting.
+
 ```bash
 # 1. Configure (same file as local runs)
 cp config.example.yaml config.yaml   # then edit endpoint + auth
@@ -135,14 +137,19 @@ EXCHANGE_ENDPOINT=https://mail.contoso.com
 AUTH_METHOD=basic
 EXCHANGE_PASSWORD=yourPassword
 EXCHANGE_INSECURE=false
+# HTTP Transport Authentication (required)
+MCP_HTTP_AUTH_ENABLED=true
+MCP_HTTP_AUTH_METHOD=apikey
+MCP_API_KEYS="your-secure-key-1,your-secure-key-2"
 EOF
 
 # 3. Build and start
 docker compose up --build -d
-curl http://localhost:3000/health     # {"status":"ok",...}
+curl -H "X-API-Key: your-secure-key-1" http://localhost:3000/health
 
 # 4. Point any MCP client at the shared endpoint (see Connect to Clients):
 #    { "mcpServers": { "exchange": { "type": "http", "url": "http://localhost:3000/sse" } } }
+#    Client must include authentication header
 
 # Logs / stop
 docker compose logs -f exchange-mcp
@@ -153,10 +160,13 @@ Plain `docker run` equivalent (no compose):
 
 ```bash
 docker build -t exchange-mcp .
-docker run -d --name exchange-mcp -p 3000:3000 \
+docker run -d --name exchange-mcp -p 127.0.0.1:3000:3000 \
   -v ./config.yaml:/app/config.yaml:ro \
   -e EXCHANGE_ENDPOINT=https://mail.contoso.com \
   -e EXCHANGE_PASSWORD=yourPassword \
+  -e MCP_HTTP_AUTH_ENABLED=true \
+  -e MCP_HTTP_AUTH_METHOD=apikey \
+  -e MCP_API_KEYS="your-secure-key-1,your-secure-key-2" \
   exchange-mcp
 ```
 
@@ -166,6 +176,7 @@ Notes:
 - Environment variables override `config.yaml` values — prefer passing secrets via env rather than baking them into an image.
 - The container is Linux-based: EWS/REST tools work fully, but PowerShell-Remoting tools need a Windows host or a custom wrapper (same limitation as running natively on Linux/macOS).
 - `restart: unless-stopped` is set in compose, so the server comes back up after host reboots.
+- **Default port binding is `127.0.0.1:3000`** (localhost only). Change to `3000:3000` to expose externally (ensure strong auth is configured).
 
 ---
 
@@ -320,6 +331,16 @@ auth: { method: certificate, certificate: { pfxPath: ./cert.pfx, passphrase: '..
 | `auth.oauth.clientId` | `OAUTH_CLIENT_ID` | — | — |
 | `server.transport` | `MCP_TRANSPORT` | `stdio` | `stdio` or `http` |
 | `server.port` | `PORT` | `3000` | HTTP port when using http transport |
+| `server.httpAuth.enabled` | `MCP_HTTP_AUTH_ENABLED` | `true` | Enable authentication for HTTP transport (secure by default) |
+| `server.httpAuth.method` | `MCP_HTTP_AUTH_METHOD` | `apikey` | `apikey`, `bearer`, `basic`, `none` or array like `[apikey, bearer]` |
+| `server.httpAuth.apiKeys` | `MCP_API_KEYS` | — | Comma-separated API keys for API key authentication |
+| `server.httpAuth.bearerTokens` | `MCP_BEARER_TOKENS` | — | Comma-separated bearer tokens for Bearer token authentication |
+| `server.httpAuth.basicAuth` | `MCP_BASIC_USER` / `MCP_BASIC_PASS` | — | Username and password for Basic authentication |
+| `server.httpAuth.allowlist` | `MCP_ALLOWLIST` | — | Comma-separated CIDR ranges for IP allowlist |
+| `server.httpAuth.denylist` | `MCP_DENYLIST` | — | Comma-separated CIDR ranges for IP denylist |
+| `server.httpAuth.rateLimit.windowMs` | `MCP_RATE_LIMIT_WINDOW_MS` | `60000` | Rate limit window in milliseconds |
+| `server.httpAuth.rateLimit.maxRequests` | `MCP_RATE_LIMIT_MAX_REQUESTS` | `100` | Maximum requests per window per IP |
+| `server.httpAuth.protectHealth` | `MCP_PROTECT_HEALTH` | `false` | Require authentication for `/health` endpoint |
 
 Configuration is loaded in the following order: defaults, then `config.yaml` (or the file specified with `--config`), then environment variables. Values in YAML may reference environment variables using `${VAR}` syntax.
 
@@ -482,17 +503,24 @@ node /absolute/path/to/dist/server.js --config=/absolute/path/to/config.yaml
 node dist/server.js --transport=http --config=./config.yaml
 # or
 docker compose up --build
-curl http://localhost:3000/health
+
+# Health check with authentication (required)
+curl -H "X-API-Key: your-key" http://localhost:3000/health
+# or with Bearer token
+curl -H "Authorization: Bearer your-token" http://localhost:3000/health
 ```
 
-Remote client configuration:
+Remote client configuration (include authentication):
 
 ```json
 {
   "mcpServers": {
     "exchange": {
       "type": "http",
-      "url": "http://localhost:3000/sse"
+      "url": "http://localhost:3000/sse",
+      "headers": {
+        "X-API-Key": "your-key"
+      }
     }
   }
 }
@@ -638,6 +666,133 @@ Project structure: server and configuration, authentication, Exchange clients (E
 - Prefer OAuth or Certificate authentication in production and use valid certificates.
 - OAuth tokens are cached in memory and certificate authentication uses HTTPS agents with `pfx` or `cert` options.
 - PowerShell Remoting uses `SkipCACheck` only when `insecure` is enabled for lab environments.
+
+### HTTP Transport Security Enhancement (v0.1.0+)
+
+**Security Enhancement:** HTTP transport mode (`--transport=http` or `MCP_TRANSPORT=http`) now includes built-in authentication and access controls. The Express server validates credentials on every request before allowing access to any MCP tool, with secure-by-default settings.
+
+Prior versions ran the HTTP transport without application-level authentication. This release adds multiple authentication methods, IP filtering, and rate limiting as standard features.
+
+#### HTTP Transport Authentication Configuration
+
+Add `server.httpAuth` to your `config.yaml` or use environment variables:
+
+**config.yaml:**
+```yaml
+server:
+  transport: http
+  port: 3000
+  host: 0.0.0.0
+  httpAuth:
+    enabled: true                    # default: true (secure by default)
+    method: apikey                   # apikey | bearer | basic | none | [apikey, bearer]
+    apiKeys:
+      - "your-secure-api-key-1"
+      - "your-secure-api-key-2"      # multiple keys for rotation
+    bearerTokens:
+      - "your-bearer-token"          # when method includes "bearer"
+    basicAuth:
+      username: "admin"
+      password: "your-password"      # when method is "basic"
+    allowlist:
+      - "10.0.0.0/8"                 # CIDR allowlist (optional)
+      - "192.168.1.0/24"
+    denylist: []                     # CIDR denylist (optional)
+    rateLimit:
+      windowMs: 60000                # 1 minute window
+      maxRequests: 100               # max requests per IP per window
+    protectHealth: false             # true = require auth for /health (LB probes)
+```
+
+**Environment variables (recommended for secrets):**
+```bash
+MCP_HTTP_AUTH_ENABLED=true
+MCP_HTTP_AUTH_METHOD=apikey
+MCP_API_KEYS="key1,key2"
+MCP_BEARER_TOKENS="token1,token2"
+MCP_BASIC_USER=admin
+MCP_BASIC_PASS=password
+MCP_ALLOWLIST="10.0.0.0/8,192.168.1.0/24"
+MCP_DENYLIST=""
+MCP_RATE_LIMIT_WINDOW_MS=60000
+MCP_RATE_LIMIT_MAX_REQUESTS=100
+MCP_PROTECT_HEALTH=false
+```
+
+#### Quick Setup
+
+```bash
+# Non-interactive (CI/CD friendly)
+npm run setup:http-auth -- --yes --method apikey --key-count 2
+
+# With custom options
+npm run setup:http-auth -- --yes --method bearer --allowlist "10.0.0.0/8" --rate-limit-max 50
+
+# JSON output for automation
+npm run setup:http-auth -- --yes --json
+```
+
+#### Client Configuration
+
+**API Key (recommended):**
+```bash
+# Header: X-API-Key or Authorization: ApiKey <key>
+curl -H "X-API-Key: your-key" http://localhost:3000/health
+
+# Agent config
+export MCP_API_KEY="your-key"
+```
+
+**Bearer Token:**
+```bash
+curl -H "Authorization: Bearer your-token" http://localhost:3000/health
+```
+
+**Basic Auth:**
+```bash
+curl -u user:pass http://localhost:3000/health
+```
+
+#### Impact by Transport Mode
+
+| Transport | Impact | Notes |
+|-----------|--------|-------|
+| **stdio** (default) | **No impact** | Uses OS-level process pipes; no network exposure |
+| **HTTP** (`--transport=http`) | **Requires auth** | All endpoints secured; 401 without credentials |
+| **Docker** | **Requires auth** | Compose binds to `127.0.0.1` by default; set `MCP_API_KEYS` in `.env` |
+
+#### Docker Compose (Updated)
+
+The default `docker-compose.yml` now binds to localhost only and includes auth env vars:
+
+```yaml
+services:
+  exchange-mcp:
+    build: .
+    ports:
+      - "127.0.0.1:3000:3000"  # localhost only
+    environment:
+      - EXCHANGE_ENDPOINT=${EXCHANGE_ENDPOINT}
+      - AUTH_METHOD=${AUTH_METHOD:-basic}
+      - EXCHANGE_PASSWORD=${EXCHANGE_PASSWORD}
+      - MCP_HTTP_AUTH_ENABLED=true
+      - MCP_HTTP_AUTH_METHOD=apikey
+      - MCP_API_KEYS=${MCP_API_KEYS}
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    restart: unless-stopped
+```
+
+**To expose externally:** Change port mapping to `"3000:3000"` and ensure strong auth is configured.
+
+#### Upgrading from Previous Versions
+
+If you were using HTTP transport without authentication configured:
+
+1. Run `npm run setup:http-auth -- --yes` to generate keys and update config
+2. Restart the server
+3. Update clients to include authentication headers
+4. For Docker: add `MCP_API_KEYS` to your `.env` file and rebuild
 
 ---
 

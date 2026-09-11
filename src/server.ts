@@ -3,6 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { loadConfig } from "./config.js";
 import { ExchangeClient } from "./clients/exchange-client.js";
+import { createAuthMiddleware } from "./middleware/auth.js";
 import { registerMailTools } from "./tools/mail-tools.js";
 import { registerCalendarTools } from "./tools/calendar-tools.js";
 import { registerContactTools } from "./tools/contact-tools.js";
@@ -91,6 +92,10 @@ async function main() {
     const app = express.default();
     app.use(express.json());
 
+    // Apply authentication middleware for HTTP transport
+    const authMiddleware = createAuthMiddleware(config);
+    app.use(authMiddleware);
+
     let sseTransport: InstanceType<typeof SSEServerTransport> | null = null;
 
     app.get("/sse", async (req: any, res: any) => {
@@ -106,7 +111,12 @@ async function main() {
     app.get("/health", (_req: any, res: any) => res.json({ status: "ok", endpoint: config.exchange.endpoint }));
 
     const port = config.server.port;
-    app.listen(port, () => console.error(`Exchange MCP server running (http) on :${port}`));
+    const host = config.server.host;
+    app.listen(port, host, () => {
+      const authEnabled = config.server.httpAuth?.enabled ?? true;
+      const authMethod = config.server.httpAuth?.method ?? "apikey";
+      console.error(`Exchange MCP server running (http) on ${host}:${port} | auth=${authEnabled ? "enabled" : "disabled"} (${Array.isArray(authMethod) ? authMethod.join(",") : authMethod})`);
+    });
   }
 }
 

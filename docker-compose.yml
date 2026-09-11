@@ -2,13 +2,25 @@ services:
   exchange-mcp:
     build: .
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       - EXCHANGE_ENDPOINT=${EXCHANGE_ENDPOINT}
       - AUTH_METHOD=${AUTH_METHOD:-basic}
       - EXCHANGE_PASSWORD=${EXCHANGE_PASSWORD}
       - OAUTH_CLIENT_ID=${OAUTH_CLIENT_ID}
       - OAUTH_CLIENT_SECRET=${OAUTH_CLIENT_SECRET}
+      # HTTP Transport Authentication (REQUIRED for production)
+      - MCP_HTTP_AUTH_ENABLED=true
+      - MCP_HTTP_AUTH_METHOD=apikey
+      - MCP_API_KEYS=${MCP_API_KEYS}
+      # - MCP_BEARER_TOKENS=${MCP_BEARER_TOKENS}
+      # - MCP_BASIC_USER=${MCP_BASIC_USER}
+      # - MCP_BASIC_PASS=${MCP_BASIC_PASS}
+      # - MCP_ALLOWLIST=${MCP_ALLOWLIST}
+      # - MCP_DENYLIST=${MCP_DENYLIST}
+      # - MCP_RATE_LIMIT_WINDOW_MS=60000
+      # - MCP_RATE_LIMIT_MAX_REQUESTS=100
+      # - MCP_PROTECT_HEALTH=false
     volumes:
       - ./config.yaml:/app/config.yaml:ro
     restart: unless-stopped

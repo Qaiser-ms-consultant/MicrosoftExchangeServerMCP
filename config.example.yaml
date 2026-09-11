@@ -45,6 +45,21 @@ server:
   port: 3000
   host: 0.0.0.0
   # All 128 tools are now always enabled (no gating)
+  # HTTP Transport Authentication — SECURITY: Enable for production!
+  # httpAuth:
+  #   enabled: true                    # default: true (secure by default)
+  #   method: apikey                   # apikey|bearer|basic|none or [apikey, bearer]
+  #   apiKeys: []                      # from MCP_API_KEYS env (comma-separated)
+  #   bearerTokens: []                 # from MCP_BEARER_TOKENS env (comma-separated)
+  #   basicAuth:                       # from MCP_BASIC_USER / MCP_BASIC_PASS env
+  #     username: ""
+  #     password: ""
+  #   allowlist: []                    # IP/CIDR allowlist from MCP_ALLOWLIST env
+  #   denylist: []                     # IP/CIDR denylist from MCP_DENYLIST env
+  #   rateLimit:
+  #     windowMs: 60000                # default: 60000 (1 minute)
+  #     maxRequests: 100               # default: 100
+  #   protectHealth: false             # default: false (health checks public for LB)
 
 logging:
   level: info # debug|info|warn|error

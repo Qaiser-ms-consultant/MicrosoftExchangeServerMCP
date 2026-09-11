@@ -17,6 +17,7 @@
     "test:watch": "vitest",
     "lint": "eslint src --ext .ts",
     "setup": "node scripts/setup.mjs",
+    "setup:http-auth": "tsx src/cli/setup-http-auth.ts",
     "inspector": "npx @modelcontextprotocol/inspector node dist/server.js",
     "init": "tsx src/cli/init.ts",
     "doctor": "tsx src/cli/doctor.ts",

@@ -30,7 +30,7 @@ const MINIMAL = (passwordLine: string) =>
 
 describe("loadConfig", () => {
   it("returns defaults when no file", () => {
-    const cfg = withDummyExchangePassword(() => loadConfig("/nonexistent.yaml"));
+    const cfg = withDummyExchangePassword(() => loadConfig(tempConfig(MINIMAL("password: test"))));
     expect(cfg.exchange.endpoint).toBeDefined();
     expect(cfg.server.transport).toBe("stdio");
   });

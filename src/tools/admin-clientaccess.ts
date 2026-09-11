@@ -92,6 +92,28 @@ export function registerClientAccessTools(server: McpServer, ps: PowerShellProvi
     return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
   });
 
+  server.tool("exchange_get_casmailbox", "View Client Access settings for a mailbox (Get-CASMailbox) — ActiveSync/OWA/POP/IMAP4 toggles. See https://learn.microsoft.com/en-us/powershell/module/exchangepowershell/get-casmailbox", {
+    identity: z.string().optional().describe("Mailbox identity, e.g. alice@contoso.com"),
+    anr: z.string().optional().describe("Ambiguous name resolution search string"),
+    protocolsettings: z.boolean().optional().describe("Return protocol settings (IMAP/Pop/SMTP servers/ports)"),
+    resultsize: z.string().optional().describe("Maximum number of results (unlimited for all)"),
+    filter: z.string().optional().describe("OPATH filter syntax"),
+    sortby: z.string().optional().describe("Property to sort results by"),
+    domaincontroller: z.string().optional().describe("Domain controller (on-prem only)"),
+  }, async ({ identity, anr, protocolsettings, resultsize, filter, sortby, domaincontroller }) => {
+    let cmd = `Get-CASMailbox`;
+    if (identity) cmd += ` -Identity '${esc(identity)}'`;
+    if (anr) cmd += ` -Anr '${esc(anr)}'`;
+    if (protocolsettings) cmd += ` -ProtocolSettings`;
+    if (resultsize) cmd += ` -ResultSize ${resultsize}`;
+    if (filter) cmd += ` -Filter '${esc(filter)}'`;
+    if (sortby) cmd += ` -SortBy '${esc(sortby)}'`;
+    if (domaincontroller) cmd += ` -DomainController '${esc(domaincontroller)}'`;
+    cmd += ` -Confirm:$false`;
+    const d = await ps.invokeJson(cmd);
+    return { content: [{ type: "text", text: JSON.stringify(d, null, 2) }] };
+  });
+
   server.tool("exchange_get_owamailboxpolicy", "View OWA mailbox policies (Get-OwaMailboxPolicy). See https://learn.microsoft.com/en-us/powershell/module/exchangepowershell/get-owamailboxpolicy", {
     identity: z.string().optional().describe("Policy name, DN, or GUID, e.g. Executives. Omit to list all."),
     domainController: z.string().optional().describe("FQDN, e.g. dc01.contoso.com (on-prem only)"),
