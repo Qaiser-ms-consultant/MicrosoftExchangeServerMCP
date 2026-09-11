@@ -4,9 +4,9 @@ import type { PowerShellProvider } from "../clients/powershell-provider.js";
 
 // Recipient Administration — covers EAC Recipients + Permissions (per learn.microsoft.com Exchange admin center)
 export function registerRecipientAdminTools(server: McpServer, ps: PowerShellProvider) {
-  server.tool("exchange_list_mailboxes", "List mailboxes (admin) — offset-paged discovery; pass offset for the next page, database to scope to one DB", {
-    filter: z.string().optional().describe("Name filter (wildcard)"), recipientType: z.string().optional().describe("UserMailbox, SharedMailbox, RoomMailbox, EquipmentMailbox, etc."), resultSize: z.number().min(1).max(1000).optional(),
-    pageSize: z.number().min(1).max(200).optional().describe("Page size for discovery (default 100)"),
+  server.tool("exchange_list_mailboxes", "List mailboxes (admin) — no args returns ALL mailboxes (no 100-row bound); pass resultSize (up to 1000) to auto-page, or pageSize/offset for explicit paging; database scopes to one DB", {
+    filter: z.string().optional().describe("Name filter (wildcard)"), recipientType: z.string().optional().describe("UserMailbox, SharedMailbox, RoomMailbox, EquipmentMailbox, etc."), resultSize: z.number().min(1).max(1000).optional().describe("Max rows to return across pages. The tool advances offset internally until resultSize rows are collected or mailboxes run out."),
+    pageSize: z.number().min(1).max(200).optional().describe("Page size for explicit paging (default 100)"),
     offset: z.number().min(0).optional().describe("Row offset from a previous page's nextOffset — omit for the first page"),
     database: z.string().optional().describe("Scope to one mailbox database (e.g. DB01)"),
     countOnly: z.boolean().optional().describe("Return only the total mailbox count (ignores filter) — use for 'how many mailboxes'"),
@@ -18,8 +18,46 @@ export function registerRecipientAdminTools(server: McpServer, ps: PowerShellPro
       const n = Array.isArray(all) ? all.length : 0;
       return { content: [{ type: "text", text: JSON.stringify({ totalMailboxes: n }, null, 2) }] };
     }
+    // No bound by default: with no paging args (pageSize/offset) and no
+    // resultSize, fetch every mailbox in one light query instead of stopping
+    // at the first 100. Pass pageSize/offset for explicit paging, or
+    // resultSize to auto-page up to N rows.
+    if (resultSize === undefined && pageSize === undefined && offset === undefined) {
+      const db = database ? ` -Database '${database.replace(/'/g, "''")}'` : "";
+      const type = recipientType ? ` -RecipientTypeDetails ${recipientType}` : "";
+      let cmd = `Get-Mailbox${db}${type} -ResultSize Unlimited | Select-Object DisplayName,Alias`;
+      if (filter) {
+        const raw = filter.trim();
+        const pattern = raw.includes("*") ? raw : `*${raw}*`;
+        cmd = `Get-Mailbox${db}${type} -Filter "Name -like '${pattern.replace(/'/g, "''")}'" -ResultSize Unlimited | Select-Object DisplayName,Alias`;
+      }
+      const rows = await ps.invokeJson(cmd).catch(() => []);
+      const mailboxes = Array.isArray(rows) ? rows : [];
+      return { content: [{ type: "text", text: JSON.stringify({ nextOffset: null, totalFetched: mailboxes.length, mailboxes }, null, 2) }] };
+    }
     const page = pageSize ?? Math.min(resultSize ?? 100, 200);
-    const { items, nextOffset } = await ps.listMailboxes(filter, recipientType, page, { offset, database });
+    // resultSize drives auto-paging: without it this returns exactly one page
+    // (historical behavior). With it, advance offset internally until want rows
+    // are collected or the provider reports exhaustion. Bounded to 1000 rows /
+    // 10 round trips so one call can never fan out unboundedly.
+    const multi = resultSize !== undefined;
+    const want = multi ? Math.min(Math.max(resultSize, 1), 1000) : page;
+    const collected: any[] = [];
+    let cursor = Math.max(offset ?? 0, 0);
+    let nextOffset: number | null = null;
+    // Without resultSize this runs exactly once (historical single page).
+    for (let trips = 0; trips < (multi ? 10 : 1) && collected.length < want; trips++) {
+      const { items, nextOffset: next } = await ps.listMailboxes(filter, recipientType, page, { offset: cursor, database });
+      if (!Array.isArray(items) || items.length === 0) { nextOffset = null; break; }
+      collected.push(...items);
+      nextOffset = next;
+      if (next === null || next === undefined) { nextOffset = null; break; }
+      cursor = next;
+    }
+    const mailboxes = collected.slice(0, want);
+    // Multi-page only: exhaustion before the want means no further pages.
+    // (Single-page responses keep the provider cursor untouched.)
+    if (multi && collected.length < want) nextOffset = null;
     // Paging keys first: narration clips long results, so the offset must
     // survive clipping. nextPage tells the narrator exactly how to continue.
     const nextPage = nextOffset !== null && nextOffset !== undefined
@@ -40,8 +78,9 @@ export function registerRecipientAdminTools(server: McpServer, ps: PowerShellPro
         text: JSON.stringify({
           nextOffset,
           pageSize: page,
+          ...(resultSize === undefined ? {} : { resultSize: want, totalFetched: mailboxes.length }),
           ...(nextPage ? { nextPage } : {}),
-          mailboxes: items,
+          mailboxes,
         }, null, 2),
       }],
     };

@@ -78,8 +78,9 @@ describe("toolExamples coverage", () => {
 
 describe("toolExamples routing honesty", () => {
   const cases: Array<[string, string]> = [
-    ["exchange_discover_mailboxes", "List all mailboxes"],
+    ["exchange_discover_mailboxes", "How many mailboxes in DB01"],
     ["exchange_list_mailboxes", "Show 50 mailboxes"],
+    ["exchange_list_mailboxes", "List all mailboxes"],
     ["ai.tell_me_everything", "Tell me everything about admin@contoso.com"],
     ["exchange_get_mailbox_statistics", "Mailbox statistics for alice@contoso.com"],
     ["exchange_get_mailbox_permissions", "Permissions of alice@contoso.com"],

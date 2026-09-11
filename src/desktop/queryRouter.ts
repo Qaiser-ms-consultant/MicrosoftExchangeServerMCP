@@ -145,9 +145,10 @@ export function routeQuery(prompt: string): Route {
       }
       const dm = prompt.match(/(\d+)\s*mailbox/i);
       if (dm) {
-        return { tool: "exchange_list_mailboxes", args: { pageSize: Math.min(200, Math.max(1, parseInt(dm[1], 10))), database: db }, write: false };
+        const n = Math.min(1000, Math.max(1, parseInt(dm[1], 10)));
+        return { tool: "exchange_list_mailboxes", args: { resultSize: n, pageSize: 200, database: db }, write: false };
       }
-      return { tool: "exchange_discover_mailboxes", args: { pageSize: 100, database: db }, write: false };
+      return { tool: "exchange_list_mailboxes", args: { database: db }, write: false };
     }
   }
   if (has("database", "databases", "db01", "db0") && has("list", "number", "count", "how many", "show", "all")) return { tool: "database.list", args: {}, write: false };
@@ -416,19 +417,19 @@ export function routeQuery(prompt: string): Route {
   if (has("remove copy")) return { tool: "database.remove_copy", args: {}, write: true };
   if (has("set activation", "activation polic")) return { tool: "dag.set_activation_policy", args: {}, write: true };
   if (has("mailbox", "mailboxes") && has("list", "number", "count", "how many", "show", "all")) {
-    // Pure count questions get the exact total. Bare list-all prompts go to
-    // granular discovery (summary + first page) so large orgs never trigger
-    // one giant fetch. An explicit count in the prompt becomes a bounded
-    // page size, clamped to the page maximum (200).
+    // Pure count questions get the exact total. Bare list-all prompts fetch
+    // everything (no 100-row bound). An explicit count becomes a resultSize
+    // (auto-paged in 200-row pages, clamped to 1000) so "show 2000 mailboxes"
+    // is honored instead of silently returning one page.
     if (has("how many", "number of") || (has("count") && !has("list", "show", "all"))) {
       return { tool: "exchange_list_mailboxes", args: { countOnly: true }, write: false };
     }
     const m = prompt.match(/(\d+)\s*mailbox/i);
     if (m) {
-      const n = Math.min(200, Math.max(1, parseInt(m[1], 10)));
-      return { tool: "exchange_list_mailboxes", args: { pageSize: n }, write: false };
+      const n = Math.min(1000, Math.max(1, parseInt(m[1], 10)));
+      return { tool: "exchange_list_mailboxes", args: { resultSize: n, pageSize: 200 }, write: false };
     }
-    return { tool: "exchange_discover_mailboxes", args: { pageSize: 100 }, write: false };
+    return { tool: "exchange_list_mailboxes", args: {}, write: false };
   }
   // Live sample for UI placeholder substitution (small, cheap fetch)
   if (has("first mailbox")) return { tool: "exchange_list_mailboxes", args: { resultSize: 5 }, write: false };

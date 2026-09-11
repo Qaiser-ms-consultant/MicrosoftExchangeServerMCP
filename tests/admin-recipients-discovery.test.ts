@@ -236,4 +236,95 @@ describe("exchange_list_mailboxes paged envelope", () => {
     await server.tools["exchange_list_mailboxes"]({ offset: 200, database: "DB01", pageSize: 50 });
     expect(got).toEqual({ n: 50, opts: { offset: 200, database: "DB01" } });
   });
+
+  it("auto-pages past the first 100 when resultSize is given", async () => {
+    const server = makeServer();
+    const calls: any[] = [];
+    const pages = [
+      { items: [{ DisplayName: "A", Alias: "a" }, { DisplayName: "B", Alias: "b" }], nextOffset: 2 },
+      { items: [{ DisplayName: "C", Alias: "c" }], nextOffset: null },
+    ];
+    registerRecipientAdminTools(server as any, {
+      invokeJson: async () => [],
+      listMailboxes: async (_f: any, _t: any, n: number, opts: any) => {
+        calls.push({ n, opts });
+        return pages[calls.length - 1] ?? { items: [], nextOffset: null };
+      },
+    } as any);
+    const body = JSON.parse((await server.tools["exchange_list_mailboxes"]({ resultSize: 5, pageSize: 2 })).content[0].text);
+    expect(calls).toHaveLength(2);
+    expect(calls[0]).toEqual({ n: 2, opts: { offset: 0, database: undefined } });
+    expect(calls[1]).toEqual({ n: 2, opts: { offset: 2, database: undefined } });
+    expect(body.mailboxes).toHaveLength(3);
+    expect(body.resultSize).toBe(5);
+    expect(body.totalFetched).toBe(3);
+    expect(body.nextOffset).toBeNull();
+    expect(body.nextPage).toBeUndefined();
+  });
+
+  it("keeps the cursor when resultSize is satisfied but more rows exist", async () => {
+    const server = makeServer();
+    registerRecipientAdminTools(server as any, {
+      invokeJson: async () => [],
+      listMailboxes: async (_f: any, _t: any, _n: number, opts: any) => ({
+        items: [{ DisplayName: "A", Alias: "a" }, { DisplayName: "B", Alias: "b" }],
+        nextOffset: (opts?.offset ?? 0) + 2,
+      }),
+    } as any);
+    const body = JSON.parse((await server.tools["exchange_list_mailboxes"]({ resultSize: 3, pageSize: 2 })).content[0].text);
+    expect(body.mailboxes).toHaveLength(3);
+    expect(body.nextOffset).toBe(4);
+    expect(body.nextPage).toEqual({
+      tool: "exchange_list_mailboxes",
+      args: { offset: 4, pageSize: 2 },
+    });
+  });
+
+  it("fetches everything with no args (no 100-row bound)", async () => {
+    const server = makeServer();
+    let seenCmd = "";
+    registerRecipientAdminTools(server as any, {
+      invokeJson: async (cmd: string) => {
+        seenCmd = cmd;
+        return [{ DisplayName: "A", Alias: "a" }, { DisplayName: "B", Alias: "b" }];
+      },
+      listMailboxes: async () => { throw new Error("should not page for the unbounded default"); },
+    } as any);
+    const body = JSON.parse((await server.tools["exchange_list_mailboxes"]({})).content[0].text);
+    expect(seenCmd).toContain("-ResultSize Unlimited");
+    expect(body.mailboxes).toHaveLength(2);
+    expect(body.totalFetched).toBe(2);
+    expect(body.nextOffset).toBeNull();
+    expect(body.nextPage).toBeUndefined();
+  });
+
+  it("scopes the unbounded default to one database", async () => {
+    const server = makeServer();
+    let seenCmd = "";
+    registerRecipientAdminTools(server as any, {
+      invokeJson: async (cmd: string) => {
+        seenCmd = cmd;
+        return [];
+      },
+      listMailboxes: async () => { throw new Error("should not page for the unbounded default"); },
+    } as any);
+    await server.tools["exchange_list_mailboxes"]({ database: "DB01" });
+    expect(seenCmd).toContain("-Database 'DB01'");
+    expect(seenCmd).toContain("-ResultSize Unlimited");
+  });
+
+  it("stops looping when pages repeat without exhaustion (10-trip cap)", async () => {
+    const server = makeServer();
+    let calls = 0;
+    registerRecipientAdminTools(server as any, {
+      invokeJson: async () => [],
+      listMailboxes: async () => {
+        calls++;
+        return { items: [{ DisplayName: "A", Alias: "a" }], nextOffset: calls };
+      },
+    } as any);
+    const body = JSON.parse((await server.tools["exchange_list_mailboxes"]({ resultSize: 1000, pageSize: 100 })).content[0].text);
+    expect(calls).toBe(10);
+    expect(body.mailboxes).toHaveLength(10);
+  });
 });

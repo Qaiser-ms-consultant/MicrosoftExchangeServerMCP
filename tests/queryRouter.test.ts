@@ -71,29 +71,29 @@ describe("routeQuery", () => {
   it("routes bare count prompts to an exact count", () => {
     expect(routeQuery("mailbox count")).toEqual({ tool: "exchange_list_mailboxes", args: { countOnly: true }, write: false });
   });
-  it("routes bare list-all prompts to granular discovery, not a giant fetch", () => {
-    expect(routeQuery("list mailboxes")).toEqual({ tool: "exchange_discover_mailboxes", args: { pageSize: 100 }, write: false });
+  it("routes bare list-all prompts to the unbounded listing, not first-page discovery", () => {
+    expect(routeQuery("list mailboxes")).toEqual({ tool: "exchange_list_mailboxes", args: {}, write: false });
   });
-  it("routes show-all prompts to granular discovery", () => {
-    expect(routeQuery("show all mailboxes")).toEqual({ tool: "exchange_discover_mailboxes", args: { pageSize: 100 }, write: false });
+  it("routes show-all prompts to the unbounded listing", () => {
+    expect(routeQuery("show all mailboxes")).toEqual({ tool: "exchange_list_mailboxes", args: {}, write: false });
   });
-  it("parses an explicit mailbox count from the prompt as a page size", () => {
-    expect(routeQuery("show 50 mailboxes")).toEqual({ tool: "exchange_list_mailboxes", args: { pageSize: 50 }, write: false });
+  it("parses an explicit mailbox count from the prompt as a result size", () => {
+    expect(routeQuery("show 50 mailboxes")).toEqual({ tool: "exchange_list_mailboxes", args: { resultSize: 50, pageSize: 200 }, write: false });
   });
-  it("clamps explicit mailbox counts to the page maximum", () => {
-    expect(routeQuery("list 2000 mailboxes")).toEqual({ tool: "exchange_list_mailboxes", args: { pageSize: 200 }, write: false });
+  it("clamps explicit mailbox counts to the 1000-row maximum", () => {
+    expect(routeQuery("list 2000 mailboxes")).toEqual({ tool: "exchange_list_mailboxes", args: { resultSize: 1000, pageSize: 200 }, write: false });
   });
-  it("scopes discovery to a named database", () => {
-    expect(routeQuery("list mailboxes in Exchange DB B")).toEqual({ tool: "exchange_discover_mailboxes", args: { pageSize: 100, database: "Exchange DB B" }, write: false });
+  it("scopes the unbounded listing to a named database", () => {
+    expect(routeQuery("list mailboxes in Exchange DB B")).toEqual({ tool: "exchange_list_mailboxes", args: { database: "Exchange DB B" }, write: false });
   });
-  it("scopes discovery with on/from phrasing", () => {
-    expect(routeQuery("show mailboxes on DB01")).toEqual({ tool: "exchange_discover_mailboxes", args: { pageSize: 100, database: "DB01" }, write: false });
+  it("scopes listing with on/from phrasing", () => {
+    expect(routeQuery("show mailboxes on DB01")).toEqual({ tool: "exchange_list_mailboxes", args: { database: "DB01" }, write: false });
   });
   it("scopes explicit counts to a database", () => {
-    expect(routeQuery("show 50 mailboxes in DB01")).toEqual({ tool: "exchange_list_mailboxes", args: { pageSize: 50, database: "DB01" }, write: false });
+    expect(routeQuery("show 50 mailboxes in DB01")).toEqual({ tool: "exchange_list_mailboxes", args: { resultSize: 50, pageSize: 200, database: "DB01" }, write: false });
   });
   it("leaves bare list-all prompts unscoped", () => {
-    expect(routeQuery("list all mailboxes")).toEqual({ tool: "exchange_discover_mailboxes", args: { pageSize: 100 }, write: false });
+    expect(routeQuery("list all mailboxes")).toEqual({ tool: "exchange_list_mailboxes", args: {}, write: false });
   });
   it("routes inbox prompts to message listing", () => {
     expect(routeQuery("show recent inbox mail")).toEqual({ tool: "exchange_list_messages", args: {}, write: false });
