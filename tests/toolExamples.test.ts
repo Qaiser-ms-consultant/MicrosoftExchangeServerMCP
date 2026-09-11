@@ -21,6 +21,7 @@ import { registerAICoreTools } from "../src/tools/ai-core.js";
 import { registerAISuiteTools } from "../src/tools/ai-suite.js";
 import { registerTellMeEverything } from "../src/tools/ai-tellmeeverything.js";
 import { registerCalendarTools } from "../src/tools/calendar-tools.js";
+import { registerClientAccessTools } from "../src/tools/admin-clientaccess.js";
 import { registerContactTools } from "../src/tools/contact-tools.js";
 import { registerMailTools } from "../src/tools/mail-tools.js";
 import { registerPsTrace } from "../src/tools/ps-trace.js";
@@ -28,6 +29,7 @@ import { registerIndividualMailboxReports } from "../src/tools/reports-mailbox-i
 import { registerSpecMissingTools } from "../src/tools/spec-missing.js";
 
 const REGISTRARS: Array<(server: any, extra: any) => void> = [
+  registerClientAccessTools,
   registerComplianceTools,
   registerDiagnosticsExtended,
   registerDiagnosticTools,

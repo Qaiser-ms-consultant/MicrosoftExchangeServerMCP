@@ -26,6 +26,21 @@ export const WRITE_REQUIRED_ARGS: Record<string, string[]> = {
   "mailflow.set_send_connector": ["identity"],
   "database.new_repair_request": ["database"],
   "mailbox.add_permission": ["identity", "user"],
+  "exchange_export_autodiscoverconfig": ["targetForestDomainController"],
+  "exchange_new_clientaccessrule": ["name", "action"],
+  "exchange_new_outlookprovider": ["name"],
+  "exchange_new_owamailboxpolicy": ["name"],
+  "exchange_remove_clientaccessrule": ["identity"],
+  "exchange_remove_outlookprovider": ["identity"],
+  "exchange_remove_owamailboxpolicy": ["identity"],
+  "exchange_set_casmailbox": ["identity"],
+  "exchange_set_clientaccessrule": ["identity"],
+  "exchange_set_mailboxcalendarconfiguration": ["identity"],
+  "exchange_set_mailboxmessageconfiguration": ["identity"],
+  "exchange_set_mailboxregionalconfiguration": ["identity"],
+  "exchange_set_mailboxspellingconfiguration": ["identity"],
+  "exchange_set_outlookprovider": ["identity"],
+  "exchange_set_owamailboxpolicy": ["identity"],
 };
 
 export type WritePlan =

@@ -200,6 +200,138 @@ const FORMS: Record<string, WriteForm> = {
       f({ name: "activationPreference", label: "Preference (1 = most preferred)", kind: "number", required: false, placeholder: "1" }),
     ],
   },
+  "exchange_disable_pushnotificationproxy": {
+    tool: "exchange_disable_pushnotificationproxy", title: "Disable push notification proxy", fields: [],
+  },
+  "exchange_enable_pushnotificationproxy": {
+    tool: "exchange_enable_pushnotificationproxy", title: "Enable push notification proxy", fields: [
+      f({ name: "organization", label: "Microsoft 365 org domain", kind: "text", required: false, placeholder: "contoso.onmicrosoft.com" }),
+      f({ name: "uri", label: "Push service endpoint", kind: "text", required: false, placeholder: "https://outlook.office365.com/PushNotifications" }),
+    ],
+  },
+  "exchange_export_autodiscoverconfig": {
+    tool: "exchange_export_autodiscoverconfig", title: "Export Autodiscover config", fields: [
+      f({ name: "targetForestDomainController", label: "Target forest/DC", kind: "text", required: true, placeholder: "contoso.com" }),
+      f({ name: "multipleExchangeDeployments", label: "Multiple Exchange forests", kind: "boolean", required: false }),
+      f({ name: "preferredSourceFqdn", label: "Preferred source FQDN", kind: "text", required: false }),
+    ],
+  },
+  "exchange_new_clientaccessrule": {
+    tool: "exchange_new_clientaccessrule", title: "New client access rule", fields: [
+      f({ name: "name", label: "Rule name", kind: "text", required: true, placeholder: "AllowRemotePS" }),
+      f({ name: "action", label: "Action", kind: "select", required: true, options: ["AllowAccess", "DenyAccess"] }),
+      f({ name: "anyOfProtocols", label: "Protocols (comma-separated)", kind: "text", required: false, placeholder: "RemotePowerShell", help: "2019+: ExchangeAdminCenter, RemotePowerShell only." }),
+      f({ name: "anyOfClientIPAddressesOrRanges", label: "Client IPs/ranges", kind: "text", required: false, placeholder: "192.168.1.0/24" }),
+      f({ name: "priority", label: "Priority (0 = highest)", kind: "number", required: false, placeholder: "1" }),
+      f({ name: "scope", label: "Scope", kind: "select", required: false, options: ["Users", "All"] }),
+    ],
+  },
+  "exchange_new_outlookprovider": {
+    tool: "exchange_new_outlookprovider", title: "New Outlook provider", fields: [
+      f({ name: "name", label: "Object name", kind: "text", required: true, placeholder: "MyOABUrl" }),
+    ],
+  },
+  "exchange_new_owamailboxpolicy": {
+    tool: "exchange_new_owamailboxpolicy", title: "New OWA mailbox policy", fields: [
+      f({ name: "name", label: "Policy name", kind: "text", required: true, placeholder: "Corporate" }),
+    ],
+  },
+  "exchange_remove_clientaccessrule": {
+    tool: "exchange_remove_clientaccessrule", title: "Remove client access rule", fields: [
+      f({ name: "identity", label: "Rule name", kind: "text", required: true, placeholder: "Block ActiveSync" }),
+    ],
+  },
+  "exchange_remove_outlookprovider": {
+    tool: "exchange_remove_outlookprovider", title: "Remove Outlook provider", fields: [
+      f({ name: "identity", label: "Object name", kind: "text", required: true, placeholder: "Test Object" }),
+    ],
+  },
+  "exchange_remove_owamailboxpolicy": {
+    tool: "exchange_remove_owamailboxpolicy", title: "Remove OWA mailbox policy", fields: [
+      f({ name: "identity", label: "Policy name", kind: "text", required: true, placeholder: "Executives" }),
+    ],
+  },
+  "exchange_set_casmailbox": {
+    tool: "exchange_set_casmailbox", title: "Edit mailbox client access", fields: [
+      f({ name: "identity", label: "Mailbox", kind: "email", required: true, placeholder: "adam@contoso.com" }),
+      f({ name: "owaEnabled", label: "OWA enabled", kind: "boolean", required: false }),
+      f({ name: "activeSyncEnabled", label: "ActiveSync enabled", kind: "boolean", required: false }),
+      f({ name: "popEnabled", label: "POP enabled", kind: "boolean", required: false }),
+      f({ name: "imapEnabled", label: "IMAP enabled", kind: "boolean", required: false }),
+      f({ name: "mapiEnabled", label: "MAPI enabled", kind: "boolean", required: false }),
+      f({ name: "ewsEnabled", label: "EWS enabled", kind: "boolean", required: false }),
+    ],
+  },
+  "exchange_set_clientaccessrule": {
+    tool: "exchange_set_clientaccessrule", title: "Edit client access rule", fields: [
+      f({ name: "identity", label: "Rule name", kind: "text", required: true, placeholder: "Allow IMAP4" }),
+      f({ name: "enabled", label: "Enabled", kind: "boolean", required: false }),
+      f({ name: "priority", label: "Priority (0 = highest)", kind: "number", required: false, placeholder: "1" }),
+      f({ name: "action", label: "Action", kind: "select", required: false, options: ["AllowAccess", "DenyAccess"] }),
+    ],
+  },
+  "exchange_set_imapsettings": {
+    tool: "exchange_set_imapsettings", title: "Edit IMAP settings", fields: [
+      f({ name: "server", label: "Server", kind: "text", required: false, placeholder: "MBX01" }),
+      f({ name: "banner", label: "Banner", kind: "text", required: false }),
+      f({ name: "protocolLogEnabled", label: "Protocol logging", kind: "boolean", required: false }),
+      f({ name: "x509CertificateName", label: "Certificate FQDN", kind: "text", required: false, placeholder: "mail.contoso.com" }),
+    ],
+  },
+  "exchange_set_mailboxcalendarconfiguration": {
+    tool: "exchange_set_mailboxcalendarconfiguration", title: "Edit calendar settings", fields: [
+      f({ name: "identity", label: "Mailbox", kind: "email", required: true, placeholder: "peter@contoso.com" }),
+      f({ name: "remindersEnabled", label: "Reminders", kind: "boolean", required: false }),
+      f({ name: "workingHoursTimeZone", label: "Working-hours timezone", kind: "text", required: false, placeholder: "Pacific Standard Time" }),
+      f({ name: "weekStartDay", label: "Week start day", kind: "text", required: false, placeholder: "Monday" }),
+    ],
+  },
+  "exchange_set_mailboxmessageconfiguration": {
+    tool: "exchange_set_mailboxmessageconfiguration", title: "Edit OWA message settings", fields: [
+      f({ name: "identity", label: "Mailbox", kind: "email", required: true, placeholder: "kai@contoso.com" }),
+      f({ name: "hideDeletedItems", label: "Hide deleted items", kind: "boolean", required: false }),
+      f({ name: "alwaysShowBcc", label: "Always show Bcc", kind: "boolean", required: false }),
+    ],
+  },
+  "exchange_set_mailboxregionalconfiguration": {
+    tool: "exchange_set_mailboxregionalconfiguration", title: "Edit regional settings", fields: [
+      f({ name: "identity", label: "Mailbox", kind: "text", required: true, placeholder: "Marcelo Teixeira" }),
+      f({ name: "language", label: "Language", kind: "text", required: false, placeholder: "pt-br" }),
+      f({ name: "localizeDefaultFolderName", label: "Localize folder names", kind: "boolean", required: false }),
+      f({ name: "timeZone", label: "Time zone", kind: "text", required: false }),
+    ],
+  },
+  "exchange_set_mailboxspellingconfiguration": {
+    tool: "exchange_set_mailboxspellingconfiguration", title: "Edit spelling settings", fields: [
+      f({ name: "identity", label: "Mailbox", kind: "text", required: true, placeholder: "kai" }),
+      f({ name: "ignoreUppercase", label: "Ignore uppercase", kind: "boolean", required: false }),
+      f({ name: "ignoreMixedDigits", label: "Ignore mixed digits", kind: "boolean", required: false }),
+      f({ name: "dictionaryLanguage", label: "Dictionary language", kind: "text", required: false }),
+    ],
+  },
+  "exchange_set_outlookprovider": {
+    tool: "exchange_set_outlookprovider", title: "Edit Outlook provider", fields: [
+      f({ name: "identity", label: "Provider", kind: "text", required: true, placeholder: "WEB" }),
+      f({ name: "ttl", label: "TTL (hours)", kind: "number", required: false, placeholder: "2" }),
+      f({ name: "server", label: "Mailbox server", kind: "text", required: false }),
+    ],
+  },
+  "exchange_set_owamailboxpolicy": {
+    tool: "exchange_set_owamailboxpolicy", title: "Edit OWA mailbox policy", fields: [
+      f({ name: "identity", label: "Policy name", kind: "text", required: true, placeholder: "Default" }),
+      f({ name: "calendarEnabled", label: "Calendar", kind: "boolean", required: false }),
+      f({ name: "tasksEnabled", label: "Tasks", kind: "boolean", required: false }),
+      f({ name: "contactsEnabled", label: "Contacts", kind: "boolean", required: false }),
+    ],
+  },
+  "exchange_set_popsettings": {
+    tool: "exchange_set_popsettings", title: "Edit POP settings", fields: [
+      f({ name: "server", label: "Server", kind: "text", required: false, placeholder: "MBX01" }),
+      f({ name: "banner", label: "Banner", kind: "text", required: false }),
+      f({ name: "protocolLogEnabled", label: "Protocol logging", kind: "boolean", required: false }),
+      f({ name: "x509CertificateName", label: "Certificate FQDN", kind: "text", required: false, placeholder: "mail.contoso.com" }),
+    ],
+  },
 };
 
 export const WRITE_FORM_TOOLS = Object.keys(FORMS);

@@ -170,6 +170,89 @@ export function registerRecipientAdminTools(server: McpServer, ps: PowerShellPro
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
   });
 
+  server.tool("exchange_add_adpermission", "Add AD permission to an object (Add-ADPermission) — e.g. grant Send As on a mailbox, or anonymous SMTP rights on a Receive connector. See https://learn.microsoft.com/en-us/powershell/module/exchangepowershell/add-adpermission", {
+    identity: z.string().describe("Object getting permissions (name or DN), e.g. 'Terry Adams' or 'IP Secured Inbound'"),
+    user: z.string().optional().describe("Who gets the permissions (UPN, DOMAIN\\user, alias). Required unless owner is set."),
+    owner: z.string().optional().describe("Set object owner instead of granting rights (Owner parameter set, cannot combine with user/accessRights)"),
+    accessRights: z.string().optional().describe("Comma-separated ActiveDirectoryRights, e.g. ExtendedRight (default when extendedRights given)"),
+    extendedRights: z.string().optional().describe("Comma-separated extended rights, e.g. 'Send As' or 'ms-Exch-SMTP-Submit,ms-Exch-SMTP-Accept-Any-Recipient,ms-Exch-Bypass-Anti-Spam'"),
+    deny: z.boolean().optional().describe("Add Deny permissions instead of Allow"),
+    inheritanceType: z.enum(["None", "All", "Children", "Descendents", "SelfAndChildren"]).optional(),
+    properties: z.string().optional().describe("Comma-separated property names (only with ReadProperty/WriteProperty/Self)"),
+    childObjectTypes: z.string().optional().describe("Comma-separated child object types (only with CreateChild/DeleteChild)"),
+    inheritedObjectType: z.string().optional(),
+    domainController: z.string().optional().describe("FQDN, e.g. dc01.contoso.com"),
+  }, async ({ identity, user, owner, accessRights, extendedRights, deny, inheritanceType, properties, childObjectTypes, inheritedObjectType, domainController }) => {
+    const esc = (s: string) => s.replace(/'/g, "''");
+    const qlist = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean).map((x) => `'${esc(x)}'`).join(",");
+    if (owner) {
+      if (user || accessRights || extendedRights || deny) throw new Error("owner cannot be combined with user/accessRights/extendedRights/deny (Owner parameter set)");
+      let cmd = `Add-ADPermission -Identity '${esc(identity)}' -Owner '${esc(owner)}'`;
+      if (domainController) cmd += ` -DomainController '${esc(domainController)}'`;
+      cmd += ` -Confirm:$false`;
+      await ps.invoke(cmd);
+      return { content: [{ type: "text", text: `Set owner ${owner} on ${identity}` }] };
+    }
+    if (!user) throw new Error("Either user or owner is required (Add-ADPermission -User / -Owner)");
+    let cmd = `Add-ADPermission -Identity '${esc(identity)}' -User '${esc(user)}'`;
+    if (accessRights) cmd += ` -AccessRights ${accessRights.split(",").map((x) => x.trim()).filter(Boolean).join(",")}`;
+    if (extendedRights) cmd += ` -ExtendedRights ${qlist(extendedRights)}`;
+    if (deny) cmd += ` -Deny`;
+    if (inheritanceType) cmd += ` -InheritanceType ${inheritanceType}`;
+    if (properties) cmd += ` -Properties ${qlist(properties)}`;
+    if (childObjectTypes) cmd += ` -ChildObjectTypes ${qlist(childObjectTypes)}`;
+    if (inheritedObjectType) cmd += ` -InheritedObjectType '${esc(inheritedObjectType)}'`;
+    if (domainController) cmd += ` -DomainController '${esc(domainController)}'`;
+    cmd += ` -Confirm:$false`;
+    await ps.invoke(cmd);
+    return { content: [{ type: "text", text: `Added AD permission on ${identity} for ${user}` }] };
+  });
+
+  server.tool("exchange_get_adpermission", "Get AD permissions on an object (Get-ADPermission) — e.g. ACLs on a mailbox or Receive connector. See https://learn.microsoft.com/en-us/powershell/module/exchangepowershell/get-adpermission", {
+    identity: z.string().describe("Object identity (name or DN), e.g. 'Ed' or Receive connector name"),
+    user: z.string().optional().describe("Filter to grants for this user/group (cannot combine with owner)"),
+    owner: z.boolean().optional().describe("Return the object owner instead of ACL entries (Owner set)"),
+    domainController: z.string().optional().describe("FQDN, e.g. dc01.contoso.com"),
+  }, async ({ identity, user, owner, domainController }) => {
+    const esc = (s: string) => s.replace(/'/g, "''");
+    if (owner && user) throw new Error("owner cannot be combined with user (Owner vs AccessRights sets)");
+    let cmd = `Get-ADPermission -Identity '${esc(identity)}'`;
+    if (owner) cmd += ` -Owner`;
+    if (user) cmd += ` -User '${esc(user)}'`;
+    if (domainController) cmd += ` -DomainController '${esc(domainController)}'`;
+    const data = await ps.invokeJson(cmd);
+    return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+  });
+
+  server.tool("exchange_remove_adpermission", "Remove AD permission from an object (Remove-ADPermission) — e.g. revoke Send As on a mailbox, or anonymous SMTP rights on a Receive connector. See https://learn.microsoft.com/en-us/powershell/module/exchangepowershell/remove-adpermission", {
+    identity: z.string().describe("Object losing permissions (name or DN), e.g. 'Administrator' or 'IP Secured Inbound'"),
+    user: z.string().describe("Whose permissions are removed (UPN, DOMAIN\\user, alias)"),
+    accessRights: z.string().optional().describe("Comma-separated ActiveDirectoryRights to remove, e.g. ExtendedRight"),
+    extendedRights: z.string().optional().describe("Comma-separated extended rights to remove, e.g. 'Send As' or 'ms-Exch-SMTP-Submit,ms-Exch-SMTP-Accept-Any-Recipient,ms-Exch-Bypass-Anti-Spam'"),
+    deny: z.boolean().optional().describe("Remove Deny permissions instead of Allow"),
+    inheritanceType: z.enum(["None", "All", "Children", "Descendents", "SelfAndChildren"]).optional(),
+    properties: z.string().optional().describe("Comma-separated property names (only with ReadProperty/WriteProperty/Self)"),
+    childObjectTypes: z.string().optional().describe("Comma-separated child object types (only with CreateChild/DeleteChild)"),
+    inheritedObjectType: z.string().optional(),
+    domainController: z.string().optional().describe("FQDN, e.g. dc01.contoso.com"),
+  }, async ({ identity, user, accessRights, extendedRights, deny, inheritanceType, properties, childObjectTypes, inheritedObjectType, domainController }) => {
+    const esc = (s: string) => s.replace(/'/g, "''");
+    const qlist = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean).map((x) => `'${esc(x)}'`).join(",");
+    if (!user) throw new Error("user is required (Remove-ADPermission -User)");
+    let cmd = `Remove-ADPermission -Identity '${esc(identity)}' -User '${esc(user)}'`;
+    if (accessRights) cmd += ` -AccessRights ${accessRights.split(",").map((x) => x.trim()).filter(Boolean).join(",")}`;
+    if (extendedRights) cmd += ` -ExtendedRights ${qlist(extendedRights)}`;
+    if (deny) cmd += ` -Deny`;
+    if (inheritanceType) cmd += ` -InheritanceType ${inheritanceType}`;
+    if (properties) cmd += ` -Properties ${qlist(properties)}`;
+    if (childObjectTypes) cmd += ` -ChildObjectTypes ${qlist(childObjectTypes)}`;
+    if (inheritedObjectType) cmd += ` -InheritedObjectType '${esc(inheritedObjectType)}'`;
+    if (domainController) cmd += ` -DomainController '${esc(domainController)}'`;
+    cmd += ` -Confirm:$false`;
+    await ps.invoke(cmd);
+    return { content: [{ type: "text", text: `Removed AD permission on ${identity} for ${user}` }] };
+  });
+
   server.tool("exchange_create_mailbox", "Create mailbox (New-Mailbox) — user/shared/room. For UserMailbox, password is required (SecureString).", {
     name: z.string().describe("Display name"),
     alias: z.string().optional(),

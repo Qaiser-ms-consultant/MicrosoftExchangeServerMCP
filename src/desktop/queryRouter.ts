@@ -342,8 +342,17 @@ export function routeQuery(prompt: string): Route {
   if (has("domain") && has("inventory", "overview")) return { tool: "report.generate_domain_report", args: {}, write: false };
   if (has("accepted domain", "remote domain")) return { tool: "exchange_list_accepted_domains", args: {}, write: false };
   if (has("virtual director", "vdir")) return { tool: "exchange_get_virtual_directory", args: {}, write: false };
+  if (has("autodiscover") && has("export", "scp", "service connection")) { const d = extractDomain(prompt); return { tool: "exchange_export_autodiscoverconfig", args: d ? { targetForestDomainController: d } : {}, write: true }; }
   if (has("autodiscover")) { const d = (email && email.split("@")[1]) || extractDomain(prompt); return { tool: "clientaccess.get_autodiscover_info", args: d ? { domain: d } : {}, write: false }; }
   if (has("test owa", "owa connect")) return { tool: "clientaccess.test_owa", args: {}, write: false };
+  if (has("test calendar", "calendar connect")) return { tool: "exchange_test_calendarconnectivity", args: {}, write: false };
+  if (has("test ecp", "test eac", "eac connect")) return { tool: "exchange_test_ecpconnectivity", args: {}, write: false };
+  if (has("test imap", "imap connect")) return { tool: "exchange_test_imapconnectivity", args: {}, write: false };
+  if (has("test pop", "pop connect", "pop3 connect")) return { tool: "exchange_test_popconnectivity", args: {}, write: false };
+  if (has("test outlook connect", "outlook probe", "mapi probe")) return { tool: "exchange_test_outlookconnectivity", args: {}, write: false };
+  if (has("test powershell", "powershell vdir", "remote powershell connect")) return { tool: "exchange_test_powershellconnectivity", args: {}, write: false };
+  if (has("test ews", "test webservices", "ews connect")) return { tool: "exchange_test_webservicesconnectivity", args: {}, write: false };
+  if (has("test client access", "which rule blocks", "which rules match")) return { tool: "exchange_test_clientaccessrule", args: {}, write: false };
   if (has("transport config", "transport setting", "max send", "message size limit")) return { tool: "exchange_get_transport_config", args: {}, write: false };
   if (has("smtp test", "test smtp", "banner check", "ehlo")) { const d = extractDomain(prompt); return { tool: "mailflow.test_smtp_connectivity", args: d ? { host: d } : {}, write: false }; }
   if (has("copy status", "copy queue", "replay queue")) return { tool: "exchange_get_database_copy_status", args: {}, write: false };
@@ -411,6 +420,44 @@ export function routeQuery(prompt: string): Route {
     return { tool: "mailbox.add_permission", args: { identity: email, ...(m ? { user: m[1] } : {}), accessRights: rights }, write: true };
   }
   if (has("suspend") && has("copy")) { const id = afterWord(prompt, "copy"); return { tool: "database.suspend_copy", args: id ? { identity: id } : {}, write: true }; }
+  // Client Access writes (confirm-gated)
+  if (has("push notification", "push proxy") && has("disable")) return { tool: "exchange_disable_pushnotificationproxy", args: {}, write: true };
+  if (has("push notification", "push proxy") && has("enable")) { const m = prompt.match(/([\w-]+\.onmicrosoft\.com)/i); return { tool: "exchange_enable_pushnotificationproxy", args: m ? { organization: m[1] } : {}, write: true }; }
+  if (has("client access rule") && has("create", "new", "add")) { const q = QUOTED_RE.exec(prompt)?.[1]; return { tool: "exchange_new_clientaccessrule", args: { ...(q ? { name: q } : {}), ...(has("deny", "block") ? { action: "DenyAccess" } : {}) }, write: true }; }
+  if (has("client access rule") && has("remove", "delete")) { const q = QUOTED_RE.exec(prompt)?.[1]; return { tool: "exchange_remove_clientaccessrule", args: q ? { identity: q } : {}, write: true }; }
+  if (has("client access rule") && has("show", "list", "get")) { const q = QUOTED_RE.exec(prompt)?.[1]; return { tool: "exchange_get_clientaccessrule", args: q ? { identity: q } : {}, write: false }; }
+  if (has("outlook provider") && has("create", "new", "add")) { const q = QUOTED_RE.exec(prompt)?.[1]; return { tool: "exchange_new_outlookprovider", args: q ? { name: q } : {}, write: true }; }
+  if (has("outlook provider") && has("remove", "delete")) { const q = QUOTED_RE.exec(prompt)?.[1]; return { tool: "exchange_remove_outlookprovider", args: q ? { identity: q } : {}, write: true }; }
+  if (has("owa") && has("polic") && has("create", "new", "add")) { const q = QUOTED_RE.exec(prompt)?.[1]; return { tool: "exchange_new_owamailboxpolicy", args: q ? { name: q } : {}, write: true }; }
+  if (has("owa") && has("polic") && has("remove", "delete")) { const q = QUOTED_RE.exec(prompt)?.[1]; return { tool: "exchange_remove_owamailboxpolicy", args: q ? { identity: q } : {}, write: true }; }
+  // Client Access Set-* (confirm-gated); toggle polarity from disable/enable phrasing
+  if (has("owa", "activesync", "active sync", "pop3", "pop", "imap", "mapi", "ews") && has("disable", "enable", "allow", "block", "turn off", "turn on") && email && !has("mailbox") && !has("permission", "access")) {
+    const off = has("disable", "block", "turn off");
+    const args: Record<string, unknown> = { identity: email };
+    if (has("owa")) args.owaEnabled = !off;
+    if (has("activesync", "active sync")) args.activeSyncEnabled = !off;
+    if (has("pop3") || (has("pop") && !has("populat"))) args.popEnabled = !off;
+    if (has("imap")) args.imapEnabled = !off;
+    if (has("mapi")) args.mapiEnabled = !off;
+    if (has("ews")) args.ewsEnabled = !off;
+    return { tool: "exchange_set_casmailbox", args, write: true };
+  }
+  if (has("client access rule") && has("disable", "enable", "edit", "set", "update")) { const q = QUOTED_RE.exec(prompt)?.[1]; const off = has("disable"); return { tool: "exchange_set_clientaccessrule", args: { ...(q ? { identity: q } : {}), ...(has("disable", "enable") ? { enabled: !off } : {}) }, write: true }; }
+  if (has("imap") && has("set", "edit", "config", "log", "banner", "cert", "binding") && !has("mailbox")) { const m = prompt.match(/\bon\s+([A-Za-z0-9_-]+)/i); return { tool: "exchange_set_imapsettings", args: { ...(m ? { server: m[1] } : {}), ...(has("log") ? { protocolLogEnabled: !has("disable") } : {}) }, write: true }; }
+  if (has("pop3", "pop settings") && has("set", "edit", "config", "log", "banner", "cert", "binding") && !has("mailbox")) { const m = prompt.match(/\bon\s+([A-Za-z0-9_-]+)/i); return { tool: "exchange_set_popsettings", args: { ...(m ? { server: m[1] } : {}), ...(has("log") ? { protocolLogEnabled: !has("disable") } : {}) }, write: true }; }
+  if (has("reminder", "calendar setting", "working hour", "week start") && email) return { tool: "exchange_set_mailboxcalendarconfiguration", args: { identity: email, ...(has("disable") ? { remindersEnabled: false } : {}) }, write: true };
+  if (has("bcc line", "always show bcc", "hide deleted", "deleted items") && email) return { tool: "exchange_set_mailboxmessageconfiguration", args: { identity: email }, write: true };
+  if (has("regional", "mailbox language", "date format", "time format", "timezone", "time zone") && email) return { tool: "exchange_set_mailboxregionalconfiguration", args: { identity: email }, write: true };
+  if (has("spell check", "spelling", "dictionary language") && email) return { tool: "exchange_set_mailboxspellingconfiguration", args: { identity: email }, write: true };
+  if (has("outlook provider") && has("set", "edit", "update", "ttl")) { const q = QUOTED_RE.exec(prompt)?.[1]; return { tool: "exchange_set_outlookprovider", args: q ? { identity: q } : {}, write: true }; }
+  if (has("owa") && has("polic") && has("set", "edit", "update", "disable", "enable")) {
+    const q = QUOTED_RE.exec(prompt)?.[1]; const off = has("disable");
+    const args: Record<string, unknown> = { ...(q ? { identity: q } : {}) };
+    if (has("task")) args.tasksEnabled = !off;
+    if (has("calendar")) args.calendarEnabled = !off;
+    if (has("contact")) args.contactsEnabled = !off;
+    return { tool: "exchange_set_owamailboxpolicy", args, write: true };
+  }
   if (has("resume") && has("copy")) { const id = afterWord(prompt, "copy"); return { tool: "database.resume_copy", args: id ? { identity: id } : {}, write: true }; }
   if (has("move active", "failover database", "switchover")) return { tool: "database.move_active", args: {}, write: true };
   if (has("add copy")) return { tool: "database.add_copy", args: {}, write: true };
