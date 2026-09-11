@@ -7,8 +7,8 @@
   "build": {
     "beforeDevCommand": "",
     "beforeBuildCommand": "",
-    "devPath": "../src",
-    "distDir": "../src"
+    "devPath": "../../src/desktop/renderer",
+    "distDir": "../../dist/desktop/renderer"
   },
   "tauri": {
     "bundle": {
@@ -38,8 +38,8 @@
         "title": "Exchange Agentic Admin",
         "width": 1280,
         "height": 860,
-        "minWidth": 1100,
-        "minHeight": 700
+        "minWidth": 800,
+        "minHeight": 600
       }
     ]
   }

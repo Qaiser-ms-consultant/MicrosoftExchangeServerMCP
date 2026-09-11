@@ -216,10 +216,42 @@
   html:not(.dark) #aiExecBadge[class*="tl-"] > span:first-child { background-color: #26251e !important; animation: none !important; }
   html:not(.dark) #aiExecBadge[class*="tl-"] > span:last-child { color: #26251e !important; }
   html:not(.dark) #aiExecBadge.tl-done > span:last-child { color: #ffffff !important; }
+  /* Responsive shell: header/nav stay fixed, main page-scrolls so no panel is ever unreachable.
+     Below lg the two home panels stack vertically with natural height; on lg they
+     return to the fixed split-pane with internal scroll containers. */
+  main[data-purpose="split-pane-workflow"] { scrollbar-width: thin; }
+  @media (max-width: 1023px) {
+    main[data-purpose="split-pane-workflow"] {
+      display: flex !important;
+      flex-direction: column !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      flex: 1 1 auto !important;
+      min-height: 0 !important;
+      height: auto !important;
+    }
+    main[data-purpose="split-pane-workflow"] > section[data-view="home"] {
+      height: auto !important;
+      min-height: 0 !important;
+      overflow: visible !important;
+      flex: none !important;
+    }
+    main[data-purpose="split-pane-workflow"] > section[data-view="health"],
+    main[data-purpose="split-pane-workflow"] > section[data-view="prompts"],
+    main[data-purpose="split-pane-workflow"] > section[data-view="logs"],
+    main[data-purpose="split-pane-workflow"] > section[data-view="docs"] {
+      overflow-y: visible !important;
+      max-height: none !important;
+    }
+  }
+  @media (min-width: 1024px) {
+    main[data-purpose="split-pane-workflow"] { overflow: hidden !important; }
+    main[data-purpose="split-pane-workflow"] > section[data-view="home"] { min-height: 0 !important; }
+  }
   /* Short viewports: let the whole page scroll so no panel is ever unreachable */
   @media (max-height: 719px) {
     html body { overflow-y: auto !important; }
-    main[data-purpose="split-pane-workflow"] { flex: none !important; height: auto !important; overflow: visible !important; }
+    main[data-purpose="split-pane-workflow"] { flex: none !important; height: auto !important; overflow-y: auto !important; overflow-x: hidden !important; }
   }
   /* AI busy indicator: three pulsing dots + label */
   .thinking-animation{ display:inline-flex; align-items:center; gap:7px; }
@@ -234,8 +266,8 @@
   #quickPromptButtons button { flex-shrink: 0; white-space: nowrap; }
 </style>
 </head>
-<body class="h-full antialiased font-sans select-none overflow-hidden flex flex-col">
-<header class="h-11 bg-[#0e1320] border-b border-[#1c263c] flex items-center justify-between px-4 z-50 flex-shrink-0">
+<body class="h-full min-h-0 antialiased font-sans select-none overflow-hidden flex flex-col">
+<header class="min-h-11 bg-[#0e1320] border-b border-[#1c263c] flex items-center justify-between flex-wrap gap-2 px-3 sm:px-4 py-1 z-50 flex-shrink-0">
 <div class="flex items-center gap-3">
 <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#ff5f56] border border-[#e0443e]"></span><span class="w-3 h-3 rounded-full bg-[#ffbd2e] border border-[#dea123]"></span><span class="w-3 h-3 rounded-full bg-[#27c93f] border border-[#1aab29]"></span></div>
 <div class="w-px h-5 bg-[#1f2d45]"></div>
@@ -252,12 +284,12 @@
 <button id="updatePill" title="Check for updates from GitHub" class="hidden items-center gap-1.5 px-3 py-1 rounded-full bg-[#141d2f] border border-[#23314c] text-[11px] font-mono text-slate-300 hover:text-white hover:border-[#2b3a58] transition"><span class="w-1.5 h-1.5 rounded-full bg-slate-400" id="updateDot"></span><span id="updateText">Checking…</span></button>
 </header>
 
-<nav class="bg-[#0e1424] border-b border-[#1b253b] px-6 py-2.5 flex items-center justify-between flex-shrink-0">
-<div>
-<h1 class="text-sm font-semibold text-white tracking-tight">Exchange Agentic Admin</h1>
-<p class="text-[11px] text-slate-400">AI Powered Exchange Operations Intelligence Platform</p>
+<nav class="bg-[#0e1424] border-b border-[#1b253b] px-3 sm:px-6 py-2.5 flex items-center justify-between flex-wrap gap-2 flex-shrink-0">
+<div class="min-w-0">
+<h1 class="text-sm font-semibold text-white tracking-tight truncate">Exchange Agentic Admin</h1>
+<p class="text-[11px] text-slate-400 truncate">AI Powered Exchange Operations Intelligence Platform</p>
 </div>
-<div class="flex items-center bg-[#141b2e] p-1 rounded-lg border border-[#222f4b]" role="tablist">
+<div class="flex items-center bg-[#141b2e] p-1 rounded-lg border border-[#222f4b] overflow-x-auto max-w-full flex-shrink-0" role="tablist">
 <button aria-selected="true" class="px-3.5 py-1 rounded-md text-xs font-medium bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm flex items-center gap-1.5" data-tab="home" role="tab"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> Home (Agent)</button>
 <button aria-selected="false" class="px-3.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-[#1b253c] flex items-center gap-1.5" data-tab="health" role="tab"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> Health <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span></button>
 <button aria-selected="false" class="px-3.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-[#1b253c] flex items-center gap-1.5" data-tab="prompts" role="tab"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> Helping Prompts</button>
@@ -266,9 +298,9 @@
 </div>
 </nav>
 
-<main class="flex-1 min-h-0 p-5 overflow-hidden grid grid-cols-12 auto-rows-fr gap-5 bg-gradient-to-b from-[#090d16] to-[#0d1322]" data-purpose="split-pane-workflow">
+<main class="flex-1 min-h-0 p-3 sm:p-4 lg:p-5 overflow-y-auto flex flex-col lg:grid lg:grid-cols-12 lg:auto-rows-fr gap-3 lg:gap-5 bg-gradient-to-b from-[#090d16] to-[#0d1322]" data-purpose="split-pane-workflow">
 <!-- LEFT: Prompt Console -->
-<section class="col-span-12 lg:col-span-5 flex flex-col gap-4 h-full min-h-0 overflow-y-auto" data-view="home">
+<section class="col-span-12 lg:col-span-5 flex flex-col gap-4 h-auto lg:h-full min-h-0 overflow-visible lg:overflow-y-auto flex-none" data-view="home">
 <div class="flex-1 min-h-min bg-[#121829]/95 backdrop-blur-md border border-[#1f2d48] rounded-xl flex flex-col shadow-xl shadow-black/40 overflow-hidden">
 <div class="px-4 py-3 bg-[#151c30]/70 border-b border-[#1f2d48] flex items-center justify-between">
 <div class="flex items-center gap-2"><span class="text-xs font-bold uppercase tracking-wider text-slate-400">BYOM — Bring Your Own Model</span></div>
@@ -316,10 +348,10 @@
 
 <!-- AI Chat Tab -->
 <!-- RIGHT: Output & Analysis -->
-<section class="col-span-12 lg:col-span-7 flex flex-col h-full min-h-0 overflow-hidden" data-view="home">
+<section class="col-span-12 lg:col-span-7 flex flex-col h-auto lg:h-full min-h-0 overflow-visible lg:overflow-hidden flex-1" data-view="home">
 <div class="flex-1 min-h-0 bg-[#121829]/95 backdrop-blur-md border border-[#1f2d48] rounded-xl flex flex-col shadow-xl shadow-black/40 overflow-hidden">
-<div class="px-4 py-3 bg-[#151c30]/70 border-b border-[#1f2d48] flex items-center justify-between flex-shrink-0">
-<div class="flex items-center gap-3">
+<div class="px-4 py-3 bg-[#151c30]/70 border-b border-[#1f2d48] flex items-center justify-between flex-wrap gap-2 flex-shrink-0">
+<div class="flex items-center gap-3 flex-wrap min-w-0">
 <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Output & Analysis</span>
 <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" id="execBadge"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> <span id="execText">Idle</span></span>
 </div>
@@ -330,9 +362,9 @@
 <button class="p-1.5 rounded-md hover:bg-[#1a2338] text-slate-300 hover:text-white border border-transparent hover:border-[#2b3a58] text-xs flex items-center gap-1" id="exportOut"><svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> Export</button>
 </div>
 </div>
-<div class="px-4 py-2 bg-[#0d121f] border-b border-[#1b253b] flex items-center justify-between text-xs flex-shrink-0">
-<div class="flex items-center gap-4">
-<div class="flex items-center gap-2 bg-[#141b2e] p-1 rounded-lg border border-[#222f4b]" role="tablist">
+<div class="px-4 py-2 bg-[#0d121f] border-b border-[#1b253b] flex items-center justify-between flex-wrap gap-2 text-xs flex-shrink-0">
+<div class="flex items-center gap-4 min-w-0">
+<div class="flex items-center gap-2 bg-[#141b2e] p-1 rounded-lg border border-[#222f4b] overflow-x-auto max-w-full" role="tablist">
 <button class="px-3.5 py-1.5 rounded-md text-xs font-medium bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm flex items-center gap-1.5" data-output-tab="ai" role="tab" aria-selected="true">✦ AI Chat</button>
 <button class="px-3.5 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-[#1b253c] flex items-center gap-1.5" data-output-tab="mcp" role="tab" aria-selected="false">MCP</button>
 <button class="px-3.5 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-[#1b253c] flex items-center gap-1.5" data-output-tab="json" role="tab" aria-selected="false">Raw JSON</button>
@@ -342,7 +374,7 @@
 </div>
 <span class="text-[11px] font-mono text-slate-500" id="hostPill">Host: mail.contoso.com</span>
 </div>
-<div class="flex-1 min-h-0 p-5 overflow-y-auto space-y-4 bg-[#0a0e17]" id="outputScroll" data-purpose="output-scroll-container">
+<div class="flex-1 min-h-[300px] lg:min-h-0 p-3 sm:p-4 lg:p-5 overflow-y-auto space-y-4 bg-[#0a0e17]" id="outputScroll" data-purpose="output-scroll-container">
 <div class="flex-1 flex flex-col h-full min-h-0" id="aiChatCard">
 <div class="flex-1 min-h-0 bg-[#121829]/95 flex flex-col rounded-xl border border-[#1f2d48] overflow-hidden">
 <div class="flex items-center justify-between px-4 py-2 bg-[#0d121f] border-b border-[#1b253b]">
@@ -448,7 +480,7 @@
 </section>
 
 <!-- LOGS/HEALTH/CONFIG (hidden by default, shown via tabs) -->
-<section class="col-span-12 lg:col-span-12 hidden min-h-0 overflow-y-auto flex-col" data-view="health">
+<section class="col-span-12 lg:col-span-12 hidden min-h-0 overflow-y-auto flex-col flex-1 w-full" data-view="health">
 <div class="flex items-center justify-between mb-4">
   <div>
     <h2 class="text-sm font-semibold text-slate-200">System Health</h2>
@@ -562,7 +594,7 @@
 </section>
 
 <!-- HELPING PROMPTS (hidden by default, shown via tab; click inserts into prompt box) -->
-<section class="col-span-12 lg:col-span-12 hidden overflow-y-auto" data-view="prompts" style="max-height:100%">
+<section class="col-span-12 lg:col-span-12 hidden overflow-y-auto min-h-0 flex-1 w-full flex-col" data-view="prompts">
 <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
 <div class="bg-[#121829] border border-[#1f2d48] rounded-xl p-4"><h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5">🤖 AI Suite</h3><div class="flex flex-wrap gap-2"><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Executive summary">Executive summary</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Daily exchange report">Daily brief</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Things I should know">Things to know</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Management report">Management report</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Anomaly detection">Anomaly detection</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Cleanup recommendations to recover space">Cleanup & recover</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Cleanup advisor for alice@contoso.com">Mailbox cleanup</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Migration batch prioritization">Migration batches</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Migration ETA and progress">Migration ETA</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Migration readiness assessment">Migration readiness</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="What if DB01 fails over?">What-if failover</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Incident report for outbound delays">Incident brief</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Permission risk report">Permission risk</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Security risk report">Security risk</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Compromised account detection">Compromised accounts</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Mail flow intelligence">Mail flow intel</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="NDR bounce statistics">NDR statistics</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Configuration risk and hardening">Config risk</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Root cause of delayed queues">Root cause</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Predict database capacity exhaustion">Capacity exhaustion</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="what tools do you offer">What can you do</button></div></div>
 <div class="bg-[#121829] border border-[#1f2d48] rounded-xl p-4"><h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5">📑 Reports</h3><div class="flex flex-wrap gap-2"><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Largest mailboxes report">Largest mailboxes</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Database growth trend">DB growth trend</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Transport queue report">Transport queues</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Archive mailbox report">Archive mailboxes</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Inactive mailbox report">Inactive mailboxes</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Mobile device report">Mobile devices</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="OOF report">OOF status</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="DAG report">DAG report</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Litigation hold report">Hold report</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Full exchange summary">Full summary</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Compliance snapshot">Compliance snapshot</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Server role report">Server roles</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="AD site mapping">AD sites</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Exchange dependencies">Dependencies</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Organization config">Org config</button><button class="px-2.5 py-1.5 rounded-md text-xs bg-[#141d30] hover:bg-[#1b2740] border border-[#22304d] text-slate-300" data-quick="Database copy status">Copy status</button></div></div>
@@ -576,7 +608,7 @@
 </section>
 
 <!-- END-TO-END OPERATION LOGS: one timeline per run, prompt → route → model → MCP → Exchange → narration → result -->
-<section class="col-span-12 lg:col-span-12 hidden min-h-0 overflow-hidden flex-col" data-view="logs" style="max-height:100%">
+<section class="col-span-12 lg:col-span-12 hidden min-h-0 overflow-y-auto flex-col flex-1 w-full" data-view="logs">
 <div class="bg-[#121829] border border-[#1f2d48] rounded-xl p-4 flex flex-col min-h-0 flex-1">
 <div class="flex flex-wrap items-center gap-2 mb-3">
 <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Pipeline logs</span>
@@ -604,7 +636,7 @@
 </section>
 
 <!-- LIVE MCP TOOL CATALOG: queried from the running server on every open, so new tools appear with zero UI changes -->
-<section class="col-span-12 lg:col-span-12 hidden min-h-0 overflow-hidden flex-col" data-view="docs" style="max-height:100%">
+<section class="col-span-12 lg:col-span-12 hidden min-h-0 overflow-y-auto flex-col flex-1 w-full" data-view="docs">
 <div class="bg-[#121829] border border-[#1f2d48] rounded-xl p-4 flex flex-col min-h-0 flex-1">
 <div class="flex flex-wrap items-center gap-2 mb-3">
 <span class="text-xs font-bold uppercase tracking-wider text-slate-400">MCP tool catalog</span>

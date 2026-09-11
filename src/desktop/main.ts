@@ -134,8 +134,8 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1280,
     height: 860,
-    minWidth: 1100,
-    minHeight: 700,
+    minWidth: 800,
+    minHeight: 600,
     title: "Exchange Agentic Admin — AI Powered Exchange Operations Intelligence Platform",
     webPreferences: {
       preload: join(__dirname, "preload.js"),
