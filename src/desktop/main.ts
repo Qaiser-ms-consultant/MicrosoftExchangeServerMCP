@@ -5,11 +5,12 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { spawn, ChildProcess } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { hasWriteIntent, helpExamplesFor, helpHintFor, routeQuery } from "./queryRouter.js";
+import { helpExamplesFor, helpHintFor, routeQuery } from "./queryRouter.js";
 import type { RouteResult } from "./queryRouter.js";
+import { modelFirstRoute, type ModelFirstResult } from "./modelFirst.js";
 import { loadConfig } from "../config.js";
 import { parse as parseYaml } from "yaml";
-import { buildNormalizerMessages, buildSummaryMessages, buildToolPickerMessages, chatComplete, isAiProvider, isEmptyResult, isToolCallEcho, parseNoToolVerdict, parseToolSelection } from "./modelClient.js";
+import { buildSummaryMessages, buildToolPickerMessages, chatComplete, isAiProvider, isEmptyResult, isToolCallEcho, parseNoToolVerdict, parseToolSelection } from "./modelClient.js";
 import { appendExchange, buildContextBlocks, clipText, fillMissingArgs, narrowCatalog, recallIdentities, type ExchangeRecord } from "./conversationContext.js";
 import { checkForUpdates, checkZipUpdate, isGitCheckout, performUpdate, performZipUpdate } from "./updater.js";
 import { enhancePrompt, enhancePromptWithModel, guardResult } from "./promptGuard.js";
@@ -634,57 +635,28 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
     write = true;
     logOp("route", "explicit tool (confirm / form / paging flow)", { tool, args });
   } else {
-    let route = routeQuery(prompt);
-    let normalizedFrom: string | null = null;
-    // Normalize-first: when raw routing yields no tool, let the model repair
-    // typos/paraphrases into router-friendly phrasing and re-route. The
-    // keyword router stays authoritative; on any failure the raw prompt is
-    // used exactly as before. Skipped for explicit tool flows (payload.tool).
-    if (aiMode && modelCfg && "help" in route) {
-      try {
-        const normMsgs = buildNormalizerMessages(prompt);
-        logOp("model_request", "prompt normalizer", { provider: modelCfg.provider, model: modelCfg.model, messages: normMsgs.map((m) => ({ role: String((m as any).role), chars: String((m as any).content ?? "").length, content: clipText(String((m as any).content ?? ""), 4000) })) });
-        const t0 = Date.now();
-        const rewritten = (await chatComplete(modelCfg, normMsgs)).text;
-        const ms = Date.now() - t0;
-        const canonical = rewritten.split("\n")[0].trim().replace(/^["']+|["'.]+$/g, "").slice(0, 500);
-        logOp("model_response", "prompt normalized", { ms, from: clipText(prompt, 200), to: clipText(canonical, 200) }, ms);
-        if (canonical) {
-          const rerouted = routeQuery(canonical);
-          if (!("help" in rerouted)) {
-            route = rerouted;
-            normalizedFrom = canonical;
-            logOp("route", `keyword router (normalized): ${(rerouted as RouteResult).tool}`, { tool: (rerouted as RouteResult).tool, args: (rerouted as RouteResult).args, normalizedFrom: canonical });
-          }
-        }
-      } catch (e) { console.error("prompt normalization failed, using raw prompt", e); }
-    }
-
-    // ModelFirst: when AI mode is ON, let the model pick the tool directly from the full catalog.
-    // If successful, use it and skip keyword router. This is now the primary/only routing path.
-    let modelFirstPick: { tool: string; args: Record<string, unknown>; write: boolean } | null = null;
+    // Single-authority routing. AI mode ON → ModelFirst (the model picks from
+    // the live catalog); the keyword router runs ONLY when AI mode is OFF.
+    // Exactly one `route` log is emitted per prompt — the two never fire together.
     if (aiMode && modelCfg) {
       logOp("model_request", "ModelFirst: picking tool from catalog", { provider: modelCfg.provider, model: modelCfg.model });
       const list = await mcpRpc("tools/list", {});
       const toolNames = (((list as any)?.tools ?? []) as any[])
         .map((t: any) => String(t?.name ?? "")).filter((n) => n);
-      const normMsgs = buildToolPickerMessages(prompt, toolNames);
       logOp("model_request", "ModelFirst tool picker", { provider: modelCfg.provider, model: modelCfg.model, toolCount: toolNames.length });
-      const t0 = Date.now();
-      const pick = await chatComplete(modelCfg, normMsgs);
-      const ms = Date.now() - t0;
-      logOp("model_response", "ModelFirst pick", { ms, reply: clipText(pick.text, 2000) }, ms);
+      let outcome: ModelFirstResult | null = null;
       try {
-        const parsed = JSON.parse(pick.text);
-        if (parsed.tool && typeof parsed.tool === "string") {
-          modelFirstPick = { tool: parsed.tool, args: parsed.args || {}, write: false };
-        }
-      } catch { }
-    }
-
-    // If ModelFirst succeeded, use its pick and skip keyword router
-    if (modelFirstPick) {
-      if (modelFirstPick.tool === "__no_tool" && modelCfg) {
+        outcome = await modelFirstRoute(prompt, toolNames, modelCfg);
+      } catch (e) { console.error("ModelFirst failed, trying AI fallback", e); outcome = null; }
+      if (outcome) logOp("model_response", "ModelFirst pick", { ms: outcome.ms, reply: clipText(outcome.rawResponse ?? "", 2000) }, outcome.ms);
+      else logOp("model_response", "ModelFirst miss (no usable pick)", {});
+      // Validate against the live catalog (__no_tool bypasses it by design).
+      // Unknown tools are treated as a miss — never executed.
+      if (outcome && outcome.tool !== "__no_tool" && !toolNames.includes(outcome.tool)) {
+        logOp("route", `ModelFirst pick rejected (unknown tool): ${outcome.tool}`, { tool: outcome.tool });
+        outcome = null;
+      }
+      if (outcome?.tool === "__no_tool") {
         logOp("route", "ModelFirst pick: __no_tool, answering from context", { tool: "__no_tool" });
         let ctxAnswer: string | undefined; let ctxUsage: { input: number; output: number } | undefined; let ctxNote: string | undefined;
         try {
@@ -699,59 +671,71 @@ ipcMain.handle("exchange:ask", async (_e, payload: { prompt: string; confirmed?:
         logOp("result", "answered from context", { outcome: "context" });
         return { prompt, tool: "history", args: {}, result: { message: "Answered from conversation context." }, psTrace: [], ...(ctxAnswer ? { aiAnswer: ctxAnswer, aiUsage: ctxUsage } : { aiNote: ctxNote }) };
       }
-      logOp("route", `ModelFirst pick: ${modelFirstPick.tool}`, { tool: modelFirstPick.tool });
-      tool = modelFirstPick.tool;
-      args = modelFirstPick.args;
-      write = modelFirstPick.write;
-      route = { tool: modelFirstPick.tool, args: modelFirstPick.args, write: modelFirstPick.write };
-    }
-
-    // AI fallback: model interprets prompts the keyword router cannot classify.
-    // It also reinterprets loose write phrasing that matched a read-only route
-    // (e.g. typos/synonyms the keywords missed) across the full tool catalog.
-    let aiRouted: { tool: string; args: any; write: boolean } | null = null;
-    if (aiMode && modelCfg) {
-      const logPicker = (stage: OpStage, label: string, body?: unknown, ms?: number) => logOp(stage, label, body, ms);
-      if ("help" in route) aiRouted = await tryAiRoute(prompt, modelCfg, contextBlock || undefined, recentTools, logPicker);
-      else if (!route.write && hasWriteIntent(normalizedFrom ?? prompt)) aiRouted = await tryAiRoute(prompt, modelCfg, contextBlock || undefined, recentTools, logPicker);
-    }
-    if ("help" in route && !aiRouted) {
-      logOp("route", "help card (no tool matched)", { aiMode });
-      logOp("result", "help card shown", { outcome: "help" });
-      const learnUrl = modelCfg && modelCfg.learnMoreUrl
-        ? modelCfg.learnMoreUrl
-        : "https://learn.microsoft.com/en-us/powershell/module/exchangepowershell/?view=exchange-ps";
-      return { prompt, tool: "help", result: {
-      message: "I can run Exchange queries. Try one of these:",
-      examples: helpExamplesFor(prompt),
-      ...(helpHintFor(prompt) ? { hint: helpHintFor(prompt) } : {}),
-      ...(modelCfg && !isAiProvider(modelCfg.provider) ? { note: "Tip: AI answers need an OpenAI-compatible provider (OpenAI, Groq, Together, OpenRouter, Mistral, Ollama, Custom)." } : {}),
-      ...(modelCfg ? { learnMore: learnUrl } : {}),
-    },
-    ...((aiMode && modelCfg) ? { aiNote: "Model could not interpret this request — keyword help below." } : {}) };
-    }
-    if (aiRouted) {
-      // Follow-up answerable from recent exchanges: no tool runs. The answer
-      // is narrated from context below; still recorded so later turns see it.
-      if (aiRouted.tool === "__no_tool" && modelCfg) {
-        logOp("route", "AI tool-picker: answered from context, no tool", { tool: "__no_tool" });
-        let ctxAnswer: string | undefined; let ctxUsage: { input: number; output: number } | undefined; let ctxNote: string | undefined;
-        try {
-          const ctxMsgs = buildSummaryMessages(prompt, "history", "No new tool result for this follow-up — answer from the conversation context.", modelCfg.systemPrompt, contextBlock || undefined);
-          logOp("model_request", "context answer", { provider: modelCfg.provider, model: modelCfg.model, messages: ctxMsgs.map((m) => ({ role: String((m as any).role), chars: String((m as any).content ?? "").length, content: clipText(String((m as any).content ?? ""), 4000) })) });
-          const t0 = Date.now();
-          const s = await chatComplete(modelCfg, ctxMsgs);
-          logOp("model_response", "context answer received", { chars: s.text.length, usage: s.usage, reply: clipText(s.text, 2000) }, Date.now() - t0);
-          ctxAnswer = s.text; ctxUsage = s.usage;
-        } catch (e: any) { console.error("Context answer failed", e); ctxNote = `AI unavailable (${e?.message || e}) — no new Exchange data was fetched.`; }
-        if (ctxAnswer || ctxNote) rememberConversation(conversationId, { prompt, tool: "history", resultJson: "", aiAnswer: ctxAnswer });
-        logOp("result", "answered from context", { outcome: "context" });
-        return { prompt, tool: "history", args: {}, result: { message: "Answered from conversation context." }, psTrace: [], ...(ctxAnswer ? { aiAnswer: ctxAnswer, aiUsage: ctxUsage } : { aiNote: ctxNote }) };
+      if (outcome) {
+        logOp("route", `ModelFirst pick: ${outcome.tool}`, { tool: outcome.tool });
+        tool = outcome.tool;
+        args = outcome.args;
+        write = outcome.tool in WRITE_REQUIRED_ARGS;
+      } else {
+        // Secondary model attempt (AI tool-picker). The keyword router is
+        // intentionally NOT consulted while AI mode is on.
+        const logPicker = (stage: OpStage, label: string, body?: unknown, ms?: number) => logOp(stage, label, body, ms);
+        const aiRouted = await tryAiRoute(prompt, modelCfg, contextBlock || undefined, recentTools, logPicker);
+        if (aiRouted?.tool === "__no_tool") {
+          logOp("route", "AI tool-picker: answered from context, no tool", { tool: "__no_tool" });
+          let ctxAnswer: string | undefined; let ctxUsage: { input: number; output: number } | undefined; let ctxNote: string | undefined;
+          try {
+            const ctxMsgs = buildSummaryMessages(prompt, "history", "No new tool result for this follow-up — answer from the conversation context.", modelCfg.systemPrompt, contextBlock || undefined);
+            logOp("model_request", "context answer", { provider: modelCfg.provider, model: modelCfg.model, messages: ctxMsgs.map((m) => ({ role: String((m as any).role), chars: String((m as any).content ?? "").length, content: clipText(String((m as any).content ?? ""), 4000) })) });
+            const t0 = Date.now();
+            const s = await chatComplete(modelCfg, ctxMsgs);
+            logOp("model_response", "context answer received", { chars: s.text.length, usage: s.usage, reply: clipText(s.text, 2000) }, Date.now() - t0);
+            ctxAnswer = s.text; ctxUsage = s.usage;
+          } catch (e: any) { console.error("Context answer failed", e); ctxNote = `AI unavailable (${e?.message || e}) — no new Exchange data was fetched.`; }
+          if (ctxAnswer || ctxNote) rememberConversation(conversationId, { prompt, tool: "history", resultJson: "", aiAnswer: ctxAnswer });
+          logOp("result", "answered from context", { outcome: "context" });
+          return { prompt, tool: "history", args: {}, result: { message: "Answered from conversation context." }, psTrace: [], ...(ctxAnswer ? { aiAnswer: ctxAnswer, aiUsage: ctxUsage } : { aiNote: ctxNote }) };
+        }
+        if (aiRouted) {
+          tool = aiRouted.tool; args = aiRouted.args; write = aiRouted.write;
+          logOp("route", `AI tool-picker: ${tool}`, { tool, args });
+        } else {
+          logOp("route", "help card (ModelFirst + AI fallback missed)", { aiMode });
+          logOp("result", "help card shown", { outcome: "help" });
+          const learnUrl = modelCfg.learnMoreUrl
+            ? modelCfg.learnMoreUrl
+            : "https://learn.microsoft.com/en-us/powershell/module/exchangepowershell/?view=exchange-ps";
+          return { prompt, tool: "help", result: {
+          message: "I can run Exchange queries. Try one of these:",
+          examples: helpExamplesFor(prompt),
+          ...(helpHintFor(prompt) ? { hint: helpHintFor(prompt) } : {}),
+          ...(modelCfg && !isAiProvider(modelCfg.provider) ? { note: "Tip: AI answers need an OpenAI-compatible provider (OpenAI, Groq, Together, OpenRouter, Mistral, Ollama, Custom)." } : {}),
+          ...(modelCfg ? { learnMore: learnUrl } : {}),
+        },
+        ...(modelCfg ? { aiNote: "Model could not interpret this request — keyword help below." } : {}) };
+        }
       }
-      tool = aiRouted.tool; args = aiRouted.args; write = aiRouted.write;
-      logOp("route", `AI tool-picker: ${tool}`, { tool, args });
+    } else {
+      // AI mode OFF → keyword router is the sole authority.
+      const route = routeQuery(prompt);
+      if ("help" in route) {
+        logOp("route", "help card (no tool matched)", { aiMode });
+        logOp("result", "help card shown", { outcome: "help" });
+        const learnUrl = modelCfg && modelCfg.learnMoreUrl
+          ? modelCfg.learnMoreUrl
+          : "https://learn.microsoft.com/en-us/powershell/module/exchangepowershell/?view=exchange-ps";
+        return { prompt, tool: "help", result: {
+        message: "I can run Exchange queries. Try one of these:",
+        examples: helpExamplesFor(prompt),
+        ...(helpHintFor(prompt) ? { hint: helpHintFor(prompt) } : {}),
+        ...(modelCfg && !isAiProvider(modelCfg.provider) ? { note: "Tip: AI answers need an OpenAI-compatible provider (OpenAI, Groq, Together, OpenRouter, Mistral, Ollama, Custom)." } : {}),
+        ...(modelCfg ? { learnMore: learnUrl } : {}),
+      } };
+      }
+      const r = route as RouteResult;
+      tool = r.tool; args = r.args; write = r.write;
+      logOp("route", `keyword router: ${tool}`, { tool, args });
     }
-    else { const r = route as RouteResult; tool = r.tool; args = r.args; write = r.write; logOp("route", `keyword router: ${tool}`, { tool, args }); }
   }
 
   // Safety gate for writes. Missing args are first resolved from the

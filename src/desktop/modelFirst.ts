@@ -6,19 +6,21 @@ export interface ModelFirstResult {
   args: Record<string, unknown>;
   write: boolean;
   rawResponse?: string;
+  ms?: number;
 }
 
 export async function modelFirstRoute(
   prompt: string,
   toolNames: string[],
-  modelCfg: ModelConfig,
-  context?: string
-): Promise<{ tool: string; args: Record<string, unknown>; write: boolean } | null> {
+  modelCfg: ModelConfig
+): Promise<ModelFirstResult | null> {
   if (!toolNames.length) return null;
 
   const messages = buildToolPickerMessages(prompt, toolNames);
+  const t0 = Date.now();
   const reply = await chatComplete({ ...modelCfg }, messages);
-  
+  const ms = Date.now() - t0;
+
   // Parse tool selection from model response
   try {
     const parsed = JSON.parse(reply.text);
@@ -26,11 +28,13 @@ export async function modelFirstRoute(
       return {
         tool: parsed.tool,
         args: parsed.args || {},
-        write: false // Will be determined by WRITE_REQUIRED_ARGS later
+        write: false, // Caller resolves via WRITE_REQUIRED_ARGS
+        rawResponse: reply.text,
+        ms
       };
     }
   } catch {
-    // Failed to parse, return null to fallback to keyword router
+    // Failed to parse or no usable pick — caller falls back (never keyword in AI mode)
   }
   return null;
 }
